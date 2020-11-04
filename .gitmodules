@@ -1,0 +1,12 @@
+[submodule "external/argon2"]
+	path = external/argon2
+	url = https://github.com/gibme-c/argon2
+[submodule "external/cryptopp"]
+	path = external/cryptopp
+	url = https://github.com/gibme-c/cryptopp
+[submodule "external/ed25519"]
+	path = external/ed25519
+	url = https://github.com/gibme-c/ed25519
+[submodule "external/serializationcpp"]
+	path = external/serializationcpp
+	url = https://github.com/gibme-c/serialization-cpp.git
