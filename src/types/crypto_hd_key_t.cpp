@@ -108,6 +108,13 @@ crypto_hd_key_t crypto_hd_key_t::generate_child_key() const
     return crypto_hd_key_t(child_key, child_chain_code);
 }
 
+crypto_hd_key_t crypto_hd_key_t::generate_child_key(const std::string &path) const
+{
+    const auto [child_key, child_chain_code] = generate_hd_child_key(_key, _chain_code, path);
+
+    return crypto_hd_key_t(child_key, child_chain_code);
+}
+
 crypto_hash_t crypto_hd_key_t::key() const
 {
     return _key;

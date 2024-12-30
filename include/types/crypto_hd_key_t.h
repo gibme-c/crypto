@@ -49,6 +49,9 @@ struct crypto_hd_key_t final
     /**
      * Generates a child key from this HD key
      *
+     * Note: These methods assume a fully hardened path, if you need normal path
+     * components, please use the generate_child_key(std::string) method
+     *
      * @param purpose
      * @param coin_type
      * @param account
@@ -64,6 +67,14 @@ struct crypto_hd_key_t final
     [[nodiscard]] crypto_hd_key_t generate_child_key(size_t purpose, size_t coin_type) const;
     [[nodiscard]] crypto_hd_key_t generate_child_key(size_t purpose) const;
     [[nodiscard]] crypto_hd_key_t generate_child_key() const;
+
+    /**
+     * Generates a child key from this BIP39 seed using the specified path
+     *
+     * @param path
+     * @return
+     */
+    [[nodiscard]] crypto_hd_key_t generate_child_key(const std::string &path) const;
 
     [[nodiscard]] crypto_hash_t key() const;
 

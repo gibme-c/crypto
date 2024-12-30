@@ -138,6 +138,19 @@ int main()
                 FAILED;
             }
         }
+
+        {
+            const auto key = seed.generate_child_key("m/0'/1'/2'/2'/1000000000'");
+            PRINT(key);
+
+            if (!test(
+                    key,
+                    "3c24da049451555d51a7014a37337aa4e12d41e485abccfa46b47dfb2af54b7a",
+                    "8f94d394a8e8fd6b1bc2f3f49f5c47e385281d5c17e65324b0f62483e37e8793"))
+            {
+                FAILED;
+            }
+        }
     }
 
     {

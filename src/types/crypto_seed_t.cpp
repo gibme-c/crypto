@@ -137,6 +137,13 @@ crypto_hd_key_t crypto_seed_t::generate_child_key() const
     return crypto_hd_key_t(child_key, child_chain_code);
 }
 
+crypto_hd_key_t crypto_seed_t::generate_child_key(const std::string &path) const
+{
+    const auto [child_key, child_chain_code] = generate_hd_child_key(_key, _chain_code, path);
+
+    return crypto_hd_key_t(child_key, child_chain_code);
+}
+
 void crypto_seed_t::generate_root_key(const std::string &hmac_key)
 {
     const auto hash = calculate_hmac_sha512(hmac_key.data(), hmac_key.size(), bytes.data(), bytes.size());
