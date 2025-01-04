@@ -28,10 +28,19 @@
 #define CRYPTO_H
 
 #include <crypto_common.h>
+#include <crypto_config.h>
+#include <crypto_constants.h>
 #include <encoding/address_encoding.h>
 #include <encoding/base58.h>
 #include <encoding/cn_base58.h>
 #include <encoding/mnemonics.h>
+#include <helpers/debug_helper.h>
+#include <helpers/dedupe_and_sort_keys.h>
+#include <helpers/gray_code_generator_t.h>
+#include <helpers/hd_keys.h>
+#include <helpers/random_bytes.h>
+#include <helpers/scalar_transcript_t.h>
+#include <helpers/string_helper.h>
 #include <proofs/audit.h>
 #include <proofs/bulletproofs.h>
 #include <proofs/bulletproofsplus.h>
@@ -42,10 +51,21 @@
 #include <signatures/ring_signature_clsag.h>
 #include <signatures/ring_signature_triptych.h>
 #include <signatures/signature.h>
+#include <types/crypto_borromean_signature_t.h>
+#include <types/crypto_bulletproof_t.h>
+#include <types/crypto_bulletproof_plus_t.h>
+#include <types/crypto_clsag_signature_t.h>
 #include <types/crypto_entropy_t.h>
+#include <types/crypto_hash_t.h>
 #include <types/crypto_hash_vector_t.h>
 #include <types/crypto_hd_key_t.h>
+#include <types/crypto_point_t.h>
+#include <types/crypto_point_vector_t.h>
+#include <types/crypto_scalar_t.h>
+#include <types/crypto_scalar_vector_t.h>
 #include <types/crypto_secret_key_t.h>
 #include <types/crypto_seed_t.h>
+#include <types/crypto_signature_t.h>
+#include <types/crypto_triptych_signature_t.h>
 
 #endif // CRYPTO_H
