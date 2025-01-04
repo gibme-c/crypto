@@ -133,7 +133,7 @@ else()
     endif()
 endif()
 
-add_subdirectory(external)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/external)
 
 set(INCLUDE_DIRECTORIES
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -189,7 +189,7 @@ set(SOURCES
 )
 
 add_library(crypto-static STATIC ${SOURCES})
-target_link_libraries(crypto-static ThirdParty)
+target_link_libraries(crypto-static crypto-thirdparty)
 target_include_directories(crypto-static PUBLIC ${INCLUDE_DIRECTORIES})
 
 if(WIN32)
@@ -198,7 +198,7 @@ endif()
 
 if(BUILD_SHARED)
     add_library(crypto-shared STATIC ${SOURCES})
-    target_link_libraries(crypto-shared ThirdParty)
+    target_link_libraries(crypto-shared crypto-thirdparty)
     target_include_directories(crypto-shared PUBLIC ${INCLUDE_DIRECTORIES})
 
     if(WIN32)
