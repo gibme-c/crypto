@@ -32,6 +32,7 @@
 #include <mutex>
 #include <proofs/bulletproofsplus.h>
 #include <proofs/ringct.h>
+#undef max
 
 static const auto powers_of_two = Crypto::TWO.pow_expand(64);
 

@@ -89,8 +89,8 @@ namespace Crypto::RingSignature::Borromean
             return false;
         }
 
-        // ([H(prefix || L || R) - sum] mod l) != 0
-        return (challenge - sum).is_nonzero();
+        // ([H(prefix || L || R) - sum] mod l) == 0
+        return !(challenge - sum).is_nonzero();
     }
 
     std::tuple<bool, crypto_borromean_signature_t> complete_ring_signature(

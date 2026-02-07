@@ -128,13 +128,11 @@ crypto_hash_t crypto_hash_t::blake2b(const void *input, size_t length)
 {
     crypto_hash_t result;
 
-    auto hash_context = new CryptoPP::BLAKE2b(false, static_cast<unsigned int>(result.size()));
+    CryptoPP::BLAKE2b hash_context(false, static_cast<unsigned int>(result.size()));
 
-    hash_context->Update(static_cast<const CryptoPP::byte *>(input), length);
+    hash_context.Update(static_cast<const CryptoPP::byte *>(input), length);
 
-    hash_context->TruncatedFinal(*result, result.size());
-
-    free(hash_context);
+    hash_context.TruncatedFinal(*result, result.size());
 
     return result;
 }
@@ -153,13 +151,11 @@ crypto_hash_t crypto_hash_t::random()
 
     crypto_hash_t result;
 
-    const auto hash_context = new CryptoPP::SHA3_512();
+    CryptoPP::SHA3_512 hash_context;
 
-    hash_context->Update(bytes, CRYPTO_ENTROPY_BYTES);
+    hash_context.Update(bytes, CRYPTO_ENTROPY_BYTES);
 
-    hash_context->TruncatedFinal(*result, result.size());
-
-    free(hash_context);
+    hash_context.TruncatedFinal(*result, result.size());
 
     return result;
 }
@@ -180,13 +176,11 @@ crypto_hash_t crypto_hash_t::sha3(const void *input, size_t length)
 {
     crypto_hash_t result;
 
-    const auto hash_context = new CryptoPP::SHA3_256();
+    CryptoPP::SHA3_256 hash_context;
 
-    hash_context->Update(static_cast<const CryptoPP::byte *>(input), length);
+    hash_context.Update(static_cast<const CryptoPP::byte *>(input), length);
 
-    hash_context->TruncatedFinal(*result, result.size());
-
-    free(hash_context);
+    hash_context.TruncatedFinal(*result, result.size());
 
     return result;
 }
@@ -215,13 +209,11 @@ crypto_hash_t crypto_hash_t::sha256(const void *input, size_t length)
 {
     crypto_hash_t result;
 
-    const auto hash_context = new CryptoPP::SHA256();
+    CryptoPP::SHA256 hash_context;
 
-    hash_context->Update(static_cast<const CryptoPP::byte *>(input), length);
+    hash_context.Update(static_cast<const CryptoPP::byte *>(input), length);
 
-    hash_context->TruncatedFinal(*result, result.size());
-
-    free(hash_context);
+    hash_context.TruncatedFinal(*result, result.size());
 
     return result;
 }
@@ -230,13 +222,11 @@ crypto_hash_t crypto_hash_t::sha384(const void *input, size_t length)
 {
     crypto_hash_t result;
 
-    const auto hash_context = new CryptoPP::SHA384();
+    CryptoPP::SHA384 hash_context;
 
-    hash_context->Update(static_cast<const CryptoPP::byte *>(input), length);
+    hash_context.Update(static_cast<const CryptoPP::byte *>(input), length);
 
-    hash_context->TruncatedFinal(*result, result.size());
-
-    free(hash_context);
+    hash_context.TruncatedFinal(*result, result.size());
 
     return result;
 }
@@ -245,13 +235,11 @@ crypto_hash_t crypto_hash_t::sha512(const void *input, size_t length)
 {
     crypto_hash_t result;
 
-    const auto hash_context = new CryptoPP::SHA512();
+    CryptoPP::SHA512 hash_context;
 
-    hash_context->Update(static_cast<const CryptoPP::byte *>(input), length);
+    hash_context.Update(static_cast<const CryptoPP::byte *>(input), length);
 
-    hash_context->TruncatedFinal(*result, result.size());
-
-    free(hash_context);
+    hash_context.TruncatedFinal(*result, result.size());
 
     return result;
 }

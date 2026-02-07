@@ -91,17 +91,15 @@ namespace Crypto::RFC8032
         CryptoPP::byte hramDigest[64];
 
         {
-            auto hash_context = new CryptoPP::SHA512();
+            CryptoPP::SHA512 hash_context;
 
-            hash_context->Update(signature.LR.L.data(), signature.LR.L.size());
+            hash_context.Update(signature.LR.L.data(), signature.LR.L.size());
 
-            hash_context->Update(public_key.data(), public_key.size());
+            hash_context.Update(public_key.data(), public_key.size());
 
-            hash_context->Update(static_cast<const CryptoPP::byte *>(message), message_length);
+            hash_context.Update(static_cast<const CryptoPP::byte *>(message), message_length);
 
-            hash_context->Final(hramDigest);
-
-            free(hash_context);
+            hash_context.Final(hramDigest);
         }
 
         // We then reduce the 512-bit SHA512 digest into a scalar value
@@ -142,17 +140,15 @@ namespace Crypto::RFC8032
         CryptoPP::byte hramDigest[64];
 
         {
-            auto hash_context = new CryptoPP::SHA512();
+            CryptoPP::SHA512 hash_context;
 
-            hash_context->Update(alpha_point.data(), alpha_point.size());
+            hash_context.Update(alpha_point.data(), alpha_point.size());
 
-            hash_context->Update(public_key.data(), public_key.size());
+            hash_context.Update(public_key.data(), public_key.size());
 
-            hash_context->Update(static_cast<const CryptoPP::byte *>(message), message_length);
+            hash_context.Update(static_cast<const CryptoPP::byte *>(message), message_length);
 
-            hash_context->Final(hramDigest);
-
-            free(hash_context);
+            hash_context.Final(hramDigest);
         }
 
         // We then reduce the 512-bit SHA512 digest into a scalar value

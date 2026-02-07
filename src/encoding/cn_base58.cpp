@@ -28,6 +28,7 @@
 #include <cassert>
 #include <crypto_config.h>
 #include <encoding/cn_base58.h>
+#include <helpers/constant_time.h>
 #include <types/crypto_hash_t.h>
 
 #define SWAP64(x)                                                                             \
@@ -351,7 +352,7 @@ namespace Crypto::CNBase58
         const auto expected_checksum = crypto_hash_t::sha3(decoded.data(), decoded.size());
 
         // check the checksum
-        if (std::memcmp(expected_checksum.data(), checksum.data(), CRYPTO_BASE58_CHECKSUM_SIZE) != 0)
+        if (!constant_time_equals(expected_checksum.data(), checksum.data(), CRYPTO_BASE58_CHECKSUM_SIZE))
         {
             return {false, {}};
         }

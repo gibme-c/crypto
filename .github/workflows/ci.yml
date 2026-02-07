@@ -97,32 +97,32 @@ jobs:
           CCACHE_DIR: $GITHUB_WORKSPACE/.ccache
         run: |
           cd build
-          ${{ matrix.CMAKE_CMD }} -DBUILD_TEST=1
+          ${{ matrix.CMAKE_CMD }} -DBUILD_TESTS=1 -DCMAKE_BUILD_TYPE=Release
       - name: Build Project
         env:
           CCACHE_DIR: $GITHUB_WORKSPACE/.ccache
         run: |
           cd build
-          cmake --build . -j2
+          cmake --build . --config Release -j2
 
       - name: Test Cryptography (Linux & OSX)
         if: matrix.os != 'windows-latest' || matrix.name == 'mingw-gcc'
         run: |
           cd build
-          ./cryptotest
+          ./crypto-test
       - name: Test Cryptography (Windows)
         if: matrix.os == 'windows-latest' && matrix.name == 'msvc'
         run: |
-          cd build/Debug
-          ./cryptotest.exe
+          cd build/Release
+          ./crypto-test.exe
 
       - name: Test SLIP-0010 (Linux & OSX)
         if: matrix.os != 'windows-latest' || matrix.name == 'mingw-gcc'
         run: |
           cd build
-          ./test_slip10
+          ./crypto-slip10-test
       - name: Test SLIP-0010 (Windows)
         if: matrix.os == 'windows-latest' && matrix.name == 'msvc'
         run: |
-          cd build/Debug
-          ./test_slip10.exe
+          cd build/Release
+          ./crypto-slip10-test.exe

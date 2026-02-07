@@ -28,15 +28,16 @@
 #include <cryptopp/sha.h>
 #include <helpers/hd_keys.h>
 #include <types/crypto_seed_t.h>
+#include <ed25519/include/ed25519_secure_erase.h>
 
 static std::vector<unsigned char>
     calculate_bip39_raw(const void *raw_bytes, size_t raw_bytes_length, const std::string &salt)
 {
     std::vector<unsigned char> bytes(64);
 
-    const auto pbkdf2_context = new CryptoPP::PKCS5_PBKDF2_HMAC<CryptoPP::SHA512>();
+    CryptoPP::PKCS5_PBKDF2_HMAC<CryptoPP::SHA512> pbkdf2_context;
 
-    pbkdf2_context->DeriveKey(
+    pbkdf2_context.DeriveKey(
         bytes.data(),
         bytes.size(),
         0,
@@ -45,8 +46,6 @@ static std::vector<unsigned char>
         static_cast<const CryptoPP::byte *>((void *)salt.data()),
         salt.size(),
         2048);
-
-    free(pbkdf2_context);
 
     return bytes;
 }
@@ -70,7 +69,11 @@ crypto_seed_t::crypto_seed_t(const std::vector<unsigned char> &raw_seed, const s
 
 crypto_seed_t::~crypto_seed_t()
 {
-    secure_erase(bytes.data(), bytes.size());
+    ed25519_secure_erase(bytes.data(), bytes.size());
+
+    ed25519_secure_erase(*_key, _key.size());
+
+    ed25519_secure_erase(*_chain_code, _chain_code.size());
 }
 
 crypto_hd_key_t crypto_seed_t::generate_child_key(

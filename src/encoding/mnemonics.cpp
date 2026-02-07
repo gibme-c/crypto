@@ -109,7 +109,7 @@ namespace Crypto::Mnemonics
     {
         if (words.size() != 24 && words.size() != 12)
         {
-            throw std::invalid_argument("Mnemonic must contain exactly 24 words");
+            throw std::invalid_argument("Mnemonic must contain exactly 12 or 24 words");
         }
 
         std::string binary_string;

@@ -128,13 +128,11 @@ void crypto_secret_key_t::load_hook()
 {
     std::vector<unsigned char> hash(64);
 
-    const auto hash_context = new CryptoPP::SHA512();
+    CryptoPP::SHA512 hash_context;
 
-    hash_context->Update(bytes, sizeof(bytes));
+    hash_context.Update(bytes, sizeof(bytes));
 
-    hash_context->Final(hash.data());
-
-    free(hash_context);
+    hash_context.Final(hash.data());
 
     hash.resize(32); // truncate the hash to 32-bytes
 

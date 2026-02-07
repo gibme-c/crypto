@@ -52,8 +52,8 @@ namespace Crypto::Signature
             return false;
         }
 
-        // [(c - sL) mod l] != 0
-        return (challenge - signature.LR.L).is_nonzero();
+        // [(c - sL) mod l] == 0
+        return !(challenge - signature.LR.L).is_nonzero();
     }
 
     crypto_signature_t complete_signature(const crypto_scalar_t &signing_scalar, const crypto_signature_t &signature)

@@ -28,9 +28,11 @@
 #include <crypto_constants.h>
 #include <cryptopp/aes.h>
 #include <cryptopp/filters.h>
+#include <cryptopp/hmac.h>
 #include <cryptopp/modes.h>
 #include <cryptopp/pwdbased.h>
 #include <cryptopp/sha3.h>
+#include <helpers/constant_time.h>
 #include <helpers/random_bytes.h>
 #include <types/crypto_scalar_vector_t.h>
 
@@ -40,14 +42,16 @@ namespace Crypto
     {
         std::string decrypt(const std::string &input, const std::string &password, size_t iterations)
         {
+            static constexpr size_t HMAC_SIZE = 32;
+
             // load the hexadecimal encoded string
             auto reader = Serialization::deserializer_t(input);
 
-            CryptoPP::byte key[16] = {0}, salt[16] = {0};
+            CryptoPP::byte derived_key[32] = {0}, salt[16] = {0};
 
-            if (reader.size() < sizeof(salt))
+            if (reader.size() < sizeof(salt) + HMAC_SIZE)
             {
-                throw std::invalid_argument("Ciphertext does not contain enough data to include the salt");
+                throw std::invalid_argument("Ciphertext does not contain enough data");
             }
 
             // pull out the salt
@@ -59,10 +63,10 @@ namespace Crypto
 
             CryptoPP::PKCS5_PBKDF2_HMAC<CryptoPP::SHA3_512> pbkdf2;
 
-            // derive the AES key from the password and salt
+            // derive 32 bytes: 16 for AES key + 16 for HMAC key
             pbkdf2.DeriveKey(
-                key,
-                sizeof(key),
+                derived_key,
+                sizeof(derived_key),
                 0,
                 reinterpret_cast<const CryptoPP::byte *>(password.c_str()),
                 password.size(),
@@ -70,19 +74,51 @@ namespace Crypto
                 sizeof(salt),
                 iterations);
 
+            const CryptoPP::byte *aes_key = derived_key;
+            const CryptoPP::byte *hmac_key = derived_key + 16;
+
+            const auto remaining = reader.unread_data();
+
+            if (remaining.size() < HMAC_SIZE)
+            {
+                throw std::invalid_argument("Ciphertext does not contain enough data");
+            }
+
+            // separate ciphertext and stored HMAC
+            const auto ciphertext_size = remaining.size() - HMAC_SIZE;
+            const auto *ciphertext_data = remaining.data();
+            const auto *stored_hmac = remaining.data() + ciphertext_size;
+
+            // recompute HMAC over salt || ciphertext
+            CryptoPP::byte computed_hmac[HMAC_SIZE];
+            {
+                CryptoPP::HMAC<CryptoPP::SHA3_256> hmac(hmac_key, 16);
+
+                hmac.Update(salt, sizeof(salt));
+
+                hmac.Update(ciphertext_data, ciphertext_size);
+
+                hmac.TruncatedFinal(computed_hmac, HMAC_SIZE);
+            }
+
+            // constant-time comparison
+            if (!constant_time_equals(computed_hmac, stored_hmac, HMAC_SIZE))
+            {
+                throw std::invalid_argument("Decryption authentication failed");
+            }
+
+            // HMAC verified, proceed with decryption
             CryptoPP::CBC_Mode<CryptoPP::AES>::Decryption cbc_decryption;
 
-            cbc_decryption.SetKeyWithIV(key, sizeof(key), salt);
+            cbc_decryption.SetKeyWithIV(aes_key, 16, salt);
 
             std::string decrypted;
-
-            const auto buffer = reader.unread_data();
 
             try
             {
                 CryptoPP::StringSource(
-                    reinterpret_cast<const CryptoPP::byte *>(buffer.data()),
-                    buffer.size(),
+                    ciphertext_data,
+                    ciphertext_size,
                     true,
                     new CryptoPP::StreamTransformationFilter(cbc_decryption, new CryptoPP::StringSink(decrypted)));
             }
@@ -96,17 +132,19 @@ namespace Crypto
 
         std::string encrypt(const std::string &input, const std::string &password, size_t iterations)
         {
-            CryptoPP::byte key[16] = {0}, salt[16] = {0};
+            static constexpr size_t HMAC_SIZE = 32;
+
+            CryptoPP::byte derived_key[32] = {0}, salt[16] = {0};
 
             // generate a random salt
             random_bytes(sizeof(salt), salt);
 
             CryptoPP::PKCS5_PBKDF2_HMAC<CryptoPP::SHA3_512> pbkdf2;
 
-            // derive the AES key from the password and salt
+            // derive 32 bytes: 16 for AES key + 16 for HMAC key
             pbkdf2.DeriveKey(
-                key,
-                sizeof(key),
+                derived_key,
+                sizeof(derived_key),
                 0,
                 reinterpret_cast<const CryptoPP::byte *>(password.c_str()),
                 password.size(),
@@ -114,9 +152,12 @@ namespace Crypto
                 sizeof(salt),
                 iterations);
 
+            const CryptoPP::byte *aes_key = derived_key;
+            const CryptoPP::byte *hmac_key = derived_key + 16;
+
             CryptoPP::CBC_Mode<CryptoPP::AES>::Encryption cbc_encryption;
 
-            cbc_encryption.SetKeyWithIV(key, sizeof(key), salt);
+            cbc_encryption.SetKeyWithIV(aes_key, 16, salt);
 
             std::vector<CryptoPP::byte> encrypted;
 
@@ -125,6 +166,18 @@ namespace Crypto
                 true,
                 new CryptoPP::StreamTransformationFilter(cbc_encryption, new CryptoPP::VectorSink(encrypted)));
 
+            // compute HMAC over salt || ciphertext
+            CryptoPP::byte hmac_digest[HMAC_SIZE];
+            {
+                CryptoPP::HMAC<CryptoPP::SHA3_256> hmac(hmac_key, 16);
+
+                hmac.Update(salt, sizeof(salt));
+
+                hmac.Update(encrypted.data(), encrypted.size());
+
+                hmac.TruncatedFinal(hmac_digest, HMAC_SIZE);
+            }
+
             auto writer = Serialization::serializer_t();
 
             // pack the salt on to the front
@@ -132,6 +185,9 @@ namespace Crypto
 
             // append the encrypted data
             writer.bytes(encrypted.data(), encrypted.size());
+
+            // append the HMAC
+            writer.bytes(hmac_digest, HMAC_SIZE);
 
             // return it as a hexadecimal encoded string
             return writer.to_string();
@@ -223,6 +279,11 @@ namespace Crypto
     {
         SCALAR_NZ_OR_THROW(derivation_scalar);
 
+        if (!public_key.check() || !public_key.check_subgroup())
+        {
+            throw std::invalid_argument("public_key is not a valid point in the subgroup");
+        }
+
         // P = [A + (Ds * G)] mod l
         return (derivation_scalar * Crypto::G) + public_key;
     }
@@ -242,6 +303,11 @@ namespace Crypto
     {
         SCALAR_NZ_OR_THROW(secret_key);
 
+        if (!public_key.check() || !public_key.check_subgroup())
+        {
+            throw std::invalid_argument("public_key is not a valid point in the subgroup");
+        }
+
         // D = (a * B) mod l
         return (secret_key * public_key).mul8();
     }
@@ -250,6 +316,11 @@ namespace Crypto
         generate_key_image(const crypto_public_key_t &public_ephemeral, const crypto_scalar_t &secret_ephemeral)
     {
         SCALAR_NZ_OR_THROW(secret_ephemeral);
+
+        if (!public_ephemeral.check() || !public_ephemeral.check_subgroup())
+        {
+            throw std::invalid_argument("public_ephemeral is not a valid point in the subgroup");
+        }
 
         // I = [Hp(P) * x] mod l
         return secret_ephemeral * crypto_hash_t::sha3(public_ephemeral).point();

@@ -213,14 +213,14 @@ bool crypto_scalar_t::operator>(const uint64_t &other) const
 {
     const auto other_scalar = crypto_scalar_t(other);
 
-    return (*this < other_scalar);
+    return (*this > other_scalar);
 }
 
 bool crypto_scalar_t::operator>(const uint256_t &other) const
 {
     const auto other_scalar = crypto_scalar_t::from_uint256(other);
 
-    return (*this < other_scalar);
+    return (*this > other_scalar);
 }
 
 bool crypto_scalar_t::operator>=(const uint64_t &other) const
@@ -405,7 +405,7 @@ crypto_point_t crypto_scalar_t::operator*(const crypto_point_t &point) const
 
     if (point == Crypto::G) // If we're multiplying by G, use the base method, it's faster
     {
-        ge_scalarmult_base(&temp_p1p1, bytes);
+        ge_scalarmult_base_ct(&temp_p1p1, bytes);
 
         ge_p1p1_to_p3(&temp_p3, &temp_p1p1);
 
@@ -416,7 +416,7 @@ crypto_point_t crypto_scalar_t::operator*(const crypto_point_t &point) const
         const auto p = point.p3();
 
         // aB = (a * B) mod l
-        ge_scalarmult(&temp_p1p1, bytes, &p);
+        ge_scalarmult_ct(&temp_p1p1, bytes, &p);
 
         ge_p1p1_to_p3(&temp_p3, &temp_p1p1);
 
@@ -464,7 +464,7 @@ crypto_point_t
 
 bool crypto_scalar_t::check() const
 {
-    return sc_check(bytes) == 0;
+    return sc_check_reduced(bytes) == 0;
 }
 
 crypto_scalar_t crypto_scalar_t::invert() const
@@ -476,7 +476,7 @@ crypto_scalar_t crypto_scalar_t::invert() const
 
 bool crypto_scalar_t::is_nonzero() const
 {
-    return sc_isnonzero(bytes) == 0;
+    return sc_isnonzero(bytes) != 0;
 }
 
 crypto_scalar_t crypto_scalar_t::negate() const
@@ -613,13 +613,11 @@ crypto_scalar_t crypto_scalar_t::random()
 
     SerializablePod result;
 
-    auto hash_context = new CryptoPP::SHA3_256();
+    CryptoPP::SHA3_256 hash_context;
 
-    hash_context->Update(static_cast<CryptoPP::byte *>(bytes), CRYPTO_ENTROPY_BYTES);
+    hash_context.Update(static_cast<CryptoPP::byte *>(bytes), CRYPTO_ENTROPY_BYTES);
 
-    hash_context->TruncatedFinal(*result, result.size());
-
-    free(hash_context);
+    hash_context.TruncatedFinal(*result, result.size());
 
     return crypto_scalar_t(result.serialize(), true);
 }
@@ -738,9 +736,9 @@ bool crypto_scalar_t::valid(bool allow_zero) const
 
 void crypto_scalar_t::do_reduce()
 {
-    sc_reduce_rfc(bytes);
+    sc_clamp(bytes);
 
-    sc_reduce32(bytes);
+    sc_reduce(bytes, 32);
 }
 
 void crypto_scalar_t::from_bits(const std::vector<crypto_scalar_t> &bits)

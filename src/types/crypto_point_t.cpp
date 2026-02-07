@@ -28,6 +28,7 @@
 #include <cryptopp/sha3.h>
 #include <helpers/random_bytes.h>
 #include <types/crypto_point_t.h>
+#include <ed25519/include/ed25519_secure_erase.h>
 
 static unsigned char z_point[32] = {0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -87,11 +88,11 @@ crypto_point_t::crypto_point_t(const uint64_t &number)
 
 crypto_point_t::~crypto_point_t()
 {
-    secure_erase(bytes, sizeof(bytes));
+    ed25519_secure_erase(bytes, sizeof(bytes));
 
-    secure_erase(&point3, sizeof(point3));
+    ed25519_secure_erase(&point3, sizeof(point3));
 
-    secure_erase(&cached_point, sizeof(cached_point));
+    ed25519_secure_erase(&cached_point, sizeof(cached_point));
 }
 
 crypto_point_t crypto_point_t::from_uint256(const uint256_t &number)
@@ -157,7 +158,7 @@ bool crypto_point_t::check() const
 {
     ge_p3 tmp;
 
-    return ge_frombytes_negate_vartime(&tmp, bytes) == 0;
+    return ge_frombytes_vartime(&tmp, bytes) == 0;
 }
 
 bool crypto_point_t::check_subgroup() const
@@ -252,7 +253,7 @@ crypto_point_t crypto_point_t::reduce(const unsigned char *bytes)
 
     ge_p3 point3;
 
-    ge_fromfe_frombytes_negate_vartime(&point, bytes);
+    ge_fromfe_frombytes_vartime(&point, bytes);
 
     ge_mul8(&point2, &point);
 
@@ -295,7 +296,7 @@ bool crypto_point_t::valid(bool allow_identity) const
 
 void crypto_point_t::load_hook()
 {
-    if (ge_frombytes_negate_vartime(&point3, bytes) != 0)
+    if (ge_frombytes_vartime(&point3, bytes) != 0)
     {
         throw std::runtime_error("could not load point");
     }

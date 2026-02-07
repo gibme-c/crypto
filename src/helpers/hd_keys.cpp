@@ -111,14 +111,11 @@ std::vector<unsigned char>
 {
     std::vector<unsigned char> result(CryptoPP::HMAC<CryptoPP::SHA512>::DIGESTSIZE);
 
-    const auto hmac_context =
-        new CryptoPP::HMAC<CryptoPP::SHA512>(static_cast<const CryptoPP::byte *>(key), key_length);
+    CryptoPP::HMAC<CryptoPP::SHA512> hmac_context(static_cast<const CryptoPP::byte *>(key), key_length);
 
-    hmac_context->Update(static_cast<const CryptoPP::byte *>(message), message_length);
+    hmac_context.Update(static_cast<const CryptoPP::byte *>(message), message_length);
 
-    hmac_context->Final(result.data());
-
-    free(hmac_context);
+    hmac_context.Final(result.data());
 
     return result;
 }
