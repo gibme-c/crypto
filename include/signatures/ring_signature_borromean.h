@@ -46,18 +46,6 @@ namespace Crypto::RingSignature::Borromean
         const crypto_borromean_signature_t &borromean_signature);
 
     /**
-     * Completes the prepared Borromean ring signature
-     * @param signing_scalar
-     * @param real_output_index
-     * @param signature
-     * @return
-     */
-    std::tuple<bool, crypto_borromean_signature_t> complete_ring_signature(
-        const crypto_scalar_t &signing_scalar,
-        size_t real_output_index,
-        const crypto_borromean_signature_t &borromean_signature);
-
-    /**
      * Generates Borromean ring signature using the secret key provided
      * @param message_digest
      * @param secret_ephemeral
@@ -68,21 +56,6 @@ namespace Crypto::RingSignature::Borromean
         const crypto_hash_t &message_digest,
         const crypto_scalar_t &secret_ephemeral,
         const std::vector<crypto_public_key_t> &public_keys);
-
-    /**
-     * Prepares a Borromean ring signature using the primitive values provided
-     * Must be completed via complete_ring_signature before it will validate
-     * @param message_digest
-     * @param key_image
-     * @param public_keys
-     * @param real_output_index
-     * @return
-     */
-    std::tuple<bool, crypto_borromean_signature_t> prepare_ring_signature(
-        const crypto_hash_t &message_digest,
-        const crypto_key_image_t &key_image,
-        const std::vector<crypto_public_key_t> &public_keys,
-        size_t real_output_index);
 } // namespace Crypto::RingSignature::Borromean
 
 #endif // CRYPTO_RING_SIGNATURE_BORROMEAN_H

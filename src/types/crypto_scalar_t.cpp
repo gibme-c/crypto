@@ -548,18 +548,23 @@ std::vector<crypto_scalar_t> crypto_scalar_t::pow_expand(size_t count, bool desc
 
     std::vector<crypto_scalar_t> result(count);
 
-    size_t start = 0, end = count;
-
-    if (!include_zero)
+    if (include_zero)
     {
-        start += 1;
+        result[0] = crypto_scalar_t(1);
 
-        end += 1;
+        for (size_t i = 1; i < count; ++i)
+        {
+            result[i] = result[i - 1] * (*this);
+        }
     }
-
-    for (size_t i = start, j = 0; i < end; ++i, ++j)
+    else
     {
-        result[j] = pow(i);
+        result[0] = *this;
+
+        for (size_t i = 1; i < count; ++i)
+        {
+            result[i] = result[i - 1] * (*this);
+        }
     }
 
     if (descending)

@@ -51,22 +51,6 @@ namespace Crypto::RingSignature::CLSAG
         const std::vector<crypto_pedersen_commitment_t> &commitments = {});
 
     /**
-     * Completes the prepared CLSAG ring signature
-     * @param signing_scalar
-     * @param real_output_index
-     * @param signature
-     * @param h
-     * @param mu_P
-     * @return
-     */
-    std::tuple<bool, crypto_clsag_signature_t> complete_ring_signature(
-        const crypto_scalar_t &signing_scalar,
-        size_t real_output_index,
-        const crypto_clsag_signature_t &signature,
-        const std::vector<crypto_scalar_t> &h,
-        const crypto_scalar_t &mu_P);
-
-    /**
      * Generates a CLSAG ring signature using the secrets provided
      * @param message_digest
      * @param secret_ephemeral
@@ -81,29 +65,6 @@ namespace Crypto::RingSignature::CLSAG
         const crypto_hash_t &message_digest,
         const crypto_scalar_t &secret_ephemeral,
         const std::vector<crypto_public_key_t> &public_keys,
-        const crypto_blinding_factor_t &input_blinding_factor = Crypto::ZERO,
-        const std::vector<crypto_pedersen_commitment_t> &public_commitments = {},
-        const crypto_blinding_factor_t &pseudo_blinding_factor = Crypto::ZERO,
-        const crypto_pedersen_commitment_t &pseudo_commitment = Crypto::Z);
-
-    /**
-     * Prepares a CLSAG ring signature using the primitive values provided
-     * Must be completed via complete_ring_signature before it will validate
-     * @param message_digest
-     * @param key_image
-     * @param public_keys
-     * @param real_output_index
-     * @param input_blinding_factor
-     * @param public_commitments
-     * @param pseudo_blinding_factor
-     * @param pseudo_commitment
-     * @return
-     */
-    std::tuple<bool, crypto_clsag_signature_t, std::vector<crypto_scalar_t>, crypto_scalar_t> prepare_ring_signature(
-        const crypto_hash_t &message_digest,
-        const crypto_key_image_t &key_image,
-        const std::vector<crypto_public_key_t> &public_keys,
-        size_t real_output_index = 0,
         const crypto_blinding_factor_t &input_blinding_factor = Crypto::ZERO,
         const std::vector<crypto_pedersen_commitment_t> &public_commitments = {},
         const crypto_blinding_factor_t &pseudo_blinding_factor = Crypto::ZERO,

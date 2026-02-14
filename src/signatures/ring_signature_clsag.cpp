@@ -27,6 +27,8 @@
 // Inspired by the work of Sarang Noether found at
 // https://github.com/SarangNoether/skunkworks/tree/clsag
 
+#include <cstring>
+
 #include <crypto_constants.h>
 #include <helpers/dedupe_and_sort_keys.h>
 #include <helpers/scalar_transcript_t.h>
@@ -137,6 +139,17 @@ namespace Crypto::RingSignature::CLSAG
             transcript.update(signature.pseudo_commitment);
         }
 
+        // pre-extract ge_p3 for key_image (constant across all iterations)
+        const auto key_image_p3 = key_image.p3();
+
+        // if using commitments, pre-extract commitment_image ge_p3
+        ge_p3 commitment_image_p3;
+
+        if (use_commitments)
+        {
+            commitment_image_p3 = signature.commitment_image.p3();
+        }
+
         for (size_t i = 0; i < ring_size; i++)
         {
             auto temp_h = h[i];
@@ -151,35 +164,60 @@ namespace Crypto::RingSignature::CLSAG
             // r = (temp_h * mu_P) mod l
             const auto r = temp_h * mu_P;
 
-            // L = [(r * P[idx]) + (s[idx] * G)] mod l
-            auto L = r.dbl_mult(public_keys[idx], signature.scalars[idx], Crypto::G);
-
             // HP = [Hp(P[idx])] mod l
             const auto HP = crypto_hash_t::sha3(public_keys[idx]).point();
 
-            // R = [(s[idx] * HP) + (r * I)] mod l
-            auto R = signature.scalars[idx].dbl_mult(HP, r, key_image);
+            crypto_point_t L, R;
 
             if (use_commitments)
             {
                 // r2 = (temp_h * mu_C) mod l
                 const auto r2 = temp_h * mu_C;
 
-                /**
-                 * Here we're calculating the offset commitments based upon the input
-                 * commitments minus the pseudo commitment that was provided thus
-                 * allowing us to verify their signers knowledge of z (the delta between the
-                 * input blinding scalar and the pseudo blinding scalar) while committing
-                 * to a "zero" amount difference between the two commitments
-                 */
                 // C = (C[idx] - PS) mod l
                 const auto C = Crypto::EIGHT * (commitments[idx] - signature.pseudo_commitment);
 
-                // L += [r2 * (C[idx] - PS)] mod l
-                L += (r2 * C);
+                // L = s[idx] * G + r * P[idx] + r2 * C
+                {
+                    ge_p3 result;
+                    unsigned char scalars[2 * 32];
+                    ge_p3 points[2];
 
-                // R += (r2 * D) mod l
-                R += (r2 * signature.commitment_image);
+                    std::memcpy(&scalars[0], r.data(), 32);
+                    points[0] = public_keys[idx].p3();
+                    std::memcpy(&scalars[32], r2.data(), 32);
+                    points[1] = C.p3();
+
+                    ge_multiscalar_mul_base_vartime(&result, scalars, points, 2, signature.scalars[idx].data());
+
+                    L = crypto_point_t(result);
+                }
+
+                // R = s[idx] * HP + r * I + r2 * D
+                {
+                    ge_p3 result;
+                    unsigned char scalars[3 * 32];
+                    ge_p3 points[3];
+
+                    std::memcpy(&scalars[0], signature.scalars[idx].data(), 32);
+                    points[0] = HP.p3();
+                    std::memcpy(&scalars[32], r.data(), 32);
+                    points[1] = key_image_p3;
+                    std::memcpy(&scalars[64], r2.data(), 32);
+                    points[2] = commitment_image_p3;
+
+                    ge_multiscalar_mul_vartime(&result, scalars, points, 3);
+
+                    R = crypto_point_t(result);
+                }
+            }
+            else
+            {
+                // L = [(r * P[idx]) + (s[idx] * G)] mod l
+                L = r.dbl_mult(public_keys[idx], signature.scalars[idx], Crypto::G);
+
+                // R = [(s[idx] * HP) + (r * I)] mod l
+                R = signature.scalars[idx].dbl_mult(HP, r, key_image);
             }
 
             auto sub_transcript = transcript;
@@ -198,51 +236,6 @@ namespace Crypto::RingSignature::CLSAG
         }
 
         return h[0] == h0;
-    }
-
-    std::tuple<bool, crypto_clsag_signature_t> complete_ring_signature(
-        const crypto_scalar_t &signing_scalar,
-        size_t real_output_index,
-        const crypto_clsag_signature_t &signature,
-        const std::vector<crypto_scalar_t> &h,
-        const crypto_scalar_t &mu_P)
-    {
-        if (signature.scalars.empty() || real_output_index >= signature.scalars.size()
-            || h.size() != signature.scalars.size())
-        {
-            return {false, {}};
-        }
-
-        if (!signing_scalar.valid() || !signature.challenge.valid() || !mu_P.valid())
-        {
-            return {false, {}};
-        }
-
-        for (const auto &scalar : signature.scalars)
-        {
-            if (!scalar.valid())
-            {
-                return {false, {}};
-            }
-        }
-
-        for (const auto &scalar : h)
-        {
-            if (!scalar.valid())
-            {
-                return {false, {}};
-            }
-        }
-
-        std::vector<crypto_scalar_t> finalized_signature(signature.scalars);
-
-        // s = [alpha - (h[real_output_index] * (p * mu_P))] mod l
-        finalized_signature[real_output_index] -= (h[real_output_index] * (mu_P * signing_scalar));
-
-        return {
-            true,
-            crypto_clsag_signature_t(
-                finalized_signature, signature.challenge, signature.commitment_image, signature.pseudo_commitment)};
     }
 
     std::tuple<bool, crypto_clsag_signature_t> generate_ring_signature(
@@ -281,19 +274,10 @@ namespace Crypto::RingSignature::CLSAG
         // P = (p * G) mod l
         const auto public_ephemeral = secret_ephemeral * Crypto::G;
 
-        /**
-         * Look for a public_ephemeral in the key set that we have the
-         * secret ephemeral for
-         */
         for (size_t i = 0; i < ring_size; i++)
         {
             if (use_commitments)
             {
-                if (!input_blinding_factor.valid() || !pseudo_blinding_factor.valid())
-                {
-                    return {false, {}};
-                }
-
                 const auto public_commitment = (input_blinding_factor - pseudo_blinding_factor) * Crypto::G;
 
                 const auto derived_commitment = Crypto::EIGHT * (public_commitments[i] - pseudo_commitment);
@@ -316,69 +300,34 @@ namespace Crypto::RingSignature::CLSAG
             }
         }
 
-        /**
-         * if we could not find the related public key(s) in the list or the proper
-         * commitments provided, then fail as we cannot generate a valid signature
-         */
         if (real_output_index == -1)
         {
             return {false, {}};
         }
 
-        const auto key_image = Crypto::generate_key_image(public_ephemeral, secret_ephemeral);
+        // compute HP for the real output once — reused for key image, commitment image, and signing
+        const auto HP_real = crypto_hash_t::sha3(public_keys[real_output_index]).point();
 
-        const auto [prep_success, signature, h, mu_P] = prepare_ring_signature(
-            message_digest,
-            key_image,
-            public_keys,
-            real_output_index,
-            input_blinding_factor,
-            public_commitments,
-            pseudo_blinding_factor,
-            pseudo_commitment);
+        // generate key image: I = [Hp(P) * x] mod l
+        const auto key_image = secret_ephemeral * HP_real;
 
-        if (!prep_success)
+        // blinding scalar difference for commitments
+        const auto z = input_blinding_factor - pseudo_blinding_factor;
+
+        crypto_key_image_t commitment_image;
+
+        if (use_commitments)
         {
-            return {false, {}};
-        }
+            const auto commitment = Crypto::EIGHT * (public_commitments[real_output_index] - pseudo_commitment);
 
-        return complete_ring_signature(secret_ephemeral, real_output_index, signature, h, mu_P);
-    }
-
-    std::tuple<bool, crypto_clsag_signature_t, std::vector<crypto_scalar_t>, crypto_scalar_t> prepare_ring_signature(
-        const crypto_hash_t &message_digest,
-        const crypto_key_image_t &key_image,
-        const std::vector<crypto_public_key_t> &public_keys,
-        size_t real_output_index,
-        const crypto_blinding_factor_t &input_blinding_factor,
-        const std::vector<crypto_pedersen_commitment_t> &public_commitments,
-        const crypto_blinding_factor_t &pseudo_blinding_factor,
-        const crypto_pedersen_commitment_t &pseudo_commitment)
-    {
-        // check to verify that there are no duplicate keys in the set
-        {
-            const auto keys = dedupe_and_sort_keys(public_keys);
-
-            if (keys.size() != public_keys.size())
+            // sanity check: z * G should match the commitment difference
+            if (commitment != z * Crypto::G)
             {
-                return {false, {}, {}, {}};
+                return {false, {}};
             }
-        }
 
-        const auto ring_size = public_keys.size();
-
-        const auto use_commitments =
-            (input_blinding_factor.valid() && public_commitments.size() == public_keys.size()
-             && pseudo_blinding_factor.valid() && pseudo_commitment.valid());
-
-        if (real_output_index >= ring_size)
-        {
-            return {false, {}, {}, {}};
-        }
-
-        if (!key_image.check_subgroup())
-        {
-            return {false, {}, {}, {}};
+            // commitment image uses the same HP as the key image
+            commitment_image = z * HP_real;
         }
 
     try_again:
@@ -397,45 +346,6 @@ namespace Crypto::RingSignature::CLSAG
         }
 
         auto signature = crypto_scalar_t::random(ring_size);
-
-        // See below for more detail
-        const auto z = input_blinding_factor - pseudo_blinding_factor;
-
-        crypto_key_image_t commitment_image;
-
-        if (use_commitments)
-        {
-            if (!input_blinding_factor.valid() || !pseudo_blinding_factor.valid())
-            {
-                return {false, {}, {}, {}};
-            }
-
-            /**
-             * TLDR: If we know the difference between the input blinding scalar and the
-             * pseudo output blinding scalar then we can use that difference as the secret
-             * key for the difference between the input commitment and the pseudo commitment
-             * thus providing no amount component differences in the commitments between the
-             * two and hence we are committing (in a non-revealing way) that the pseudo output
-             * commitment is equivalent to ONE of the input commitments in the set
-             */
-            const auto commitment = Crypto::EIGHT * (public_commitments[real_output_index] - pseudo_commitment);
-
-            /**
-             * Quick sanity check to make sure that the computed z value (blinding scalar) delta
-             * has a resulting public point that is the same as the commitment that we can sign for above
-             */
-            if (commitment != z * Crypto::G)
-            {
-                return {false, {}, {}, {}};
-            }
-
-            /**
-             * This likely looks a bit goofy; however, the commitment image is based upon
-             * the public output key not the commitment point to prevent a whole bunch
-             * of frivolous math that only makes this far worse later
-             */
-            commitment_image = Crypto::generate_key_image(public_keys[real_output_index], z);
-        }
 
         std::vector<crypto_scalar_t> h(ring_size);
 
@@ -460,8 +370,7 @@ namespace Crypto::RingSignature::CLSAG
 
             if (!mu_P.valid())
             {
-                // We exit here as trying again does not change the transcript inputs
-                return {false, {}, {}, {}};
+                return {false, {}};
             }
         }
 
@@ -482,8 +391,7 @@ namespace Crypto::RingSignature::CLSAG
 
             if (!mu_C.valid())
             {
-                // We exit here as trying again does not change the transcript inputs
-                return {false, {}, {}, {}};
+                return {false, {}};
             }
         }
 
@@ -509,11 +417,8 @@ namespace Crypto::RingSignature::CLSAG
             // L = (a * G) mod l;
             const auto L = alpha_scalar * G;
 
-            // HP = [Hp(P)] mod l
-            const auto HP = crypto_hash_t::sha3(public_keys[real_output_index]).point();
-
-            // R = (alpha * HP) mod l
-            const auto R = alpha_scalar * HP;
+            // R = (alpha * HP) mod l — reuse precomputed HP_real
+            const auto R = alpha_scalar * HP_real;
 
             auto sub_transcript = transcript;
 
@@ -532,6 +437,17 @@ namespace Crypto::RingSignature::CLSAG
 
         if (ring_size > 1)
         {
+            // pre-extract ge_p3 for key_image (constant across all iterations)
+            const auto key_image_p3 = key_image.p3();
+
+            // if using commitments, pre-extract commitment_image ge_p3
+            ge_p3 commitment_image_p3;
+
+            if (use_commitments)
+            {
+                commitment_image_p3 = commitment_image.p3();
+            }
+
             for (size_t i = real_output_index + 1; i < real_output_index + ring_size; i++)
             {
                 const auto idx = i % ring_size;
@@ -539,35 +455,60 @@ namespace Crypto::RingSignature::CLSAG
                 // r = (h[idx] * mu_P) mod l
                 const auto r = h[idx] * mu_P;
 
-                // L = [(r * P) + (s[idx] * G)] mod l
-                auto L = r.dbl_mult(public_keys[idx], signature[idx], Crypto::G);
-
                 // HP = [Hp(P)] mod l
                 const auto HP = crypto_hash_t::sha3(public_keys[idx]).point();
 
-                // R = [(s[idx] * HP) + (r * I)] mod l
-                auto R = signature[idx].dbl_mult(HP, r, key_image);
+                crypto_point_t L, R;
 
                 if (use_commitments)
                 {
                     // r2 = (h[idx] * mu_C) mod l
                     const auto r2 = h[idx] * mu_C;
 
-                    /**
-                     * Here we're calculating the offset commitments based upon the input
-                     * commitments minus our pseudo commitment that we generated thus
-                     * allowing us to prove our knowledge of z (the delta between the
-                     * input blinding scalar and the pseudo blinding scalar) while committing
-                     * to a "zero" amount difference between the two commitments
-                     */
                     // C = (C[idx] - PS) mod l
                     const auto C = Crypto::EIGHT * (public_commitments[idx] - pseudo_commitment);
 
-                    // L += (r2 * C[idx]) mod l
-                    L += (r2 * C);
+                    // L = s[idx] * G + r * P[idx] + r2 * C
+                    {
+                        ge_p3 result;
+                        unsigned char scalars[2 * 32];
+                        ge_p3 points[2];
 
-                    // R += (r2 * D) mod l
-                    R += (r2 * commitment_image);
+                        std::memcpy(&scalars[0], r.data(), 32);
+                        points[0] = public_keys[idx].p3();
+                        std::memcpy(&scalars[32], r2.data(), 32);
+                        points[1] = C.p3();
+
+                        ge_multiscalar_mul_base_vartime(&result, scalars, points, 2, signature[idx].data());
+
+                        L = crypto_point_t(result);
+                    }
+
+                    // R = s[idx] * HP + r * I + r2 * D
+                    {
+                        ge_p3 result;
+                        unsigned char scalars[3 * 32];
+                        ge_p3 points[3];
+
+                        std::memcpy(&scalars[0], signature[idx].data(), 32);
+                        points[0] = HP.p3();
+                        std::memcpy(&scalars[32], r.data(), 32);
+                        points[1] = key_image_p3;
+                        std::memcpy(&scalars[64], r2.data(), 32);
+                        points[2] = commitment_image_p3;
+
+                        ge_multiscalar_mul_vartime(&result, scalars, points, 3);
+
+                        R = crypto_point_t(result);
+                    }
+                }
+                else
+                {
+                    // L = [(r * P) + (s[idx] * G)] mod l
+                    L = r.dbl_mult(public_keys[idx], signature[idx], Crypto::G);
+
+                    // R = [(s[idx] * HP) + (r * I)] mod l
+                    R = signature[idx].dbl_mult(HP, r, key_image);
                 }
 
                 auto sub_transcript = transcript;
@@ -576,29 +517,26 @@ namespace Crypto::RingSignature::CLSAG
 
                 const auto challenge = sub_transcript.challenge();
 
-                /*
-                 * our challenge value should never be 0
-                 *
-                 * As this challenge value does not have a random component, if we fail this check here
-                 * then we need to fail out totally instead of trying again as the transcript value will
-                 * not change just by trying again
-                 */
                 if (!challenge.valid())
                 {
-                    return {false, {}, {}, {}};
+                    return {false, {}};
                 }
 
                 h[(idx + 1) % ring_size] = challenge;
             }
         }
 
+        // complete the signature
         signature[real_output_index] = alpha_scalar;
+
+        // s = [alpha - (h[real_output_index] * (p * mu_P))] mod l
+        signature[real_output_index] -= (h[real_output_index] * (mu_P * secret_ephemeral));
 
         if (use_commitments)
         {
             signature[real_output_index] -= (h[real_output_index] * z * mu_C);
         }
 
-        return {true, crypto_clsag_signature_t(signature, h[0], commitment_image, pseudo_commitment), h, mu_P};
+        return {true, crypto_clsag_signature_t(signature, h[0], commitment_image, pseudo_commitment)};
     }
 } // namespace Crypto::RingSignature::CLSAG

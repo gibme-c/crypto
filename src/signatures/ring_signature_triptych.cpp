@@ -27,6 +27,8 @@
 // Adapted from Python code by Sarang Noether found at
 // https://github.com/SarangNoether/skunkworks/tree/triptych
 
+#include <cstring>
+
 #include <crypto_constants.h>
 #include <helpers/dedupe_and_sort_keys.h>
 #include <helpers/gray_code_generator_t.h>
@@ -37,19 +39,40 @@ typedef std::vector<std::vector<crypto_scalar_t>> triptych_crypto_scalar_vector_
 
 static inline crypto_point_t commitment_tensor(const triptych_crypto_scalar_vector_t &v, const crypto_scalar_t &r)
 {
-    auto C = Crypto::Z;
+    // count total terms: all v[i][j] pairs + the final r*H term
+    size_t count = 0;
+
+    for (size_t i = 0; i < v.size(); ++i)
+    {
+        count += v[i].size();
+    }
+
+    count++; // for r * H
+
+    // build contiguous scalar and point arrays for MSM
+    std::vector<unsigned char> scalars(count * 32);
+    std::vector<ge_p3> points(count);
+
+    size_t idx = 0;
 
     for (size_t i = 0; i < v.size(); ++i)
     {
         for (size_t j = 0; j < v[i].size(); ++j)
         {
-            C += v[i][j] * Crypto::commitment_tensor_point(TRIPTYCH_DOMAIN_1, i, j);
+            std::memcpy(&scalars[idx * 32], v[i][j].data(), 32);
+            points[idx] = Crypto::commitment_tensor_point(TRIPTYCH_DOMAIN_1, i, j).p3();
+            idx++;
         }
     }
 
-    C += r * Crypto::H;
+    // final term: r * H
+    std::memcpy(&scalars[idx * 32], r.data(), 32);
+    points[idx] = Crypto::H.p3();
 
-    return C;
+    ge_p3 result;
+    ge_multiscalar_mul_vartime(&result, scalars.data(), points.data(), count);
+
+    return crypto_point_t(result);
 }
 
 static inline triptych_crypto_scalar_vector_t init_triptych_scalar_vector(
@@ -202,7 +225,24 @@ namespace Crypto::RingSignature::Triptych
             return false;
         }
 
-        auto RX = Crypto::Z, RY = Crypto::Z;
+        const auto N = public_keys.size();
+
+        // total terms: N (gray code) + m (X[j]/Y[j]) + 1 (z*G or z*I)
+        const auto total_terms = N + m + 1;
+
+        // RY: the second point in the gray code loop is constant:
+        // U + mu * commitment_image, so RY's gray code portion is
+        // (sum of t_k) * constant_RY_point, collapsible to 1 term
+        const auto RY_gray_point = Crypto::U + (mu * signature.commitment_image);
+
+        // Build RX MSM: N gray code terms + m X[j] terms + z*G (base variant)
+        std::vector<unsigned char> rx_scalars(total_terms * 32);
+        std::vector<ge_p3> rx_points(total_terms);
+
+        // Build RY MSM: 1 collapsed gray code term + m Y[j] terms + z*I
+        const auto ry_total = m + 2;
+        std::vector<unsigned char> ry_scalars(ry_total * 32);
+        std::vector<ge_p3> ry_points(ry_total);
 
         auto t = Crypto::ONE;
 
@@ -211,36 +251,61 @@ namespace Crypto::RingSignature::Triptych
             t *= f[j][0];
         }
 
+        // accumulate the sum of all t values for the collapsed RY gray code term
+        auto t_sum = t;
+
         gray_code_generator_t gray_codes(n, m);
 
-        for (size_t k = 0; k < gray_codes.size(); ++k)
+        // gray code terms for RX (positive)
+        std::memcpy(&rx_scalars[0], t.data(), 32);
+        rx_points[0] = (public_keys[0] + (mu * (Crypto::EIGHT * (commitments[0] - signature.pseudo_commitment)))).p3();
+
+        for (size_t k = 1; k < N; ++k)
         {
             const auto &gray_update = gray_codes[k];
 
-            if (k > 0)
-            {
-                t *= f[gray_update[0]][gray_update[1]].invert() * f[gray_update[0]][gray_update[2]];
-            }
+            t *= f[gray_update[0]][gray_update[1]].invert() * f[gray_update[0]][gray_update[2]];
 
-            RX += t * (public_keys[k] + (mu * (Crypto::EIGHT * (commitments[k] - signature.pseudo_commitment))));
+            t_sum += t;
 
-            RY += t * (Crypto::U + (mu * signature.commitment_image));
+            std::memcpy(&rx_scalars[k * 32], t.data(), 32);
+            rx_points[k] =
+                (public_keys[k] + (mu * (Crypto::EIGHT * (commitments[k] - signature.pseudo_commitment)))).p3();
         }
 
+        // X[j] and Y[j] terms (negated: subtraction)
         for (size_t j = 0; j < m; ++j)
         {
-            const auto xpow = x.pow(j);
+            const auto neg_xpow = x.pow(j).negate();
 
-            RX -= xpow * signature.X[j];
+            std::memcpy(&rx_scalars[(N + j) * 32], neg_xpow.data(), 32);
+            rx_points[N + j] = signature.X[j].p3();
 
-            RY -= xpow * signature.Y[j];
+            std::memcpy(&ry_scalars[(1 + j) * 32], neg_xpow.data(), 32);
+            ry_points[1 + j] = signature.Y[j].p3();
         }
 
-        RX -= signature.z * Crypto::G;
+        // RX: z*G term via base variant (negated)
+        const auto neg_z = signature.z.negate();
 
-        RY -= signature.z * key_image;
+        // RY: collapsed gray code term (t_sum * RY_gray_point)
+        std::memcpy(&ry_scalars[0], t_sum.data(), 32);
+        ry_points[0] = RY_gray_point.p3();
 
-        return RX.empty() && RY.empty();
+        // RY: z * key_image term (negated)
+        std::memcpy(&ry_scalars[(m + 1) * 32], neg_z.data(), 32);
+        ry_points[m + 1] = key_image.p3();
+
+        // compute RX = base_scalar*G + sum(scalars[i]*points[i])
+        ge_p3 rx_result;
+        ge_multiscalar_mul_base_vartime(
+            &rx_result, rx_scalars.data(), rx_points.data(), N + m, neg_z.data());
+
+        // compute RY
+        ge_p3 ry_result;
+        ge_multiscalar_mul_vartime(&ry_result, ry_scalars.data(), ry_points.data(), ry_total);
+
+        return crypto_point_t(rx_result).empty() && crypto_point_t(ry_result).empty();
     }
 
     std::tuple<bool, crypto_triptych_signature_t> complete_ring_signature(
@@ -550,19 +615,60 @@ namespace Crypto::RingSignature::Triptych
             }
         }
 
+        // precompute combined points for each ring member
+        std::vector<ge_p3> combined_points(N);
+
+        for (size_t i = 0; i < N; ++i)
+        {
+            combined_points[i] =
+                (public_keys[i] + (mu * (Crypto::EIGHT * (input_commitments[i] - pseudo_commitment)))).p3();
+        }
+
+        const auto key_image_p3 = key_image.p3();
+        const auto U_p3 = Crypto::U.p3();
+
         for (size_t j = 0; j < m; ++j)
         {
-            for (size_t i = 0; i < N; ++i)
+            // X[j] = sum(p[i][j] * combined_point[i]) + rho[j] * G
             {
-                X[j] +=
-                    p[i][j] * (public_keys[i] + (mu * (Crypto::EIGHT * (input_commitments[i] - pseudo_commitment))));
+                std::vector<unsigned char> scalars(N * 32);
+                auto p_sum = Crypto::ZERO;
 
-                Y[j] += p[i][j] * Crypto::U;
+                for (size_t i = 0; i < N; ++i)
+                {
+                    std::memcpy(&scalars[i * 32], p[i][j].data(), 32);
+                    p_sum += p[i][j];
+                }
+
+                ge_p3 result;
+                ge_multiscalar_mul_base_vartime(&result, scalars.data(), combined_points.data(), N, rho[j].data());
+
+                X[j] = crypto_point_t(result);
             }
 
-            X[j] += rho[j] * Crypto::G;
+            // Y[j] = (sum of p[i][j]) * U + rho[j] * key_image
+            // All N terms share the same point U, so collapse to a single scalar mult
+            {
+                auto p_sum = Crypto::ZERO;
 
-            Y[j] += rho[j] * key_image;
+                for (size_t i = 0; i < N; ++i)
+                {
+                    p_sum += p[i][j];
+                }
+
+                unsigned char scalars[2 * 32];
+                ge_p3 points[2];
+
+                std::memcpy(&scalars[0], p_sum.data(), 32);
+                points[0] = U_p3;
+                std::memcpy(&scalars[32], rho[j].data(), 32);
+                points[1] = key_image_p3;
+
+                ge_p3 result;
+                ge_multiscalar_mul_vartime(&result, scalars, points, 2);
+
+                Y[j] = crypto_point_t(result);
+            }
         }
 
         tr.update(X);

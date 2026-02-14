@@ -24,6 +24,8 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <cstring>
+
 #include <helpers/dedupe_and_sort_keys.h>
 #include <types/crypto_scalar_vector_t.h>
 #include <utility>
@@ -154,54 +156,37 @@ crypto_point_t crypto_scalar_vector_t::inner_product(const crypto_point_vector_t
         throw std::range_error("vectors must be of equal size");
     }
 
+    const auto n = container.size();
+
     /**
      * If there is only a single value in each vector then it is faster
      * to just compute the result of the multiplication
      */
-    if (container.size() == 1)
+    if (n == 1)
     {
         return container[0] * other[0];
     }
 
     /**
-     * The method below reduces the number of individual scalar multiplications and additions
-     * performed in individual calls by using ge_double_scalarmult_negate_vartime instead
-     * of regular ge_scalarmult (regardless of the implementation) it does not incur the
-     * extra overhead of expanding and contracting multiple times. An alternative to this
-     * is a method which, while reliable, is quite a bit slower and left below as a reference.
-     *
-     * return (*this * other).sum();
+     * Use multi-scalar multiplication (MSM) to compute the sum of all
+     * scalar*point products in a single batched call. This replaces
+     * the previous approach of n/2 dbl_mult calls followed by a
+     * sequential summation, giving roughly log2(n) speedup via
+     * Straus (n<=32) or Pippenger (n>32) algorithms.
      */
+    std::vector<unsigned char> scalars(n * 32);
+    std::vector<ge_p3> points(n);
 
-    // Divide our vectors in half so that we can get a (L)eft and a (R)ight
-    const auto n = container.size() / 2;
-
-    crypto_point_vector_t points(n);
-
-    // slice the container and the points up into the (L)eft and (R)ight
-    const auto aL = slice(0, n), aR = slice(n, n * 2);
-
-    const auto AL = other.slice(0, n), AR = other.slice(n, n * 2);
-
-    /**
-     * Perform the double scalar mult using the (L)eft and (R)ight vectors
-     */
-    for (size_t i = 0; i < aL.size(); ++i)
+    for (size_t i = 0; i < n; ++i)
     {
-        points[i] = aL[i].dbl_mult(AL[i], aR[i], AR[i]);
+        std::memcpy(&scalars[i * 32], container[i].data(), 32);
+        points[i] = other[i].p3();
     }
 
-    /**
-     * If there was a (singular) value in the vectors that was not included in the
-     * (L)eft and (R)ight pairings then toss that on to the end of the vector
-     */
-    if (n * 2 != container.size())
-    {
-        points.append(container.back() * other.back());
-    }
+    ge_p3 result;
+    ge_multiscalar_mul_vartime(&result, scalars.data(), points.data(), n);
 
-    // Tally up the results and send them back
-    return points.sum();
+    return crypto_point_t(result);
 }
 
 crypto_scalar_t crypto_scalar_vector_t::inner_product(const crypto_scalar_vector_t &other) const

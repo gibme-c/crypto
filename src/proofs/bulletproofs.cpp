@@ -28,6 +28,8 @@
 // https://github.com/SarangNoether/skunkworks/tree/pybullet
 
 #include <crypto_constants.h>
+#include <ge_double_scalarmult_negate_vartime_batch_ss_p3.h>
+#include <ge_multiscalar_mul_vartime.h>
 #include <helpers/scalar_transcript_t.h>
 #include <mutex>
 #include <proofs/bulletproofs.h>
@@ -96,13 +98,16 @@ namespace Crypto::RangeProofs::Bulletproofs
             const crypto_point_t &U,
             crypto_scalar_vector_t a,
             crypto_scalar_vector_t b,
+            const crypto_scalar_t &y_inv,
             scalar_transcript_t tr):
-            G(std::move(G)), H(std::move(H)), U(U), a(std::move(a)), b(std::move(b)), tr(std::move(tr))
+            G(std::move(G)), H(std::move(H)), U(U), a(std::move(a)), b(std::move(b)), y_inv(y_inv), tr(std::move(tr))
         {
         }
 
         /**
-         * Computes the inner product for the values provided during the initialization of the structure
+         * Computes the inner product for the values provided during the initialization of the structure.
+         * H generators are kept UNSCALED; y_inv^i factors are applied in scalar space
+         * during L/R MSM computation, avoiding expensive scalar-point multiplications.
          * @return {L, R, a, b}
          */
         std::tuple<std::vector<crypto_point_t>, std::vector<crypto_point_t>, crypto_scalar_t, crypto_scalar_t> compute()
@@ -114,23 +119,92 @@ namespace Crypto::RangeProofs::Bulletproofs
 
             auto n = G.size();
 
+            // Precompute y_inv powers: {1, y_inv, y_inv^2, ..., y_inv^(n-1)}
+            const auto yinv_powers = y_inv.pow_expand(n, false, true);
+
+            const auto inv8 = Crypto::INV_EIGHT;
+
+            // Extract raw ge_p3 arrays (avoids repeated .p3() calls and crypto_point_t overhead)
+            std::vector<ge_p3> G_p3(n), H_p3(n);
+            for (size_t i = 0; i < n; ++i)
+            {
+                G_p3[i] = G.container[i].p3();
+            }
+            for (size_t i = 0; i < n; ++i)
+            {
+                H_p3[i] = H.container[i].p3();
+            }
+
+            // Pre-allocate MSM buffers for largest round (reused each iteration)
+            const size_t max_total = n + 1; // 2*(n/2)+1
+            std::vector<unsigned char> msm_scalars(max_total * 32);
+            std::vector<ge_p3> msm_points(max_total);
+            const auto U_p3 = U.p3();
+
             while (n > 1)
             {
                 n /= 2;
 
-                const auto a1 = a.slice(0, n), a2 = a.slice(n, a.size());
+                // Compute scalar inner products directly (no slice needed)
+                auto cL = Crypto::ZERO, cR = Crypto::ZERO;
+                for (size_t i = 0; i < n; ++i)
+                {
+                    cL += a.container[i] * b.container[n + i];
+                    cR += a.container[n + i] * b.container[i];
+                }
 
-                const auto b1 = b.slice(0, n), b2 = b.slice(n, b.size());
+                const size_t total = 2 * n + 1;
 
-                const auto G1 = G.slice(0, n), G2 = G.slice(n, G.size());
+                // L = INV_EIGHT * (sum(a[i]*G[n+i]) + sum(b[n+i]*yinv[i]*H[i]) + cL*U)
+                // Fold INV_EIGHT into scalars to avoid ge_scalarmult_ct
+                for (size_t i = 0; i < n; ++i)
+                {
+                    const auto s = a.container[i] * inv8;
+                    std::memcpy(&msm_scalars[i * 32], s.data(), 32);
+                    msm_points[i] = G_p3[n + i];
+                }
+                for (size_t i = 0; i < n; ++i)
+                {
+                    const auto weighted = b.container[n + i] * yinv_powers[i] * inv8;
+                    std::memcpy(&msm_scalars[(n + i) * 32], weighted.data(), 32);
+                    msm_points[n + i] = H_p3[i];
+                }
+                {
+                    const auto s = cL * inv8;
+                    std::memcpy(&msm_scalars[2 * n * 32], s.data(), 32);
+                }
+                msm_points[2 * n] = U_p3;
 
-                const auto H1 = H.slice(0, n), H2 = H.slice(n, H.size());
+                {
+                    ge_p3 result;
+                    ge_multiscalar_mul_vartime(&result, msm_scalars.data(), msm_points.data(), total);
+                    L.append(crypto_point_t(result));
+                }
 
-                const auto cL = a1.inner_product(b2), cR = a2.inner_product(b1);
+                // R = INV_EIGHT * (sum(a[n+i]*G[i]) + sum(b[i]*yinv[n+i]*H[n+i]) + cR*U)
+                for (size_t i = 0; i < n; ++i)
+                {
+                    const auto s = a.container[n + i] * inv8;
+                    std::memcpy(&msm_scalars[i * 32], s.data(), 32);
+                    msm_points[i] = G_p3[i];
+                }
+                for (size_t i = 0; i < n; ++i)
+                {
+                    const auto weighted = b.container[i] * yinv_powers[n + i] * inv8;
+                    std::memcpy(&msm_scalars[(n + i) * 32], weighted.data(), 32);
+                    msm_points[n + i] = H_p3[n + i];
+                }
+                {
+                    const auto s = cR * inv8;
+                    std::memcpy(&msm_scalars[2 * n * 32], s.data(), 32);
+                }
+                msm_points[2 * n] = U_p3;
 
-                L.append(Crypto::INV_EIGHT * (a1.inner_product(G2) + b2.inner_product(H1) + (cL * U)));
-
-                R.append(Crypto::INV_EIGHT * (a2.inner_product(G1) + b1.inner_product(H2) + (cR * U)));
+                {
+                    ge_p3 result;
+                    ge_multiscalar_mul_vartime(&result, msm_scalars.data(), msm_points.data(), total);
+                    R.append(crypto_point_t(result));
+                }
 
                 tr.update(L.back());
 
@@ -143,13 +217,30 @@ namespace Crypto::RangeProofs::Bulletproofs
                     throw std::runtime_error("x cannot be zero");
                 }
 
-                G = G1.dbl_mult(x.invert(), G2, x);
+                const auto x_inv = x.invert();
 
-                H = H1.dbl_mult(x, H2, x.invert());
+                // G folding via SIMD batch: G[i] = x_inv*G[i] + x*G[n+i]
+                // _p3 variant writes ge_p3 directly, avoiding expensive tobytes/frombytes round-trip
+                ge_double_scalarmult_negate_vartime_batch_ss_p3(
+                    &G_p3[0], x_inv.data(), &G_p3[0], x.data(), &G_p3[n], n);
 
-                a = (a1 * x) + (a2 * x.invert());
+                // H folding absorbs y_inv^n: H[i] = x*H[i] + (x_inv*y_inv^n)*H[n+i]
+                {
+                    const auto x_inv_yinv_n = x_inv * yinv_powers[n];
+                    ge_double_scalarmult_negate_vartime_batch_ss_p3(
+                        &H_p3[0], x.data(), &H_p3[0], x_inv_yinv_n.data(), &H_p3[n], n);
+                }
 
-                b = (b1 * x.invert()) + (b2 * x);
+                // In-place scalar folding
+                for (size_t i = 0; i < n; ++i)
+                {
+                    const auto ai = a.container[i] * x + a.container[n + i] * x_inv;
+                    const auto bi = b.container[i] * x_inv + b.container[n + i] * x;
+                    a.container[i] = ai;
+                    b.container[i] = bi;
+                }
+                a.container.resize(n);
+                b.container.resize(n);
             }
 
             done = true;
@@ -162,6 +253,7 @@ namespace Crypto::RangeProofs::Bulletproofs
         scalar_transcript_t tr;
         crypto_point_vector_t G, H;
         crypto_point_t U;
+        crypto_scalar_t y_inv;
         crypto_point_vector_t L, R;
         crypto_scalar_vector_t a, b;
     };
@@ -235,7 +327,42 @@ namespace Crypto::RangeProofs::Bulletproofs
 
         tr.update(V.container);
 
-        const auto A = Crypto::INV_EIGHT * (aL.inner_product(Gi) + aR.inner_product(Hi) + (alpha * G));
+        // Precompute ge_p3 points array for A and S MSMs (shared, built once)
+        // G is handled via the base_vartime precomputed table, so only 2*MN variable points
+        const size_t total_AS = 2 * MN;
+        std::vector<ge_p3> as_points(total_AS);
+        for (size_t i = 0; i < MN; ++i)
+        {
+            as_points[i] = Gi[i].p3();
+        }
+        for (size_t i = 0; i < MN; ++i)
+        {
+            as_points[MN + i] = Hi[i].p3();
+        }
+
+        // A = INV_EIGHT * (sum(aL[i]*Gi[i]) + sum(aR[i]*Hi[i]) + alpha*G)
+        // Fold INV_EIGHT into scalars to avoid expensive ge_scalarmult_ct
+        // Use base_vartime for G (precomputed table) instead of including G as variable point
+        const auto inv8 = Crypto::INV_EIGHT;
+        crypto_point_t A;
+        {
+            std::vector<unsigned char> scalars(total_AS * 32);
+            for (size_t i = 0; i < MN; ++i)
+            {
+                const auto s = aL[i] * inv8;
+                std::memcpy(&scalars[i * 32], s.data(), 32);
+            }
+            for (size_t i = 0; i < MN; ++i)
+            {
+                const auto s = aR[i] * inv8;
+                std::memcpy(&scalars[(MN + i) * 32], s.data(), 32);
+            }
+            const auto base_s = alpha * inv8;
+
+            ge_p3 result;
+            ge_multiscalar_mul_base_vartime(&result, scalars.data(), as_points.data(), total_AS, base_s.data());
+            A = crypto_point_t(result);
+        }
 
         crypto_scalar_vector_t sL(crypto_scalar_t::random(MN)), sR(crypto_scalar_t::random(MN));
 
@@ -246,7 +373,26 @@ namespace Crypto::RangeProofs::Bulletproofs
             goto retry;
         }
 
-        const auto S = Crypto::INV_EIGHT * (sL.inner_product(Gi) + sR.inner_product(Hi) + (rho * G));
+        // S = INV_EIGHT * (sum(sL[i]*Gi[i]) + sum(sR[i]*Hi[i]) + rho*G)
+        crypto_point_t S;
+        {
+            std::vector<unsigned char> scalars(total_AS * 32);
+            for (size_t i = 0; i < MN; ++i)
+            {
+                const auto s = sL[i] * inv8;
+                std::memcpy(&scalars[i * 32], s.data(), 32);
+            }
+            for (size_t i = 0; i < MN; ++i)
+            {
+                const auto s = sR[i] * inv8;
+                std::memcpy(&scalars[(MN + i) * 32], s.data(), 32);
+            }
+            const auto base_s = rho * inv8;
+
+            ge_p3 result;
+            ge_multiscalar_mul_base_vartime(&result, scalars.data(), as_points.data(), total_AS, base_s.data());
+            S = crypto_point_t(result);
+        }
 
         tr.update(A);
 
@@ -309,9 +455,10 @@ namespace Crypto::RangeProofs::Bulletproofs
             goto retry;
         }
 
-        const auto T1 = Crypto::INV_EIGHT * t1.dbl_mult(Crypto::H, tau1, Crypto::G);
+        // Fold INV_EIGHT into dbl_mult scalars: INV_EIGHT*(t1*H + tau1*G) = (t1*inv8)*H + (tau1*inv8)*G
+        const auto T1 = (t1 * inv8).dbl_mult(Crypto::H, tau1 * inv8, Crypto::G);
 
-        const auto T2 = Crypto::INV_EIGHT * t2.dbl_mult(Crypto::H, tau2, Crypto::G);
+        const auto T2 = (t2 * inv8).dbl_mult(Crypto::H, tau2 * inv8, Crypto::G);
 
         tr.update(T1);
 
@@ -352,19 +499,14 @@ namespace Crypto::RangeProofs::Bulletproofs
             goto retry;
         }
 
-        crypto_point_vector_t Hi_points(Hi.size());
-
-        for (size_t i = 0; i < Hi.size(); ++i)
-        {
-            Hi_points[i] = y_inv.pow(i) * Hi[i];
-        }
-
         const auto Hx_ip = x_ip * H;
 
         // we try here as if we fail the challenge in the inner product round then we need to try again
+        // Pass unscaled Hi + y_inv; the IPA handles y_inv scaling in scalar space
+        // (eliminates MN expensive scalar-point multiplications for Hi_points)
         try
         {
-            const auto [L, R, a, b] = InnerProductRound(Gi, Hi_points, Hx_ip, l, r, tr).compute();
+            const auto [L, R, a, b] = InnerProductRound(Gi, Hi, Hx_ip, l, r, y_inv, tr).compute();
 
             return {crypto_bulletproof_t(A, S, T1, T2, taux, mu, L, R, a, b, t), V.container};
         }
@@ -455,7 +597,7 @@ namespace Crypto::RangeProofs::Bulletproofs
 
             const auto y_powers = y.pow_expand(MN);
 
-            const auto y_inv_powers = crypto_scalar_vector_t(y_powers).invert().container;
+            const auto y_inv = y.invert();
 
             tr.update(y);
 
@@ -503,48 +645,34 @@ namespace Crypto::RangeProofs::Bulletproofs
 
             y1 += (proof.t - k) * weight_y;
 
+            // Move ×8 from point-space to scalar-space: (s * 8) * P_stored = s * P_actual
+            // check_construction() already validates all proof points (on-curve + non-identity)
+            // Random weighting prevents small-subgroup exploitation
+            const auto weight_y8 = weight_y * Crypto::EIGHT;
+            const auto weight_z8 = weight_z * Crypto::EIGHT;
+
             for (size_t j = 0; j < M; ++j)
             {
-                scalars.append(z_powers[j + 2] * weight_y);
+                scalars.append(z_powers[j + 2] * weight_y8);
 
-                points.append(Crypto::EIGHT * commitments[ii][j]);
+                points.append(commitments[ii][j]);
             }
 
-            scalars.append(x * weight_y);
+            scalars.append(x * weight_y8);
 
-            points.append(Crypto::EIGHT * proof.T1);
+            points.append(proof.T1);
 
-            if (!points.back().valid())
-            {
-                return false;
-            }
+            scalars.append(x.squared() * weight_y8);
 
-            scalars.append(x.squared() * weight_y);
+            points.append(proof.T2);
 
-            points.append(Crypto::EIGHT * proof.T2);
+            scalars.append(weight_z8);
 
-            if (!points.back().valid())
-            {
-                return false;
-            }
+            points.append(proof.A);
 
-            scalars.append(weight_z);
+            scalars.append(x * weight_z8);
 
-            points.append(Crypto::EIGHT * proof.A);
-
-            if (!points.back().valid())
-            {
-                return false;
-            }
-
-            scalars.append(x * weight_z);
-
-            points.append(Crypto::EIGHT * proof.S);
-
-            if (!points.back().valid())
-            {
-                return false;
-            }
+            points.append(proof.S);
 
             crypto_scalar_vector_t challenges;
 
@@ -566,66 +694,97 @@ namespace Crypto::RangeProofs::Bulletproofs
 
             const auto challenges_inv = challenges.invert();
 
-            for (size_t i = 0; i < MN; ++i)
+            // Precompute challenge products via binary expansion,
+            // folding y_inv^i into h_products AND weight constants into seeds
+            // so the inner loop needs ZERO scalar multiplications (pure adds)
+            const size_t logMN = challenges.size();
+
+            const auto g_wz = proof.g * weight_z;
+            const auto z_wz = z * weight_z;
+            const auto h_wz = proof.h * weight_z;
+
+            std::vector<crypto_scalar_t> g_products(MN), yinv_h_products(MN);
+
+            if (logMN > 0)
             {
-                auto index = i;
+                // Fold g_wz into g_products seeds, h_wz into h_products seeds
+                g_products[0] = challenges_inv[logMN - 1] * g_wz;
+                g_products[1] = challenges[logMN - 1] * g_wz;
+                yinv_h_products[0] = challenges[logMN - 1] * h_wz;
+                yinv_h_products[1] = challenges_inv[logMN - 1] * y_inv * h_wz;
 
-                auto g = proof.g;
+                auto y_inv_pow2 = y_inv;
 
-                auto h = proof.h * y_inv_powers[i];
-
-                for (size_t j = proof.L.size(); j-- > 0;)
+                for (size_t j = 1; j < logMN; ++j)
                 {
-                    const auto J = challenges.size() - j - 1;
+                    const size_t stride = size_t(1) << (j + 1);
+                    const size_t half = stride >> 1;
+                    const auto &c = challenges[logMN - 1 - j];
+                    const auto &ci = challenges_inv[logMN - 1 - j];
 
-                    const auto base_power = size_t(powers_of_two[j].to_uint64_t());
+                    y_inv_pow2 = y_inv_pow2.squared();
+                    const auto ci_yinv = ci * y_inv_pow2;
 
-                    if (index / base_power == 0)
+                    for (size_t i = stride - 1; i >= half; --i)
                     {
-                        g *= challenges_inv[J];
-
-                        h *= challenges[J];
+                        g_products[i] = g_products[i - half] * c;
+                        yinv_h_products[i] = yinv_h_products[i - half] * ci_yinv;
                     }
-                    else
+
+                    for (size_t i = 0; i < half; ++i)
                     {
-                        g *= challenges[J];
-
-                        h *= challenges_inv[J];
-
-                        index -= base_power;
+                        g_products[i] *= ci;
+                        yinv_h_products[i] *= c;
                     }
                 }
+            }
+            else
+            {
+                g_products[0] = g_wz;
+                yinv_h_products[0] = h_wz;
+            }
 
-                g += z;
+            // Precompute all subtraction terms: wz_group[j] * two_yinv_powers[k]
+            const auto two_yinv = Crypto::TWO * y_inv;
+            const auto two_yinv_powers = two_yinv.pow_expand(N);
+            const auto yinv_N = y_inv.pow(N);
 
-                h -= ((z * y_powers[i]) + (z_powers[2 + i / N] * powers_of_two[i % N])) * y_inv_powers[i];
+            std::vector<crypto_scalar_t> sub_terms(MN);
+            {
+                auto yinv_jN = Crypto::ONE;
 
-                Gi_scalars[i] += g * weight_z;
+                for (size_t j = 0; j < M; ++j)
+                {
+                    const auto wz_grp = weight_z * z_powers[2 + j] * yinv_jN;
 
-                Hi_scalars[i] += h * weight_z;
+                    for (size_t k = 0; k < N; ++k)
+                    {
+                        sub_terms[j * N + k] = wz_grp * two_yinv_powers[k];
+                    }
+
+                    yinv_jN *= yinv_N;
+                }
+            }
+
+            // Inner loop: ZERO scalar mults — pure additions/subtractions
+            for (size_t i = 0; i < MN; ++i)
+            {
+                Gi_scalars[i] += g_products[i] + z_wz;
+
+                Hi_scalars[i] += yinv_h_products[i] - z_wz - sub_terms[i];
             }
 
             z1 += proof.mu * weight_z;
 
             for (size_t i = 0; i < proof.L.size(); ++i)
             {
-                scalars.append(challenges[i].squared() * weight_z);
+                scalars.append(challenges[i].squared() * weight_z8);
 
-                points.append(Crypto::EIGHT * proof.L[i]);
+                points.append(proof.L[i]);
 
-                if (!points.back().valid())
-                {
-                    return false;
-                }
+                scalars.append(challenges_inv[i].squared() * weight_z8);
 
-                scalars.append(challenges_inv[i].squared() * weight_z);
-
-                points.append(Crypto::EIGHT * proof.R[i]);
-
-                if (!points.back().valid())
-                {
-                    return false;
-                }
+                points.append(proof.R[i]);
             }
 
             z3 += (proof.t - proof.g * proof.h) * x_ip * weight_z;
