@@ -68,6 +68,7 @@ The source code is designed in such a way (using overloads for the majority of c
   * Proof Types
     * `crypto_bulletproof_t`: [Bulletproofs](https://eprint.iacr.org/2017/1066.pdf)
     * `crypto_bulletproof_plus_t`: [Bulletproofs+](https://eprint.iacr.org/2020/735.pdf)
+    * `crypto_bulletproof_pp_t`: [Bulletproofs++](https://eprint.iacr.org/2022/510.pdf)
 * Core Functionality
   * [Stealth Addresses](https://bytecoin.org/old/whitepaper.pdf)
   * Auditing Methods
@@ -132,6 +133,12 @@ The source code is designed in such a way (using overloads for the majority of c
     * No limits to number of values proved or verified in a single call
     * Batch Verification
     * Implements caching of common points for faster repeat calls to `prove()` and `verify()`
+  * [Bulletproofs++](https://eprint.iacr.org/2022/510.pdf) Range Proofs
+    * Reciprocal-argument based range proofs with smaller proof size (~516 bytes vs ~578 for BP+)
+    * Base-16 digit decomposition (N=64, 16 digits)
+    * Single-value proofs
+    * Batch Verification
+    * Weighted Norm Linear Argument (WNLA) inner proof
 * [Serialization](https://github.com/gibme-c/serialization-cpp)
   * Byte/Binary Serialization & De-Serialization
   * Structure to/from [JSON](https://wikipedia.org/wiki/JSON) provided via [RapidJSON](https://rapidjson.org)

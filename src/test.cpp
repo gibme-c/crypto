@@ -916,6 +916,46 @@ int main()
         if (!check("bulletproofs+ JSON encoding", test_json_encoding(proof))) return 1;
     }
 
+    std::cout << std::endl << "=== Bulletproofs++ ===" << std::endl;
+
+    // Bulletproofs++
+    {
+        auto [proof, commitments] = Crypto::RangeProofs::BulletproofsPP::prove({1000}, crypto_scalar_t::random(1));
+
+        if (!check("bulletproofs++ verify valid",
+                Crypto::RangeProofs::BulletproofsPP::verify({proof}, {commitments})))
+            return 1;
+
+        std::cout << proof << std::endl;
+        std::cout << "    " << proof.to_string() << std::endl << std::endl;
+
+        auto tampered = proof;
+        tampered.C_l = tampered.C_l + tampered.C_l;
+
+        if (!check("bulletproofs++ reject tampered",
+                !Crypto::RangeProofs::BulletproofsPP::verify({tampered}, {commitments})))
+            return 1;
+
+        // verify that value out of range is rejected at prove time
+        {
+            bool threw = false;
+            try
+            {
+                Crypto::RangeProofs::BulletproofsPP::prove({1000}, crypto_scalar_t::random(1), 8);
+            }
+            catch (const std::range_error &)
+            {
+                threw = true;
+            }
+            if (!check("bulletproofs++ reject out-of-range", threw))
+                return 1;
+        }
+
+        if (!check("bulletproofs++ binary encoding", test_binary_encoding(proof))) return 1;
+
+        if (!check("bulletproofs++ JSON encoding", test_json_encoding(proof))) return 1;
+    }
+
     std::cout << std::endl << "==================" << std::endl;
     std::cout << "Total:  " << tests_run << std::endl;
     std::cout << "Passed: " << tests_passed << std::endl;

@@ -423,6 +423,42 @@ int main(int argc, char **argv)
             10);
     }
 
+    // Bulletproofs++ benchmarks
+    {
+        const auto blinding_factors = crypto_scalar_t::random(1);
+
+        // seed the memory cache as to not taint the benchmark
+        const auto [p, c] = Crypto::RangeProofs::BulletproofsPP::prove({1000}, blinding_factors);
+
+        crypto_bulletproof_pp_t proof;
+
+        std::vector<crypto_pedersen_commitment_t> commitments;
+
+        std::cout << std::endl;
+
+        benchmark(
+            [&proof, &blinding_factors, &commitments]()
+            {
+                const auto [p, c] = Crypto::RangeProofs::BulletproofsPP::prove({1000}, blinding_factors);
+                proof = p;
+                commitments = c;
+            },
+            "Bulletproofs++::prove",
+            10);
+
+        benchmark(
+            [&proof, &commitments]() { Crypto::RangeProofs::BulletproofsPP::verify({proof}, {commitments}); },
+            "Bulletproofs++::verify",
+            10);
+
+        benchmark(
+            [&proof, &commitments]() {
+                Crypto::RangeProofs::BulletproofsPP::verify({proof, proof}, {commitments, commitments});
+            },
+            "Bulletproofs++::verify [batched]",
+            10);
+    }
+
     std::cout << std::endl << std::endl;
 
     if (!advanced_only)

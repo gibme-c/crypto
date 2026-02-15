@@ -23,51 +23,54 @@
 // INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// Based on ePrint 2022/510 (Bulletproofs++)
 
-#ifndef CRYPTO_H
-#define CRYPTO_H
+#ifndef CRYPTO_RANGEPROOFS_BULLETPROOFS_PP_H
+#define CRYPTO_RANGEPROOFS_BULLETPROOFS_PP_H
 
-#include <crypto_common.h>
-#include <crypto_config.h>
-#include <crypto_constants.h>
-#include <encoding/address_encoding.h>
-#include <encoding/base58.h>
-#include <encoding/cn_base58.h>
-#include <encoding/mnemonics.h>
-#include <helpers/debug_helper.h>
-#include <helpers/dedupe_and_sort_keys.h>
-#include <helpers/gray_code_generator_t.h>
-#include <helpers/hd_keys.h>
-#include <helpers/random_bytes.h>
-#include <helpers/scalar_transcript_t.h>
-#include <helpers/string_helper.h>
-#include <proofs/audit.h>
-#include <proofs/bulletproofs.h>
-#include <proofs/bulletproofsplus.h>
-#include <proofs/bulletproofspp.h>
-#include <proofs/merkle.h>
-#include <proofs/ringct.h>
-#include <signatures/rfc8032.h>
-#include <signatures/ring_signature_borromean.h>
-#include <signatures/ring_signature_clsag.h>
-#include <signatures/ring_signature_triptych.h>
-#include <signatures/signature.h>
-#include <types/crypto_borromean_signature_t.h>
-#include <types/crypto_bulletproof_t.h>
-#include <types/crypto_bulletproof_plus_t.h>
 #include <types/crypto_bulletproof_pp_t.h>
-#include <types/crypto_clsag_signature_t.h>
-#include <types/crypto_entropy_t.h>
-#include <types/crypto_hash_t.h>
-#include <types/crypto_hash_vector_t.h>
-#include <types/crypto_hd_key_t.h>
-#include <types/crypto_point_t.h>
-#include <types/crypto_point_vector_t.h>
-#include <types/crypto_scalar_t.h>
-#include <types/crypto_scalar_vector_t.h>
-#include <types/crypto_secret_key_t.h>
-#include <types/crypto_seed_t.h>
-#include <types/crypto_signature_t.h>
-#include <types/crypto_triptych_signature_t.h>
 
-#endif // CRYPTO_H
+namespace Crypto::RangeProofs::BulletproofsPP
+{
+    /**
+     * Generates a Bulletproof++ range proof and the related pedersen commitments
+     * for the given amounts and blinding factors
+     * @param amounts
+     * @param blinding_factors
+     * @param N
+     * @return
+     */
+    std::tuple<crypto_bulletproof_pp_t, std::vector<crypto_pedersen_commitment_t>> prove(
+        const std::vector<uint64_t> &amounts,
+        const std::vector<crypto_blinding_factor_t> &blinding_factors,
+        size_t N = 64);
+
+    /**
+     * Performs batch verification of the range proofs provided for the provided
+     * pedersen commitments to the given values
+     * @param proofs
+     * @param commitments
+     * @param N
+     * @return
+     */
+    bool verify(
+        const std::vector<crypto_bulletproof_pp_t> &proofs,
+        const std::vector<std::vector<crypto_pedersen_commitment_t>> &commitments,
+        size_t N = 64);
+
+    /**
+     * Performs verification of the range proof provided for the provided
+     * pedersen commitments to the given values
+     * @param proof
+     * @param commitments
+     * @param N
+     * @return
+     */
+    bool verify(
+        const crypto_bulletproof_pp_t &proof,
+        const std::vector<crypto_pedersen_commitment_t> &commitments,
+        size_t N = 64);
+} // namespace Crypto::RangeProofs::BulletproofsPP
+
+#endif // CRYPTO_RANGEPROOFS_BULLETPROOFS_PP_H

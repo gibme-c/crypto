@@ -155,6 +155,7 @@ set(SOURCES
     src/proofs/audit.cpp
     src/proofs/bulletproofs.cpp
     src/proofs/bulletproofsplus.cpp
+    src/proofs/bulletproofspp.cpp
     src/proofs/merkle.cpp
     src/proofs/ringct.cpp
     src/signatures/rfc8032.cpp
@@ -164,6 +165,7 @@ set(SOURCES
     src/signatures/signature.cpp
     src/types/crypto_borromean_signature_t.cpp
     src/types/crypto_bulletproof_plus_t.cpp
+    src/types/crypto_bulletproof_pp_t.cpp
     src/types/crypto_bulletproof_t.cpp
     src/types/crypto_clsag_signature_t.cpp
     src/types/crypto_entropy_t.cpp

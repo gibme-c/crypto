@@ -102,4 +102,10 @@ const auto OUTPUT_PROOF_DOMAIN = generate_salt_scalar(18);
 
 const auto TRANSCRIPT_BASE = generate_salt_scalar(19);
 
+const auto BULLETPROOFS_PP_DOMAIN_0 = generate_salt_scalar(20);
+
+const auto BULLETPROOFS_PP_DOMAIN_1 = generate_salt_point(21);
+
+const auto BULLETPROOFS_PP_DOMAIN_2 = generate_salt_point(22);
+
 #endif
