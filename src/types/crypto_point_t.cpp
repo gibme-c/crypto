@@ -95,7 +95,7 @@ crypto_point_t::crypto_point_t(const uint64_t &number)
 crypto_point_t::~crypto_point_t()
 {
     // Wipe all representations to prevent key material from lingering in memory
-    ed25519_secure_erase(bytes, sizeof(bytes));
+    // Note: bytes is auto-erased by ~SerializablePod<32>()
 
     ed25519_secure_erase(&point3, sizeof(point3));
 

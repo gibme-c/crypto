@@ -77,9 +77,7 @@ crypto_seed_t::~crypto_seed_t()
 {
     ed25519_secure_erase(bytes.data(), bytes.size());
 
-    ed25519_secure_erase(*_key, _key.size());
-
-    ed25519_secure_erase(*_chain_code, _chain_code.size());
+    // _key and _chain_code are crypto_hash_t — auto-erased by ~SerializablePod<32>()
 }
 
 crypto_hd_key_t crypto_seed_t::generate_child_key(
