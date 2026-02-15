@@ -749,6 +749,74 @@ int main()
         if (!check("clsag+commit JSON encoding", test_json_encoding(signature))) return 1;
     }
 
+    std::cout << std::endl << "=== MLSAG Ring Signature ===" << std::endl;
+
+    // MLSAG
+    {
+        auto public_keys = crypto_point_t::random(RING_SIZE);
+
+        public_keys[RING_SIZE / 2] = public_ephemeral;
+
+        const auto [gen_sucess, signature] =
+            Crypto::RingSignature::MLSAG::generate_ring_signature(SHA3_HASH, secret_ephemeral, public_keys);
+
+        if (!check("mlsag generate_ring_signature", gen_sucess)) return 1;
+
+        std::cout << signature << std::endl;
+        std::cout << "    " << signature.to_string() << std::endl << std::endl;
+
+        if (!check("mlsag check_ring_signature",
+                Crypto::RingSignature::MLSAG::check_ring_signature(SHA3_HASH, key_image, public_keys, signature)))
+            return 1;
+
+        if (!check("mlsag binary encoding", test_binary_encoding(signature))) return 1;
+
+        if (!check("mlsag JSON encoding", test_json_encoding(signature))) return 1;
+    }
+
+    std::cout << std::endl << "=== MLSAG Ring Signature w/ Commitments ===" << std::endl;
+
+    // MLSAG w/ Commitments
+    {
+        auto public_keys = crypto_point_t::random(RING_SIZE);
+
+        public_keys[RING_SIZE / 2] = public_ephemeral;
+
+        const auto input_blinding = crypto_scalar_t::random();
+
+        const auto input_commitment = Crypto::RingCT::generate_pedersen_commitment(input_blinding, 100);
+
+        std::vector<crypto_pedersen_commitment_t> public_commitments = crypto_point_t::random(RING_SIZE);
+
+        public_commitments[RING_SIZE / 2] = input_commitment;
+
+        const auto [ps_blindings, ps_commitments] =
+            Crypto::RingCT::generate_pseudo_commitments({100}, crypto_scalar_t::random(1));
+
+        const auto [gen_sucess, signature] = Crypto::RingSignature::MLSAG::generate_ring_signature(
+            SHA3_HASH,
+            secret_ephemeral,
+            public_keys,
+            input_blinding,
+            public_commitments,
+            ps_blindings[0],
+            ps_commitments[0]);
+
+        if (!check("mlsag+commit generate_ring_signature", gen_sucess)) return 1;
+
+        std::cout << signature << std::endl;
+        std::cout << "    " << signature.to_string() << std::endl << std::endl;
+
+        if (!check("mlsag+commit check_ring_signature",
+                Crypto::RingSignature::MLSAG::check_ring_signature(
+                    SHA3_HASH, key_image, public_keys, signature, public_commitments)))
+            return 1;
+
+        if (!check("mlsag+commit binary encoding", test_binary_encoding(signature))) return 1;
+
+        if (!check("mlsag+commit JSON encoding", test_json_encoding(signature))) return 1;
+    }
+
     std::cout << std::endl << "=== Triptych Ring Signature ===" << std::endl;
 
     // Triptych

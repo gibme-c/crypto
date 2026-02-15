@@ -153,6 +153,12 @@ const auto BULLETPROOFS_PP_DOMAIN_1 = generate_salt_point(21);
 /** @brief Bulletproofs++ reciprocal range proof -- second auxiliary generator point. */
 const auto BULLETPROOFS_PP_DOMAIN_2 = generate_salt_point(22);
 
+/** @brief MLSAG ring signature -- challenge chain. */
+const auto MLSAG_DOMAIN_0 = generate_salt_scalar(23);
+
+/** @brief MLSAG ring signature -- commitment nonce derivation. */
+const auto MLSAG_DOMAIN_1 = generate_salt_scalar(24);
+
 /** @} */
 
 #endif

@@ -280,6 +280,92 @@ int main(int argc, char **argv)
             100);
     }
 
+    // MLSAG
+    {
+        auto public_keys = crypto_point_t::random(RING_SIZE);
+
+        public_keys[RING_SIZE / 2] = public_ephemeral;
+
+        crypto_mlsag_signature_t signature;
+
+        const auto image = Crypto::generate_key_image(public_ephemeral, secret_ephemeral);
+
+        std::cout << std::endl;
+
+        benchmark(
+            [&public_keys, &secret_ephemeral, &signature]()
+            {
+                const auto [success, sig] = Crypto::RingSignature::MLSAG::generate_ring_signature(
+                    SHA3_HASH, secret_ephemeral, public_keys, RING_SIZE / 2);
+                signature = sig;
+            },
+            "MLSAG::sign",
+            100);
+
+        benchmark(
+            [&public_keys, &image, &signature]()
+            { Crypto::RingSignature::MLSAG::check_ring_signature(SHA3_HASH, image, public_keys, signature); },
+            "MLSAG::verify",
+            100);
+    }
+
+    // MLSAG w/ Commitments
+    {
+        auto public_keys = crypto_point_t::random(RING_SIZE);
+
+        public_keys[RING_SIZE / 2] = public_ephemeral;
+
+        crypto_mlsag_signature_t signature;
+
+        const auto image = Crypto::generate_key_image(public_ephemeral, secret_ephemeral);
+
+        const auto input_blinding = crypto_scalar_t::random();
+
+        const auto input_commitment = Crypto::RingCT::generate_pedersen_commitment(input_blinding, 100);
+
+        std::vector<crypto_pedersen_commitment_t> public_commitments = crypto_point_t::random(RING_SIZE);
+
+        public_commitments[RING_SIZE / 2] = input_commitment;
+
+        const auto _ps_result2 =
+            Crypto::RingCT::generate_pseudo_commitments({100}, crypto_scalar_t::random(1));
+        const auto &ps_blindings = std::get<0>(_ps_result2);
+        const auto &ps_commitments = std::get<1>(_ps_result2);
+
+        std::cout << std::endl;
+
+        benchmark(
+            [&public_keys,
+             &secret_ephemeral,
+             &signature,
+             &input_blinding,
+             &public_commitments,
+             &ps_blindings,
+             &ps_commitments]()
+            {
+                const auto [success, sig] = Crypto::RingSignature::MLSAG::generate_ring_signature(
+                    SHA3_HASH,
+                    secret_ephemeral,
+                    public_keys,
+                    RING_SIZE / 2,
+                    input_blinding,
+                    public_commitments,
+                    ps_blindings[0],
+                    ps_commitments[0]);
+                signature = sig;
+            },
+            "MLSAG::sign [w/ commitments]",
+            100);
+
+        benchmark(
+            [&public_keys, &image, &signature, &public_commitments]() {
+                Crypto::RingSignature::MLSAG::check_ring_signature(
+                    SHA3_HASH, image, public_keys, signature, public_commitments);
+            },
+            "MLSAG::verify [w/ commitments]",
+            100);
+    }
+
     // Triptych
     {
         auto public_keys = crypto_point_t::random(RING_SIZE);

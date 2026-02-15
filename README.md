@@ -59,10 +59,11 @@ Mnemonic encoding supports 10 languages: Chinese (Simplified & Traditional), Cze
 | [Ed25519](https://ed25519.cr.yp.to/ed25519-20110926.pdf) | 64 B | — | Standard Schnorr signature (generate + check) |
 | [RFC-8032 Ed25519](https://datatracker.ietf.org/doc/html/rfc8032) | 64 B | — | Strict RFC-8032 — raw seed input, deterministic nonce, arbitrary-length messages |
 | [Borromean](https://github.com/Blockstream/borromean_paper/raw/master/borromean_draft_0.01_34241bb.pdf) | O(*n*) | Yes | Linkable ring signature — prove you own one of *n* keys without revealing which |
+| [MLSAG](https://eprint.iacr.org/2015/1098.pdf) | O(*n*) | Yes | Multilayered linkable ring signature with optional Pedersen commitment binding |
 | [CLSAG](https://eprint.iacr.org/2019/654.pdf) | O(*n*) | Yes | Compact linkable ring signature with optional Pedersen commitment binding |
 | [Triptych](https://eprint.iacr.org/2020/018.pdf) | O(log *n*) | Yes | Logarithmic-size ring signature for much larger anonymity sets |
 
-All three ring signature schemes produce a **key image** — a deterministic, unlinkable tag that detects if the same key signs twice. CLSAG and Triptych optionally support **commitment binding**, tying the signature to confidential transaction amounts.
+All four ring signature schemes produce a **key image** — a deterministic, unlinkable tag that detects if the same key signs twice. MLSAG, CLSAG, and Triptych optionally support **commitment binding**, tying the signature to confidential transaction amounts.
 
 **Signature timings** (ring size n=4 where applicable):
 
@@ -71,6 +72,8 @@ All three ring signature schemes produce a **key image** — a deterministic, un
 | Ed25519 | ~56 us | ~36 us |
 | RFC-8032 Ed25519 | ~59 us | ~46 us |
 | Borromean (n=4) | ~530 us | ~230 us |
+| MLSAG (n=4) | ~437 us | ~235 us |
+| MLSAG w/ commitments (n=4) | ~964 us | ~573 us |
 | CLSAG (n=4) | ~456 us | ~258 us |
 | CLSAG w/ commitments (n=4) | ~740 us | ~527 us |
 | Triptych (n=4) | ~1.2 ms | ~676 us |

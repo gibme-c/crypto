@@ -161,6 +161,7 @@ set(SOURCES
     src/signatures/rfc8032.cpp
     src/signatures/ring_signature_borromean.cpp
     src/signatures/ring_signature_clsag.cpp
+    src/signatures/ring_signature_mlsag.cpp
     src/signatures/ring_signature_triptych.cpp
     src/signatures/signature.cpp
     src/types/crypto_borromean_signature_t.cpp
@@ -168,6 +169,7 @@ set(SOURCES
     src/types/crypto_bulletproof_pp_t.cpp
     src/types/crypto_bulletproof_t.cpp
     src/types/crypto_clsag_signature_t.cpp
+    src/types/crypto_mlsag_signature_t.cpp
     src/types/crypto_entropy_t.cpp
     src/types/crypto_hash_t.cpp
     src/types/crypto_hash_vector_t.cpp

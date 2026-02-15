@@ -29,7 +29,7 @@
  * @brief Standalone C++17 cryptographic primitive library built around Ed25519 elliptic curve operations.
  *
  * Include this single header to access the full API: hashing (SHA3, Argon2), key
- * derivation (BIP-39/BIP-32/SLIP-10), signatures (Ed25519, Borromean, CLSAG, Triptych),
+ * derivation (BIP-39/BIP-32/SLIP-10), signatures (Ed25519, Borromean, MLSAG, CLSAG, Triptych),
  * range proofs (Bulletproofs/+/++), Pedersen commitments, encoding (Base58, addresses,
  * mnemonics), and hierarchical deterministic keys. Link against the `crypto-static`
  * CMake target to pull in all dependencies.
@@ -61,6 +61,7 @@
 #include <signatures/rfc8032.h>
 #include <signatures/ring_signature_borromean.h>
 #include <signatures/ring_signature_clsag.h>
+#include <signatures/ring_signature_mlsag.h>
 #include <signatures/ring_signature_triptych.h>
 #include <signatures/signature.h>
 #include <types/crypto_borromean_signature_t.h>
@@ -68,6 +69,7 @@
 #include <types/crypto_bulletproof_plus_t.h>
 #include <types/crypto_bulletproof_pp_t.h>
 #include <types/crypto_clsag_signature_t.h>
+#include <types/crypto_mlsag_signature_t.h>
 #include <types/crypto_entropy_t.h>
 #include <types/crypto_hash_t.h>
 #include <types/crypto_hash_vector_t.h>
