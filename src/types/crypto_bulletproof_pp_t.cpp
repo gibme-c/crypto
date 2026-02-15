@@ -80,12 +80,12 @@ crypto_bulletproof_pp_t::crypto_bulletproof_pp_t(Serialization::deserializer_t &
 
 bool crypto_bulletproof_pp_t::check_construction() const
 {
-    if (X.size() != W.size() || X.empty())
+    if (X.size() != W.size() || X.size() < 4)
     {
         return false;
     }
 
-    if (l.empty() || n.empty())
+    if (l.size() != 2 || n.size() != 1)
     {
         return false;
     }

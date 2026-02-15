@@ -389,6 +389,112 @@ int main(int argc, char **argv)
             10);
     }
 
+    // Bulletproofs M=2
+    {
+        const auto bf2 = crypto_scalar_t::random(2);
+        const auto [p, c] = Crypto::RangeProofs::Bulletproofs::prove({1000, 2000}, bf2);
+
+        crypto_bulletproof_t proof;
+        std::vector<crypto_pedersen_commitment_t> commitments;
+
+        std::cout << std::endl;
+
+        benchmark(
+            [&proof, &bf2, &commitments]()
+            {
+                const auto [p, c] = Crypto::RangeProofs::Bulletproofs::prove({1000, 2000}, bf2);
+                proof = p;
+                commitments = c;
+            },
+            "Bulletproofs::prove [M=2]",
+            10);
+
+        benchmark(
+            [&proof, &commitments]() { Crypto::RangeProofs::Bulletproofs::verify({proof}, {commitments}); },
+            "Bulletproofs::verify [M=2]",
+            10);
+    }
+
+    // Bulletproofs M=4
+    {
+        const auto bf4 = crypto_scalar_t::random(4);
+        const auto [p, c] = Crypto::RangeProofs::Bulletproofs::prove({10, 20, 30, 40}, bf4);
+
+        crypto_bulletproof_t proof;
+        std::vector<crypto_pedersen_commitment_t> commitments;
+
+        std::cout << std::endl;
+
+        benchmark(
+            [&proof, &bf4, &commitments]()
+            {
+                const auto [p, c] = Crypto::RangeProofs::Bulletproofs::prove({10, 20, 30, 40}, bf4);
+                proof = p;
+                commitments = c;
+            },
+            "Bulletproofs::prove [M=4]",
+            10);
+
+        benchmark(
+            [&proof, &commitments]() { Crypto::RangeProofs::Bulletproofs::verify({proof}, {commitments}); },
+            "Bulletproofs::verify [M=4]",
+            10);
+    }
+
+    // Bulletproofs M=8
+    {
+        const auto bf = crypto_scalar_t::random(8);
+        const std::vector<uint64_t> amounts = {10, 20, 30, 40, 50, 60, 70, 80};
+        const auto [p, c] = Crypto::RangeProofs::Bulletproofs::prove(amounts, bf);
+
+        crypto_bulletproof_t proof;
+        std::vector<crypto_pedersen_commitment_t> commitments;
+
+        std::cout << std::endl;
+
+        benchmark(
+            [&proof, &bf, &amounts, &commitments]()
+            {
+                const auto [p, c] = Crypto::RangeProofs::Bulletproofs::prove(amounts, bf);
+                proof = p;
+                commitments = c;
+            },
+            "Bulletproofs::prove [M=8]",
+            10);
+
+        benchmark(
+            [&proof, &commitments]() { Crypto::RangeProofs::Bulletproofs::verify({proof}, {commitments}); },
+            "Bulletproofs::verify [M=8]",
+            10);
+    }
+
+    // Bulletproofs M=16
+    {
+        const auto bf = crypto_scalar_t::random(16);
+        const std::vector<uint64_t> amounts = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160};
+        const auto [p, c] = Crypto::RangeProofs::Bulletproofs::prove(amounts, bf);
+
+        crypto_bulletproof_t proof;
+        std::vector<crypto_pedersen_commitment_t> commitments;
+
+        std::cout << std::endl;
+
+        benchmark(
+            [&proof, &bf, &amounts, &commitments]()
+            {
+                const auto [p, c] = Crypto::RangeProofs::Bulletproofs::prove(amounts, bf);
+                proof = p;
+                commitments = c;
+            },
+            "Bulletproofs::prove [M=16]",
+            10);
+
+        benchmark(
+            [&proof, &commitments]() { Crypto::RangeProofs::Bulletproofs::verify({proof}, {commitments}); },
+            "Bulletproofs::verify [M=16]",
+            10);
+    }
+
     // Bulletproofs+
     {
         const auto blinding_factors = crypto_scalar_t::random(1);
@@ -425,6 +531,112 @@ int main(int argc, char **argv)
             10);
     }
 
+    // Bulletproofs+ M=2
+    {
+        const auto bf2 = crypto_scalar_t::random(2);
+        const auto [p, c] = Crypto::RangeProofs::BulletproofsPlus::prove({1000, 2000}, bf2);
+
+        crypto_bulletproof_plus_t proof;
+        std::vector<crypto_pedersen_commitment_t> commitments;
+
+        std::cout << std::endl;
+
+        benchmark(
+            [&proof, &bf2, &commitments]()
+            {
+                const auto [p, c] = Crypto::RangeProofs::BulletproofsPlus::prove({1000, 2000}, bf2);
+                proof = p;
+                commitments = c;
+            },
+            "Bulletproofs+::prove [M=2]",
+            10);
+
+        benchmark(
+            [&proof, &commitments]() { Crypto::RangeProofs::BulletproofsPlus::verify({proof}, {commitments}); },
+            "Bulletproofs+::verify [M=2]",
+            10);
+    }
+
+    // Bulletproofs+ M=4
+    {
+        const auto bf4 = crypto_scalar_t::random(4);
+        const auto [p, c] = Crypto::RangeProofs::BulletproofsPlus::prove({10, 20, 30, 40}, bf4);
+
+        crypto_bulletproof_plus_t proof;
+        std::vector<crypto_pedersen_commitment_t> commitments;
+
+        std::cout << std::endl;
+
+        benchmark(
+            [&proof, &bf4, &commitments]()
+            {
+                const auto [p, c] = Crypto::RangeProofs::BulletproofsPlus::prove({10, 20, 30, 40}, bf4);
+                proof = p;
+                commitments = c;
+            },
+            "Bulletproofs+::prove [M=4]",
+            10);
+
+        benchmark(
+            [&proof, &commitments]() { Crypto::RangeProofs::BulletproofsPlus::verify({proof}, {commitments}); },
+            "Bulletproofs+::verify [M=4]",
+            10);
+    }
+
+    // Bulletproofs+ M=8
+    {
+        const auto bf = crypto_scalar_t::random(8);
+        const std::vector<uint64_t> amounts = {10, 20, 30, 40, 50, 60, 70, 80};
+        const auto [p, c] = Crypto::RangeProofs::BulletproofsPlus::prove(amounts, bf);
+
+        crypto_bulletproof_plus_t proof;
+        std::vector<crypto_pedersen_commitment_t> commitments;
+
+        std::cout << std::endl;
+
+        benchmark(
+            [&proof, &bf, &amounts, &commitments]()
+            {
+                const auto [p, c] = Crypto::RangeProofs::BulletproofsPlus::prove(amounts, bf);
+                proof = p;
+                commitments = c;
+            },
+            "Bulletproofs+::prove [M=8]",
+            10);
+
+        benchmark(
+            [&proof, &commitments]() { Crypto::RangeProofs::BulletproofsPlus::verify({proof}, {commitments}); },
+            "Bulletproofs+::verify [M=8]",
+            10);
+    }
+
+    // Bulletproofs+ M=16
+    {
+        const auto bf = crypto_scalar_t::random(16);
+        const std::vector<uint64_t> amounts = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160};
+        const auto [p, c] = Crypto::RangeProofs::BulletproofsPlus::prove(amounts, bf);
+
+        crypto_bulletproof_plus_t proof;
+        std::vector<crypto_pedersen_commitment_t> commitments;
+
+        std::cout << std::endl;
+
+        benchmark(
+            [&proof, &bf, &amounts, &commitments]()
+            {
+                const auto [p, c] = Crypto::RangeProofs::BulletproofsPlus::prove(amounts, bf);
+                proof = p;
+                commitments = c;
+            },
+            "Bulletproofs+::prove [M=16]",
+            10);
+
+        benchmark(
+            [&proof, &commitments]() { Crypto::RangeProofs::BulletproofsPlus::verify({proof}, {commitments}); },
+            "Bulletproofs+::verify [M=16]",
+            10);
+    }
+
     // Bulletproofs++ benchmarks
     {
         const auto blinding_factors = crypto_scalar_t::random(1);
@@ -458,6 +670,112 @@ int main(int argc, char **argv)
                 Crypto::RangeProofs::BulletproofsPP::verify({proof, proof}, {commitments, commitments});
             },
             "Bulletproofs++::verify [batched]",
+            10);
+    }
+
+    // Bulletproofs++ M=2 benchmarks
+    {
+        const auto bf2 = crypto_scalar_t::random(2);
+        const auto [p, c] = Crypto::RangeProofs::BulletproofsPP::prove({1000, 2000}, bf2);
+
+        crypto_bulletproof_pp_t proof;
+        std::vector<crypto_pedersen_commitment_t> commitments;
+
+        std::cout << std::endl;
+
+        benchmark(
+            [&proof, &bf2, &commitments]()
+            {
+                const auto [p, c] = Crypto::RangeProofs::BulletproofsPP::prove({1000, 2000}, bf2);
+                proof = p;
+                commitments = c;
+            },
+            "Bulletproofs++::prove [M=2]",
+            10);
+
+        benchmark(
+            [&proof, &commitments]() { Crypto::RangeProofs::BulletproofsPP::verify({proof}, {commitments}); },
+            "Bulletproofs++::verify [M=2]",
+            10);
+    }
+
+    // Bulletproofs++ M=4 benchmarks
+    {
+        const auto bf4 = crypto_scalar_t::random(4);
+        const auto [p, c] = Crypto::RangeProofs::BulletproofsPP::prove({10, 20, 30, 40}, bf4);
+
+        crypto_bulletproof_pp_t proof;
+        std::vector<crypto_pedersen_commitment_t> commitments;
+
+        std::cout << std::endl;
+
+        benchmark(
+            [&proof, &bf4, &commitments]()
+            {
+                const auto [p, c] = Crypto::RangeProofs::BulletproofsPP::prove({10, 20, 30, 40}, bf4);
+                proof = p;
+                commitments = c;
+            },
+            "Bulletproofs++::prove [M=4]",
+            10);
+
+        benchmark(
+            [&proof, &commitments]() { Crypto::RangeProofs::BulletproofsPP::verify({proof}, {commitments}); },
+            "Bulletproofs++::verify [M=4]",
+            10);
+    }
+
+    // Bulletproofs++ M=8
+    {
+        const auto bf = crypto_scalar_t::random(8);
+        const std::vector<uint64_t> amounts = {10, 20, 30, 40, 50, 60, 70, 80};
+        const auto [p, c] = Crypto::RangeProofs::BulletproofsPP::prove(amounts, bf);
+
+        crypto_bulletproof_pp_t proof;
+        std::vector<crypto_pedersen_commitment_t> commitments;
+
+        std::cout << std::endl;
+
+        benchmark(
+            [&proof, &bf, &amounts, &commitments]()
+            {
+                const auto [p, c] = Crypto::RangeProofs::BulletproofsPP::prove(amounts, bf);
+                proof = p;
+                commitments = c;
+            },
+            "Bulletproofs++::prove [M=8]",
+            10);
+
+        benchmark(
+            [&proof, &commitments]() { Crypto::RangeProofs::BulletproofsPP::verify({proof}, {commitments}); },
+            "Bulletproofs++::verify [M=8]",
+            10);
+    }
+
+    // Bulletproofs++ M=16
+    {
+        const auto bf = crypto_scalar_t::random(16);
+        const std::vector<uint64_t> amounts = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160};
+        const auto [p, c] = Crypto::RangeProofs::BulletproofsPP::prove(amounts, bf);
+
+        crypto_bulletproof_pp_t proof;
+        std::vector<crypto_pedersen_commitment_t> commitments;
+
+        std::cout << std::endl;
+
+        benchmark(
+            [&proof, &bf, &amounts, &commitments]()
+            {
+                const auto [p, c] = Crypto::RangeProofs::BulletproofsPP::prove(amounts, bf);
+                proof = p;
+                commitments = c;
+            },
+            "Bulletproofs++::prove [M=16]",
+            10);
+
+        benchmark(
+            [&proof, &commitments]() { Crypto::RangeProofs::BulletproofsPP::verify({proof}, {commitments}); },
+            "Bulletproofs++::verify [M=16]",
             10);
     }
 

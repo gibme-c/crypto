@@ -855,11 +855,11 @@ int main()
 
     std::cout << std::endl << "=== Bulletproofs ===" << std::endl;
 
-    // Bulletproofs
+    // Bulletproofs M=1 (base tests: tamper, out-of-range, encoding)
     {
         auto [proof, commitments] = Crypto::RangeProofs::Bulletproofs::prove({1000}, crypto_scalar_t::random(1));
 
-        if (!check("bulletproofs verify valid",
+        if (!check("bulletproofs M=1 verify valid",
                 Crypto::RangeProofs::Bulletproofs::verify({proof}, {commitments})))
             return 1;
 
@@ -872,7 +872,6 @@ int main()
                 !Crypto::RangeProofs::Bulletproofs::verify({proof}, {commitments})))
             return 1;
 
-        // verify that value out of range fails proof
         auto [proof2, commitments2] = Crypto::RangeProofs::Bulletproofs::prove({1000}, crypto_scalar_t::random(1), 8);
 
         if (!check("bulletproofs reject out-of-range",
@@ -884,13 +883,43 @@ int main()
         if (!check("bulletproofs JSON encoding", test_json_encoding(proof))) return 1;
     }
 
+    // Bulletproofs M=2,4,8,16
+    for (const size_t M : {2, 4, 8, 16})
+    {
+        std::vector<uint64_t> amounts(M);
+        for (size_t i = 0; i < M; ++i) amounts[i] = 1000 + i * 100;
+
+        auto [proof, commitments] = Crypto::RangeProofs::Bulletproofs::prove(amounts, crypto_scalar_t::random(M));
+
+        if (!check(("bulletproofs M=" + std::to_string(M) + " verify valid").c_str(),
+                Crypto::RangeProofs::Bulletproofs::verify({proof}, {commitments})))
+            return 1;
+
+        std::cout << std::endl << "  --- M=" << M << " ---" << std::endl;
+        std::cout << proof << std::endl;
+        std::cout << "    " << proof.to_string() << std::endl << std::endl;
+
+        if (!check(("bulletproofs M=" + std::to_string(M) + " binary encoding").c_str(), test_binary_encoding(proof)))
+            return 1;
+    }
+
+    // Bulletproofs batch verify with mixed M values
+    {
+        auto [proof1, c1] = Crypto::RangeProofs::Bulletproofs::prove({500}, crypto_scalar_t::random(1));
+        auto [proof2, c2] = Crypto::RangeProofs::Bulletproofs::prove({600, 700}, crypto_scalar_t::random(2));
+
+        if (!check("bulletproofs mixed batch verify",
+                Crypto::RangeProofs::Bulletproofs::verify({proof1, proof2}, {c1, c2})))
+            return 1;
+    }
+
     std::cout << std::endl << "=== Bulletproofs+ ===" << std::endl;
 
-    // Bulletproofs+
+    // Bulletproofs+ M=1 (base tests: tamper, out-of-range, encoding)
     {
         auto [proof, commitments] = Crypto::RangeProofs::BulletproofsPlus::prove({1000}, crypto_scalar_t::random(1));
 
-        if (!check("bulletproofs+ verify valid",
+        if (!check("bulletproofs+ M=1 verify valid",
                 Crypto::RangeProofs::BulletproofsPlus::verify({proof}, {commitments})))
             return 1;
 
@@ -903,7 +932,6 @@ int main()
                 !Crypto::RangeProofs::BulletproofsPlus::verify({proof}, {commitments})))
             return 1;
 
-        // verify that value out of range fails proof
         auto [proof2, commitments2] =
             Crypto::RangeProofs::BulletproofsPlus::prove({1000}, crypto_scalar_t::random(1), 8);
 
@@ -916,13 +944,43 @@ int main()
         if (!check("bulletproofs+ JSON encoding", test_json_encoding(proof))) return 1;
     }
 
+    // Bulletproofs+ M=2,4,8,16
+    for (const size_t M : {2, 4, 8, 16})
+    {
+        std::vector<uint64_t> amounts(M);
+        for (size_t i = 0; i < M; ++i) amounts[i] = 1000 + i * 100;
+
+        auto [proof, commitments] = Crypto::RangeProofs::BulletproofsPlus::prove(amounts, crypto_scalar_t::random(M));
+
+        if (!check(("bulletproofs+ M=" + std::to_string(M) + " verify valid").c_str(),
+                Crypto::RangeProofs::BulletproofsPlus::verify({proof}, {commitments})))
+            return 1;
+
+        std::cout << std::endl << "  --- M=" << M << " ---" << std::endl;
+        std::cout << proof << std::endl;
+        std::cout << "    " << proof.to_string() << std::endl << std::endl;
+
+        if (!check(("bulletproofs+ M=" + std::to_string(M) + " binary encoding").c_str(), test_binary_encoding(proof)))
+            return 1;
+    }
+
+    // Bulletproofs+ batch verify with mixed M values
+    {
+        auto [proof1, c1] = Crypto::RangeProofs::BulletproofsPlus::prove({500}, crypto_scalar_t::random(1));
+        auto [proof2, c2] = Crypto::RangeProofs::BulletproofsPlus::prove({600, 700}, crypto_scalar_t::random(2));
+
+        if (!check("bulletproofs+ mixed batch verify",
+                Crypto::RangeProofs::BulletproofsPlus::verify({proof1, proof2}, {c1, c2})))
+            return 1;
+    }
+
     std::cout << std::endl << "=== Bulletproofs++ ===" << std::endl;
 
-    // Bulletproofs++
+    // Bulletproofs++ M=1 (base tests: tamper, out-of-range, encoding)
     {
         auto [proof, commitments] = Crypto::RangeProofs::BulletproofsPP::prove({1000}, crypto_scalar_t::random(1));
 
-        if (!check("bulletproofs++ verify valid",
+        if (!check("bulletproofs++ M=1 verify valid",
                 Crypto::RangeProofs::BulletproofsPP::verify({proof}, {commitments})))
             return 1;
 
@@ -936,7 +994,6 @@ int main()
                 !Crypto::RangeProofs::BulletproofsPP::verify({tampered}, {commitments})))
             return 1;
 
-        // verify that value out of range is rejected at prove time
         {
             bool threw = false;
             try
@@ -954,6 +1011,48 @@ int main()
         if (!check("bulletproofs++ binary encoding", test_binary_encoding(proof))) return 1;
 
         if (!check("bulletproofs++ JSON encoding", test_json_encoding(proof))) return 1;
+    }
+
+    // Bulletproofs++ M=2,4,8,16
+    for (const size_t M : {2, 4, 8, 16})
+    {
+        std::vector<uint64_t> amounts(M);
+        for (size_t i = 0; i < M; ++i) amounts[i] = 1000 + i * 100;
+
+        auto [proof, commitments] = Crypto::RangeProofs::BulletproofsPP::prove(amounts, crypto_scalar_t::random(M));
+
+        if (!check(("bulletproofs++ M=" + std::to_string(M) + " verify valid").c_str(),
+                Crypto::RangeProofs::BulletproofsPP::verify({proof}, {commitments})))
+            return 1;
+
+        std::cout << std::endl << "  --- M=" << M << " ---" << std::endl;
+        std::cout << proof << std::endl;
+        std::cout << "    " << proof.to_string() << std::endl << std::endl;
+
+        if (!check(("bulletproofs++ M=" + std::to_string(M) + " binary encoding").c_str(), test_binary_encoding(proof)))
+            return 1;
+    }
+
+    // Bulletproofs++ M=3 (tests pow2 padding to M_pad=4)
+    {
+        auto [proof, commitments] = Crypto::RangeProofs::BulletproofsPP::prove(
+            {100, 200, 300}, crypto_scalar_t::random(3));
+
+        if (!check("bulletproofs++ M=3 verify valid",
+                Crypto::RangeProofs::BulletproofsPP::verify({proof}, {commitments})))
+            return 1;
+    }
+
+    // Bulletproofs++ batch verify with mixed M values
+    {
+        auto [proof1, c1] = Crypto::RangeProofs::BulletproofsPP::prove(
+            {500}, crypto_scalar_t::random(1));
+        auto [proof2, c2] = Crypto::RangeProofs::BulletproofsPP::prove(
+            {600, 700}, crypto_scalar_t::random(2));
+
+        if (!check("bulletproofs++ mixed batch verify",
+                Crypto::RangeProofs::BulletproofsPP::verify({proof1, proof2}, {c1, c2})))
+            return 1;
     }
 
     std::cout << std::endl << "==================" << std::endl;

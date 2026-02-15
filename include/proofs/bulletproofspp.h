@@ -32,8 +32,8 @@
  *
  * Implements the reciprocal-argument range proof scheme from ePrint 2022/510. This is
  * the smallest of the three Bulletproof variants, using a base-16 digit decomposition
- * and Weighted Norm Linear Argument (WNLA) as the inner proof system. Currently
- * supports single-value proofs only (M=1), with N=64 bits by default. The API follows
+ * and Weighted Norm Linear Argument (WNLA) as the inner proof system. Supports
+ * aggregated multi-value proofs (M >= 1), with N=64 bits by default. The API follows
  * the same prove/verify/batch-verify pattern as the other Bulletproof variants.
  */
 
@@ -48,7 +48,7 @@ namespace Crypto::RangeProofs::BulletproofsPP
      * Generates a Bulletproofs++ range proof for one or more amounts.
      *
      * Produces both the proof and the corresponding Pedersen commitments. Each amount
-     * is proven to be in [0, 2^N). Currently limited to single-value proofs (M=1).
+     * is proven to be in [0, 2^N). Supports aggregated multi-value proofs (M >= 1).
      *
      * @param amounts the plaintext values to create range proofs for
      * @param blinding_factors the blinding factors for each Pedersen commitment
