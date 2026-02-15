@@ -45,6 +45,7 @@
 #include <encoding/base58.h>
 #include <encoding/cn_base58.h>
 #include <encoding/mnemonics.h>
+#include <encoding/slip39.h>
 #include <helpers/debug_helper.h>
 #include <helpers/dedupe_and_sort_keys.h>
 #include <helpers/gray_code_generator_t.h>

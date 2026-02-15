@@ -149,6 +149,8 @@ set(SOURCES
     src/encoding/base58.cpp
     src/encoding/cn_base58.cpp
     src/encoding/mnemonics.cpp
+    src/encoding/slip39.cpp
+    src/encoding/languages/slip39_english.cpp
     src/helpers/gray_code_generator_t.cpp
     src/helpers/hd_keys.cpp
     src/helpers/random_bytes.cpp
@@ -223,4 +225,8 @@ if(BUILD_TESTS)
     add_executable(crypto-slip10-test src/test_slip10.cpp)
     target_link_libraries(crypto-slip10-test crypto-static)
     set_property(TARGET crypto-slip10-test PROPERTY OUTPUT_NAME "crypto-slip10-test")
+
+    add_executable(crypto-slip39-test src/test_slip39.cpp)
+    target_link_libraries(crypto-slip39-test crypto-static)
+    set_property(TARGET crypto-slip39-test PROPERTY OUTPUT_NAME "crypto-slip39-test")
 endif()

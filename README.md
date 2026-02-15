@@ -52,6 +52,23 @@ The derivation chain: **entropy** → mnemonic words → **seed** → root key �
 
 Mnemonic encoding supports 10 languages: Chinese (Simplified & Traditional), Czech, English, French, Italian, Japanese, Korean, Portuguese, and Spanish.
 
+#### SLIP-39 Shamir Backup
+
+[SLIP-39](https://github.com/satoshilabs/slips/blob/master/slip-0039.md) splits entropy into **T-of-N mnemonic shares** using Shamir's Secret Sharing over GF(256). Any T shares can reconstruct the original entropy; fewer than T reveal nothing. Supports 128-bit (20-word shares) and 256-bit (33-word shares) with optional passphrase protection via a PBKDF2-based Feistel cipher.
+
+```cpp
+// Split entropy into 3 shares, any 2 can reconstruct
+auto shares = Crypto::Mnemonics::Shamir::split(entropy, 2, 3);
+
+// Combine any 2 shares to recover the original entropy
+auto recovered = Crypto::Mnemonics::Shamir::combine({shares[0], shares[2]});
+
+// Validate a single share (checks words + RS1024 checksum)
+bool valid = Crypto::Mnemonics::Shamir::validate_share(shares[0]);
+```
+
+Recovered entropy feeds directly into the existing HD key flow: `shares → combine() → crypto_entropy_t → crypto_seed_t → HD keys`.
+
 ### Signatures
 
 | Scheme | Size | Ring | Description |
@@ -141,6 +158,7 @@ All three support variable bit lengths (1–64 bits), multi-value aggregated pro
 - **Block-based Base58** — processes input in 8-byte blocks for deterministic output length
 - **Address encoding** — checksummed addresses in single-key or dual-key (spend + view) formats, using either Base58 variant
 - **[BIP-39 Mnemonics](https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki)** — entropy ↔ word sequence conversion (SHA-3 checksum) in 10 languages
+- **[SLIP-39 Shamir Backup](https://github.com/satoshilabs/slips/blob/master/slip-0039.md)** — split entropy into T-of-N mnemonic shares (GF(256) Shamir SSS, RS1024 checksums, PBKDF2 Feistel cipher)
 
 ### Core Utilities
 
