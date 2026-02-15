@@ -29,12 +29,11 @@
  * @brief FROST threshold signature: Feldman VSS DKG + 2-round signing + aggregation.
  */
 
+#include <algorithm>
 #include <crypto_constants.h>
 #include <helpers/scalar_transcript_t.h>
-#include <signatures/frost.h>
-
-#include <algorithm>
 #include <set>
+#include <signatures/frost.h>
 #include <stdexcept>
 
 namespace Crypto::FROST
@@ -180,9 +179,7 @@ namespace Crypto::FROST
         return {shares, commitments};
     }
 
-    bool dkg_verify_share(
-        const crypto_frost_secret_share_t &share,
-        const crypto_point_vector_t &sender_commitments)
+    bool dkg_verify_share(const crypto_frost_secret_share_t &share, const crypto_point_vector_t &sender_commitments)
     {
         if (share.identifier == 0 || sender_commitments.size() == 0)
         {
@@ -252,9 +249,8 @@ namespace Crypto::FROST
         return {identifier, signing_share, verifying_share, group_public_key, min_signers};
     }
 
-    crypto_frost_public_key_package_t build_public_key_package(
-        size_t max_signers,
-        const std::vector<crypto_point_vector_t> &all_commitments)
+    crypto_frost_public_key_package_t
+        build_public_key_package(size_t max_signers, const std::vector<crypto_point_vector_t> &all_commitments)
     {
         // group_public_key = sum of A_{j,0}
         auto group_public_key = Crypto::Z;
@@ -292,8 +288,7 @@ namespace Crypto::FROST
         return {group_public_key, verifying_shares};
     }
 
-    std::tuple<crypto_frost_nonce_t, crypto_frost_nonce_commitment_t>
-        round1_commit(size_t identifier)
+    std::tuple<crypto_frost_nonce_t, crypto_frost_nonce_commitment_t> round1_commit(size_t identifier)
     {
         if (identifier == 0)
         {
@@ -312,10 +307,7 @@ namespace Crypto::FROST
         const auto hiding_point = hiding_nonce * Crypto::G;
         const auto binding_point = binding_nonce * Crypto::G;
 
-        return {
-            {hiding_nonce, binding_nonce},
-            {identifier, hiding_point, binding_point}
-        };
+        return {{hiding_nonce, binding_nonce}, {identifier, hiding_point, binding_point}};
     }
 
     crypto_frost_signature_share_t round2_sign(
@@ -364,7 +356,8 @@ namespace Crypto::FROST
         const auto lambda = lagrange_coefficient(key_package.identifier, signer_ids);
 
         // Signature share: z_i = d_i + e_i * rho_i + lambda_i * s_i * c
-        auto z = signer_nonces.hiding_nonce + (signer_nonces.binding_nonce * rho) + (lambda * key_package.signing_share * c);
+        auto z =
+            signer_nonces.hiding_nonce + (signer_nonces.binding_nonce * rho) + (lambda * key_package.signing_share * c);
 
         return {key_package.identifier, z};
     }
@@ -440,7 +433,8 @@ namespace Crypto::FROST
             const auto lambda = lagrange_coefficient(sig_share.identifier, signer_ids);
 
             const auto lhs = sig_share.share * Crypto::G;
-            const auto rhs = signer_commitment->hiding + (rho * signer_commitment->binding) + (c * lambda * (*verifying_share));
+            const auto rhs =
+                signer_commitment->hiding + (rho * signer_commitment->binding) + (c * lambda * (*verifying_share));
 
             if (!(lhs == rhs))
             {

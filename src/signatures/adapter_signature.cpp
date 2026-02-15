@@ -125,9 +125,7 @@ namespace Crypto::AdapterSignature
         return Crypto::DLEQ::check_proof(R, R, Crypto::G, Crypto::G, pre_signature.dleq);
     }
 
-    crypto_signature_t adapt(
-        const crypto_adapter_signature_t &pre_signature,
-        const crypto_scalar_t &witness_y)
+    crypto_signature_t adapt(const crypto_adapter_signature_t &pre_signature, const crypto_scalar_t &witness_y)
     {
         SCALAR_NZ_OR_THROW(witness_y);
 

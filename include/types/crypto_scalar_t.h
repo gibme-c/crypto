@@ -379,10 +379,12 @@ namespace Crypto
 {
     /** Commonly used scalar constants. */
     const crypto_scalar_t ZERO = {0}; ///< The zero scalar (additive identity)
-    const crypto_scalar_t ONE(1);     ///< The one scalar (multiplicative identity)
-    const crypto_scalar_t TWO(2);     ///< Two -- handy for doubling operations
-    const crypto_scalar_t EIGHT(8);   ///< The cofactor of Ed25519 (h = 8), used for cofactor clearing
-    const crypto_scalar_t INV_EIGHT = EIGHT.invert(); ///< 1/8 mod l -- multiplied into proof elements so verifiers can clear the cofactor with a cheap multiply-by-8 instead of a full scalar mult
+    const crypto_scalar_t ONE(1); ///< The one scalar (multiplicative identity)
+    const crypto_scalar_t TWO(2); ///< Two -- handy for doubling operations
+    const crypto_scalar_t EIGHT(8); ///< The cofactor of Ed25519 (h = 8), used for cofactor clearing
+    const crypto_scalar_t INV_EIGHT =
+        EIGHT.invert(); ///< 1/8 mod l -- multiplied into proof elements so verifiers can clear the cofactor with a
+                        ///< cheap multiply-by-8 instead of a full scalar mult
 
     /**
      * l = 2^252 + 27742317777372353535851937790883648493

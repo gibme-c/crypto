@@ -62,9 +62,7 @@ namespace Crypto::FROST
      * @param sender_commitments the sender's VSS commitment points
      * @return true if the share is consistent with the commitments
      */
-    bool dkg_verify_share(
-        const crypto_frost_secret_share_t &share,
-        const crypto_point_vector_t &sender_commitments);
+    bool dkg_verify_share(const crypto_frost_secret_share_t &share, const crypto_point_vector_t &sender_commitments);
 
     /**
      * DKG Part 3: Combine verified shares into a key package.
@@ -88,9 +86,8 @@ namespace Crypto::FROST
      * @param all_commitments each participant's VSS commitments
      * @return the public key package (group key + verifying shares)
      */
-    crypto_frost_public_key_package_t build_public_key_package(
-        size_t max_signers,
-        const std::vector<crypto_point_vector_t> &all_commitments);
+    crypto_frost_public_key_package_t
+        build_public_key_package(size_t max_signers, const std::vector<crypto_point_vector_t> &all_commitments);
 
     /**
      * Round 1: Generate nonce pair and commitment for signing.
@@ -98,8 +95,7 @@ namespace Crypto::FROST
      * @param identifier this participant's identifier
      * @return (secret_nonce, public_commitment) -- nonce MUST be kept private
      */
-    std::tuple<crypto_frost_nonce_t, crypto_frost_nonce_commitment_t>
-        round1_commit(size_t identifier);
+    std::tuple<crypto_frost_nonce_t, crypto_frost_nonce_commitment_t> round1_commit(size_t identifier);
 
     /**
      * Round 2: Produce a signature share using the nonce and key package.

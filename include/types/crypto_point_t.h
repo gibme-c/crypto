@@ -253,7 +253,8 @@ typedef crypto_point_t crypto_public_key_t;
 /** A shared ECDH derivation point, typically computed as aB or bA between two parties. */
 typedef crypto_point_t crypto_derivation_t;
 
-/** A key image -- a unique, unlinkable tag derived from a secret key, used to detect double-spends in ring signatures. */
+/** A key image -- a unique, unlinkable tag derived from a secret key, used to detect double-spends in ring signatures.
+ */
 typedef crypto_point_t crypto_key_image_t;
 
 /** A Pedersen commitment -- a hiding and binding commitment to a value, typically C = vH + bG. */

@@ -28,8 +28,8 @@
 #define BENCHMARK_WARMUP_ITERATIONS 100
 
 #include <benchmark.h>
-#include <cstring>
 #include <crypto.h>
+#include <cstring>
 
 #define RING_SIZE 4
 
@@ -83,13 +83,10 @@ int main(int argc, char **argv)
 
     if (!advanced_only)
     {
-        benchmark(
-            []() { crypto_hash_t::sha3(INPUT_DATA); }, "hash_t::sha3", BENCHMARK_PERFORMANCE_ITERATIONS_LONG);
+        benchmark([]() { crypto_hash_t::sha3(INPUT_DATA); }, "hash_t::sha3", BENCHMARK_PERFORMANCE_ITERATIONS_LONG);
 
         benchmark(
-            []() { crypto_hash_t::blake2b(INPUT_DATA); },
-            "hash_t::blake2b",
-            BENCHMARK_PERFORMANCE_ITERATIONS_LONG);
+            []() { crypto_hash_t::blake2b(INPUT_DATA); }, "hash_t::blake2b", BENCHMARK_PERFORMANCE_ITERATIONS_LONG);
 
         benchmark([]() { crypto_hash_t::argon2d(INPUT_DATA, 4, 256, 1); }, "hash_t::argon2d", 100);
 
@@ -105,21 +102,15 @@ int main(int argc, char **argv)
 
         benchmark([]() { const auto [point, scalar] = Crypto::generate_keys(); }, "generate_keys");
 
-        benchmark(
-            [&point]() { const auto base58 = Crypto::Base58::encode(point.serialize()); },
-            "Base58::encode");
+        benchmark([&point]() { const auto base58 = Crypto::Base58::encode(point.serialize()); }, "Base58::encode");
 
         const auto encoded = Crypto::Base58::encode(point.serialize());
 
-        benchmark(
-            [&encoded]() { const auto [succes, reader] = Crypto::Base58::decode(encoded); },
-            "Base58::decode");
+        benchmark([&encoded]() { const auto [succes, reader] = Crypto::Base58::decode(encoded); }, "Base58::decode");
 
         std::cout << std::endl;
 
-        benchmark(
-            [&point, &scalar]() { Crypto::generate_key_derivation(point, scalar); },
-            "generate_key_derivation");
+        benchmark([&point, &scalar]() { Crypto::generate_key_derivation(point, scalar); }, "generate_key_derivation");
 
         benchmark([&ds, &point]() { Crypto::derive_public_key(ds, point); }, "derive_public_key");
 
@@ -127,12 +118,9 @@ int main(int argc, char **argv)
 
         benchmark([&point]() { Crypto::underive_public_key(point, 64, point); }, "underive_public_key");
 
-        benchmark(
-            [&point, &scalar]() { Crypto::generate_key_image(point, scalar); },
-            "generate_key_image");
+        benchmark([&point, &scalar]() { Crypto::generate_key_image(point, scalar); }, "generate_key_image");
 
-        benchmark(
-            [&key_image]() { const auto valid = key_image.check_subgroup(); }, "point_t::check_subgroup");
+        benchmark([&key_image]() { const auto valid = key_image.check_subgroup(); }, "point_t::check_subgroup");
     }
 
     // signing
@@ -145,9 +133,7 @@ int main(int argc, char **argv)
             [&sig, &scalar]() { sig = Crypto::Signature::generate_signature(SHA3_HASH, scalar); },
             "Signature::generate");
 
-        benchmark(
-            [&sig, &point]() { Crypto::Signature::check_signature(SHA3_HASH, point, sig); },
-            "Signature::check");
+        benchmark([&sig, &point]() { Crypto::Signature::check_signature(SHA3_HASH, point, sig); }, "Signature::check");
     }
 
     // signing RF8032
@@ -157,12 +143,9 @@ int main(int argc, char **argv)
         std::cout << std::endl;
 
         benchmark(
-            [&sig, &scalar]() { sig = Crypto::RFC8032::generate_signature(SHA3_HASH, scalar); },
-            "RFC8032::generate");
+            [&sig, &scalar]() { sig = Crypto::RFC8032::generate_signature(SHA3_HASH, scalar); }, "RFC8032::generate");
 
-        benchmark(
-            [&sig, &point]() { Crypto::RFC8032::check_signature(SHA3_HASH, point, sig); },
-            "RFC8032::check");
+        benchmark([&sig, &point]() { Crypto::RFC8032::check_signature(SHA3_HASH, point, sig); }, "RFC8032::check");
     }
 
     // Borromean
@@ -241,8 +224,7 @@ int main(int argc, char **argv)
 
         public_commitments[RING_SIZE / 2] = input_commitment;
 
-        const auto _ps_result1 =
-            Crypto::RingCT::generate_pseudo_commitments({100}, crypto_scalar_t::random(1));
+        const auto _ps_result1 = Crypto::RingCT::generate_pseudo_commitments({100}, crypto_scalar_t::random(1));
         const auto &ps_blindings = std::get<0>(_ps_result1);
         const auto &ps_commitments = std::get<1>(_ps_result1);
 
@@ -327,8 +309,7 @@ int main(int argc, char **argv)
 
         public_commitments[RING_SIZE / 2] = input_commitment;
 
-        const auto _ps_result2 =
-            Crypto::RingCT::generate_pseudo_commitments({100}, crypto_scalar_t::random(1));
+        const auto _ps_result2 = Crypto::RingCT::generate_pseudo_commitments({100}, crypto_scalar_t::random(1));
         const auto &ps_blindings = std::get<0>(_ps_result2);
         const auto &ps_commitments = std::get<1>(_ps_result2);
 
@@ -384,8 +365,7 @@ int main(int argc, char **argv)
 
         public_commitments[RING_SIZE / 2] = input_commitment;
 
-        const auto _ps_result2 =
-            Crypto::RingCT::generate_pseudo_commitments({100}, crypto_scalar_t::random(1));
+        const auto _ps_result2 = Crypto::RingCT::generate_pseudo_commitments({100}, crypto_scalar_t::random(1));
         const auto &ps_blindings = std::get<0>(_ps_result2);
         const auto &ps_commitments = std::get<1>(_ps_result2);
 
@@ -913,8 +893,7 @@ int main(int argc, char **argv)
             100);
 
         benchmark(
-            [&adapter_pre_sig, &witness_y]()
-            { Crypto::AdapterSignature::adapt(adapter_pre_sig, witness_y); },
+            [&adapter_pre_sig, &witness_y]() { Crypto::AdapterSignature::adapt(adapter_pre_sig, witness_y); },
             "Adapter::adapt",
             100);
     }
@@ -940,8 +919,7 @@ int main(int argc, char **argv)
             100);
 
         benchmark(
-            [&vrf_pub, &vrf_alpha, &vrf_proof]()
-            { Crypto::VRF::verify(vrf_pub, vrf_alpha, vrf_proof); },
+            [&vrf_pub, &vrf_alpha, &vrf_proof]() { Crypto::VRF::verify(vrf_pub, vrf_alpha, vrf_proof); },
             "VRF::verify",
             100);
     }
@@ -953,8 +931,7 @@ int main(int argc, char **argv)
         const std::vector<unsigned char> rfc_vrf_alpha = {0x48, 0x65, 0x6c, 0x6c, 0x6f};
 
         benchmark(
-            [&rfc_vrf_sk, &rfc_vrf_alpha]()
-            { Crypto::VRF::RFC9381::prove(rfc_vrf_sk, rfc_vrf_alpha); },
+            [&rfc_vrf_sk, &rfc_vrf_alpha]() { Crypto::VRF::RFC9381::prove(rfc_vrf_sk, rfc_vrf_alpha); },
             "VRF::RFC9381::prove",
             100);
 
@@ -1010,7 +987,8 @@ int main(int argc, char **argv)
                 for (size_t i = 0; i < n; ++i)
                 {
                     std::vector<crypto_frost_secret_share_t> rec;
-                    for (size_t j = 0; j < n; ++j) rec.push_back(sh[j][i]);
+                    for (size_t j = 0; j < n; ++j)
+                        rec.push_back(sh[j][i]);
                     Crypto::FROST::dkg_part3(i + 1, rec, cm);
                 }
             },
@@ -1034,8 +1012,8 @@ int main(int argc, char **argv)
                 std::vector<crypto_frost_signature_share_t> sig_shares(signers.size());
                 for (size_t i = 0; i < signers.size(); ++i)
                 {
-                    sig_shares[i] = Crypto::FROST::round2_sign(
-                        SHA3_HASH, key_packages[signers[i]], nonces[i], nonce_commitments);
+                    sig_shares[i] =
+                        Crypto::FROST::round2_sign(SHA3_HASH, key_packages[signers[i]], nonces[i], nonce_commitments);
                 }
                 Crypto::FROST::aggregate(SHA3_HASH, sig_shares, nonce_commitments, pub_key_package);
             },

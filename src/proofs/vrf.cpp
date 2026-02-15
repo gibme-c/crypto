@@ -41,9 +41,7 @@ namespace Crypto::VRF
     /**
      * Hash-to-curve for VRF: deterministically maps (public_key, alpha) to a curve point.
      */
-    static crypto_point_t hash_to_curve(
-        const crypto_public_key_t &public_key,
-        const std::vector<unsigned char> &alpha)
+    static crypto_point_t hash_to_curve(const crypto_public_key_t &public_key, const std::vector<unsigned char> &alpha)
     {
         // Domain-separated hash: SHA3(VRF_DOMAIN_0 || PK || alpha) -> point via Elligator + mul8
         Serialization::serializer_t writer;
@@ -63,9 +61,8 @@ namespace Crypto::VRF
         return crypto_hash_t::sha3(cofactored);
     }
 
-    std::tuple<crypto_vrf_proof_t, crypto_hash_t> prove(
-        const crypto_scalar_t &secret_key,
-        const std::vector<unsigned char> &alpha)
+    std::tuple<crypto_vrf_proof_t, crypto_hash_t>
+        prove(const crypto_scalar_t &secret_key, const std::vector<unsigned char> &alpha)
     {
         SCALAR_NZ_OR_THROW(secret_key);
 
@@ -171,9 +168,7 @@ namespace Crypto::VRF::RFC9381
      * Hash-to-curve per RFC 9381 Section 5.4.1.2:
      * SHA-512(suite || 0x01 || PK || alpha) -> first 32 bytes -> Elligator2 -> mul8
      */
-    static crypto_point_t hash_to_curve(
-        const crypto_public_key_t &public_key,
-        const std::vector<unsigned char> &alpha)
+    static crypto_point_t hash_to_curve(const crypto_public_key_t &public_key, const std::vector<unsigned char> &alpha)
     {
         CryptoPP::byte digest[64];
 
@@ -291,9 +286,8 @@ namespace Crypto::VRF::RFC9381
         return crypto_hash_t(std::vector<unsigned char>(digest, digest + 32));
     }
 
-    std::tuple<crypto_vrf_rfc9381_proof_t, crypto_hash_t> prove(
-        const crypto_scalar_t &secret_key,
-        const std::vector<unsigned char> &alpha)
+    std::tuple<crypto_vrf_rfc9381_proof_t, crypto_hash_t>
+        prove(const crypto_scalar_t &secret_key, const std::vector<unsigned char> &alpha)
     {
         SCALAR_NZ_OR_THROW(secret_key);
 

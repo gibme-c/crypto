@@ -30,7 +30,6 @@
  */
 
 #include <cstring>
-
 #include <helpers/dedupe_and_sort_keys.h>
 #include <types/crypto_scalar_vector_t.h>
 #include <utility>

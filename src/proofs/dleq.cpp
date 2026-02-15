@@ -35,10 +35,7 @@
 
 namespace Crypto::DLEQ
 {
-    crypto_dleq_proof_t generate_proof(
-        const crypto_scalar_t &secret,
-        const crypto_point_t &G,
-        const crypto_point_t &H)
+    crypto_dleq_proof_t generate_proof(const crypto_scalar_t &secret, const crypto_point_t &G, const crypto_point_t &H)
     {
         SCALAR_NZ_OR_THROW(secret);
 

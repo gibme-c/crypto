@@ -33,9 +33,8 @@
  *        signer index and Gray code optimization for product evaluation.
  */
 
-#include <cstring>
-
 #include <crypto_constants.h>
+#include <cstring>
 #include <helpers/dedupe_and_sort_keys.h>
 #include <helpers/gray_code_generator_t.h>
 #include <helpers/scalar_transcript_t.h>
@@ -313,8 +312,7 @@ namespace Crypto::RingSignature::Triptych
 
         // compute RX = base_scalar*G + sum(scalars[i]*points[i])
         ge_p3 rx_result; // NOLINT: immediately populated by ge_multiscalar_mul
-        ge_multiscalar_mul_base_vartime(
-            &rx_result, rx_scalars.data(), rx_points.data(), N + m, neg_z.data());
+        ge_multiscalar_mul_base_vartime(&rx_result, rx_scalars.data(), rx_points.data(), N + m, neg_z.data());
 
         // compute RY
         ge_p3 ry_result; // NOLINT: immediately populated by ge_multiscalar_mul
@@ -368,8 +366,14 @@ namespace Crypto::RingSignature::Triptych
         }
 
         return generate_ring_signature(
-            message_digest, secret_ephemeral, public_keys, real_output_index,
-            input_blinding_factor, input_commitments, pseudo_blinding_factor, pseudo_commitment);
+            message_digest,
+            secret_ephemeral,
+            public_keys,
+            real_output_index,
+            input_blinding_factor,
+            input_commitments,
+            pseudo_blinding_factor,
+            pseudo_commitment);
     }
 
     // ---- Sign (explicit signer index): full proof construction ----
@@ -695,7 +699,6 @@ namespace Crypto::RingSignature::Triptych
             z -= rho[j] * x.pow(j);
         }
 
-        return {true,
-            crypto_triptych_signature_t(commitment_image, pseudo_commitment, A, B, C, D, X, Y, f, zA, zC, z)};
+        return {true, crypto_triptych_signature_t(commitment_image, pseudo_commitment, A, B, C, D, X, Y, f, zA, zC, z)};
     }
 } // namespace Crypto::RingSignature::Triptych

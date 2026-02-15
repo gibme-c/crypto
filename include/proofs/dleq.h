@@ -48,10 +48,7 @@ namespace Crypto::DLEQ
      * @param H second base point
      * @return the DLEQ proof
      */
-    crypto_dleq_proof_t generate_proof(
-        const crypto_scalar_t &secret,
-        const crypto_point_t &G,
-        const crypto_point_t &H);
+    crypto_dleq_proof_t generate_proof(const crypto_scalar_t &secret, const crypto_point_t &G, const crypto_point_t &H);
 
     /**
      * Verifies a DLEQ proof that A and B share the same discrete log w.r.t. G and H.

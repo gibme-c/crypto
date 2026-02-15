@@ -31,10 +31,7 @@
 
 #include <types/crypto_vrf_proof_t.h>
 
-crypto_vrf_proof_t::crypto_vrf_proof_t(
-    const crypto_point_t &gamma,
-    const crypto_scalar_t &c,
-    const crypto_scalar_t &s):
+crypto_vrf_proof_t::crypto_vrf_proof_t(const crypto_point_t &gamma, const crypto_scalar_t &c, const crypto_scalar_t &s):
     gamma(gamma), c(c), s(s)
 {
 }

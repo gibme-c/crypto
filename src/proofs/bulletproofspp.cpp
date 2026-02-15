@@ -52,8 +52,7 @@ static constexpr size_t DIM_NP = 16; // base (hex)
 // ============================================================================
 static std::mutex bpp_mutex;
 
-static std::tuple<crypto_point_vector_t, crypto_point_vector_t> generate_exponents(
-    size_t g_count, size_t h_count)
+static std::tuple<crypto_point_vector_t, crypto_point_vector_t> generate_exponents(size_t g_count, size_t h_count)
 {
     std::scoped_lock lock(bpp_mutex);
 
@@ -109,9 +108,7 @@ static crypto_scalar_t weight_inner_product(
 // ============================================================================
 // Helper: scalar-vector inner product <a, b> = sum(a[i]*b[i])
 // ============================================================================
-static crypto_scalar_t dot(
-    const std::vector<crypto_scalar_t> &a,
-    const std::vector<crypto_scalar_t> &b)
+static crypto_scalar_t dot(const std::vector<crypto_scalar_t> &a, const std::vector<crypto_scalar_t> &b)
 {
     auto result = Crypto::ZERO;
     const auto sz = (std::min)(a.size(), b.size());
@@ -125,10 +122,7 @@ static crypto_scalar_t dot(
 // ============================================================================
 // Helper: MSM using raw ge_p3 arrays, returns crypto_point_t
 // ============================================================================
-static crypto_point_t msm(
-    const std::vector<crypto_scalar_t> &scalars,
-    const std::vector<ge_p3> &points,
-    size_t n)
+static crypto_point_t msm(const std::vector<crypto_scalar_t> &scalars, const std::vector<ge_p3> &points, size_t n)
 {
     std::vector<unsigned char> s(n * 32);
     for (size_t i = 0; i < n; ++i)
@@ -160,12 +154,11 @@ static crypto_point_t msm_base(
 // ============================================================================
 // Helper: point-vector inner product <scalars, points> via MSM
 // ============================================================================
-static crypto_point_t point_inner_product(
-    const std::vector<crypto_scalar_t> &scalars,
-    const std::vector<ge_p3> &points,
-    size_t n)
+static crypto_point_t
+    point_inner_product(const std::vector<crypto_scalar_t> &scalars, const std::vector<ge_p3> &points, size_t n)
 {
-    if (n == 0) return Crypto::Z;
+    if (n == 0)
+        return Crypto::Z;
     return msm(scalars, points, n);
 }
 
@@ -219,18 +212,20 @@ namespace Crypto::RangeProofs::BulletproofsPP
         }
 
         // Runtime dimensions
-        const size_t ND_TOTAL = M_pad * DIM_ND;   // total digits
-        const size_t NM_TOTAL = ND_TOTAL;          // multiplier gates
-        const size_t NV_TOTAL = M_pad * 17;        // witness slots (16 multiplicities + 1 zero per value)
+        const size_t ND_TOTAL = M_pad * DIM_ND; // total digits
+        const size_t NM_TOTAL = ND_TOTAL; // multiplier gates
+        const size_t NV_TOTAL = M_pad * 17; // witness slots (16 multiplicities + 1 zero per value)
         const size_t G_VEC_FULL = ND_TOTAL;
-        const size_t H_VEC_FULL = 2 * ND_TOTAL;    // next_pow2(9 + NV_TOTAL) = 2*M_pad*16
+        const size_t H_VEC_FULL = 2 * ND_TOTAL; // next_pow2(9 + NV_TOTAL) = 2*M_pad*16
 
         const auto [g_vec, h_vec] = generate_exponents(G_VEC_FULL, H_VEC_FULL);
 
         // Extract ge_p3 arrays for MSM
         std::vector<ge_p3> g_p3(G_VEC_FULL), h_p3(H_VEC_FULL);
-        for (size_t i = 0; i < G_VEC_FULL; ++i) g_p3[i] = g_vec[i].p3();
-        for (size_t i = 0; i < H_VEC_FULL; ++i) h_p3[i] = h_vec[i].p3();
+        for (size_t i = 0; i < G_VEC_FULL; ++i)
+            g_p3[i] = g_vec[i].p3();
+        for (size_t i = 0; i < H_VEC_FULL; ++i)
+            h_p3[i] = h_vec[i].p3();
         const auto inv8 = Crypto::INV_EIGHT;
 
         // Generate commitments V_j = amount_j*G + blinding_j*h_vec[0]
@@ -245,7 +240,8 @@ namespace Crypto::RangeProofs::BulletproofsPP
             tr.update(V_all[j]);
 
         const auto e = tr.challenge();
-        if (!e.valid()) goto try_again;
+        if (!e.valid())
+            goto try_again;
 
         // ---- Digit decomposition (base-16) for all values ----
         std::vector<crypto_scalar_t> digits(ND_TOTAL);
@@ -279,7 +275,8 @@ namespace Crypto::RangeProofs::BulletproofsPP
             for (size_t i = 0; i < ND_TOTAL; ++i)
             {
                 sums[i] = digits[i] + e;
-                if (!sums[i].valid()) goto try_again;
+                if (!sums[i].valid())
+                    goto try_again;
             }
             const auto inv = crypto_scalar_vector_t(std::move(sums)).invert();
             for (size_t i = 0; i < ND_TOTAL; ++i)
@@ -288,7 +285,8 @@ namespace Crypto::RangeProofs::BulletproofsPP
 
         // ---- Pole commitment R = r_blind * h[0] + sum_j <reciprocals_j, h[9+j*17:9+j*17+16]> ----
         const auto r_blind = crypto_scalar_t::random();
-        if (!r_blind.valid()) goto try_again;
+        if (!r_blind.valid())
+            goto try_again;
 
         crypto_point_t R;
         {
@@ -325,12 +323,24 @@ namespace Crypto::RangeProofs::BulletproofsPP
         {
             auto randoms = crypto_scalar_t::random(18);
             size_t ri = 0;
-            ro[0] = randoms[ri++]; ro[1] = randoms[ri++]; ro[2] = randoms[ri++]; ro[3] = randoms[ri++];
-            ro[5] = randoms[ri++]; ro[6] = randoms[ri++]; ro[7] = randoms[ri++];
-            rl[0] = randoms[ri++]; rl[1] = randoms[ri++]; rl[2] = randoms[ri++];
-            rl[4] = randoms[ri++]; rl[5] = randoms[ri++]; rl[6] = randoms[ri++];
-            rr[0] = randoms[ri++]; rr[1] = randoms[ri++];
-            rr[3] = randoms[ri++]; rr[4] = randoms[ri++]; rr[5] = randoms[ri++];
+            ro[0] = randoms[ri++];
+            ro[1] = randoms[ri++];
+            ro[2] = randoms[ri++];
+            ro[3] = randoms[ri++];
+            ro[5] = randoms[ri++];
+            ro[6] = randoms[ri++];
+            ro[7] = randoms[ri++];
+            rl[0] = randoms[ri++];
+            rl[1] = randoms[ri++];
+            rl[2] = randoms[ri++];
+            rl[4] = randoms[ri++];
+            rl[5] = randoms[ri++];
+            rl[6] = randoms[ri++];
+            rr[0] = randoms[ri++];
+            rr[1] = randoms[ri++];
+            rr[3] = randoms[ri++];
+            rr[4] = randoms[ri++];
+            rr[5] = randoms[ri++];
         }
 
         // ---- Circuit commitments via MSM ----
@@ -340,7 +350,7 @@ namespace Crypto::RangeProofs::BulletproofsPP
             std::vector<crypto_scalar_t> s(7);
             std::vector<ge_p3> p(7);
             size_t idx = 0;
-            for (size_t i : {0,1,2,3,5,6,7})
+            for (size_t i : {0, 1, 2, 3, 5, 6, 7})
             {
                 s[idx] = ro[i] * inv8;
                 p[idx] = h_p3[i];
@@ -356,7 +366,7 @@ namespace Crypto::RangeProofs::BulletproofsPP
             std::vector<crypto_scalar_t> s(total);
             std::vector<ge_p3> p(total);
             size_t idx = 0;
-            for (size_t i : {0,1,2,4,5,6})
+            for (size_t i : {0, 1, 2, 4, 5, 6})
             {
                 s[idx] = rl[i] * inv8;
                 p[idx] = h_p3[i];
@@ -384,7 +394,7 @@ namespace Crypto::RangeProofs::BulletproofsPP
             std::vector<crypto_scalar_t> s(total);
             std::vector<ge_p3> p(total);
             size_t idx = 0;
-            for (size_t i : {0,1,3,4,5})
+            for (size_t i : {0, 1, 3, 4, 5})
             {
                 s[idx] = rr[i] * inv8;
                 p[idx] = h_p3[i];
@@ -407,13 +417,17 @@ namespace Crypto::RangeProofs::BulletproofsPP
             tr.update(V_all[j]);
 
         const auto rho = tr.challenge();
-        if (!rho.valid()) goto try_again;
+        if (!rho.valid())
+            goto try_again;
         const auto lambda = tr.challenge();
-        if (!lambda.valid()) goto try_again;
+        if (!lambda.valid())
+            goto try_again;
         const auto beta = tr.challenge();
-        if (!beta.valid()) goto try_again;
+        if (!beta.valid())
+            goto try_again;
         const auto delta = tr.challenge();
-        if (!delta.valid()) goto try_again;
+        if (!delta.valid())
+            goto try_again;
 
         const auto mu = rho * rho;
 
@@ -443,7 +457,7 @@ namespace Crypto::RangeProofs::BulletproofsPP
         }
 
         // Batch invert mu and beta (2 inversions → 1 batch)
-        const auto batch_inv_2 = crypto_scalar_vector_t(std::vector<crypto_scalar_t>{mu, beta}).invert();
+        const auto batch_inv_2 = crypto_scalar_vector_t(std::vector<crypto_scalar_t> {mu, beta}).invert();
         const auto mu_inv = batch_inv_2[0];
         const auto beta_inv = batch_inv_2[1];
 
@@ -630,7 +644,8 @@ namespace Crypto::RangeProofs::BulletproofsPP
         // ---- Transcript: get tau ----
         tr.update(C_s);
         const auto tau = tr.challenge();
-        if (!tau.valid()) goto try_again;
+        if (!tau.valid())
+            goto try_again;
 
         const auto tau2 = tau * tau;
         const auto tau3 = tau2 * tau;
@@ -640,7 +655,12 @@ namespace Crypto::RangeProofs::BulletproofsPP
         size_t num_wnla_rounds = 0;
         {
             size_t l_sz = H_VEC_FULL, n_sz = G_VEC_FULL;
-            while (l_sz + n_sz >= 6) { l_sz /= 2; n_sz /= 2; ++num_wnla_rounds; }
+            while (l_sz + n_sz >= 6)
+            {
+                l_sz /= 2;
+                n_sz /= 2;
+                ++num_wnla_rounds;
+            }
         }
 
         // WNLA rho sequence: rho, mu, mu^2, mu^4, mu^8, ...
@@ -696,8 +716,7 @@ namespace Crypto::RangeProofs::BulletproofsPP
         std::vector<crypto_scalar_t> n_vec(G_VEC_FULL);
         for (size_t i = 0; i < NM_TOTAL; ++i)
         {
-            n_vec[i] = c_nR[i] * tau - c_nL[i] * tau2
-                       + tau_inv * ns[i] + tau * nl[i] - tau2 * nr[i];
+            n_vec[i] = c_nR[i] * tau - c_nL[i] * tau2 + tau_inv * ns[i] + tau * nl[i] - tau2 * nr[i];
         }
 
         // ---- Assemble WNLA c vector (same dimension as l = H_VEC_FULL) ----
@@ -720,8 +739,10 @@ namespace Crypto::RangeProofs::BulletproofsPP
 
         // ---- WNLA prove ----
         std::vector<ge_p3> wnla_g(G_VEC_FULL), wnla_h(H_VEC_FULL);
-        for (size_t i = 0; i < G_VEC_FULL; ++i) wnla_g[i] = g_p3[i];
-        for (size_t i = 0; i < H_VEC_FULL; ++i) wnla_h[i] = h_p3[i];
+        for (size_t i = 0; i < G_VEC_FULL; ++i)
+            wnla_g[i] = g_p3[i];
+        for (size_t i = 0; i < H_VEC_FULL; ++i)
+            wnla_h[i] = h_p3[i];
 
         std::vector<crypto_point_t> X_points, W_points;
 
@@ -772,10 +793,30 @@ namespace Crypto::RangeProofs::BulletproofsPP
             {
                 const size_t total = half_l + half_l + half_n + half_n;
                 size_t idx = 0;
-                for (size_t i = 0; i < half_l; ++i) { x_scalars[idx] = l_vec[2*i+1] * inv8; x_points[idx] = wnla_h[2*i]; idx++; }
-                for (size_t i = 0; i < half_l; ++i) { x_scalars[idx] = l_vec[2*i] * inv8; x_points[idx] = wnla_h[2*i+1]; idx++; }
-                for (size_t i = 0; i < half_n; ++i) { x_scalars[idx] = n_vec[2*i+1] * cur_rho * inv8; x_points[idx] = wnla_g[2*i]; idx++; }
-                for (size_t i = 0; i < half_n; ++i) { x_scalars[idx] = n_vec[2*i] * rho_inv * inv8; x_points[idx] = wnla_g[2*i+1]; idx++; }
+                for (size_t i = 0; i < half_l; ++i)
+                {
+                    x_scalars[idx] = l_vec[2 * i + 1] * inv8;
+                    x_points[idx] = wnla_h[2 * i];
+                    idx++;
+                }
+                for (size_t i = 0; i < half_l; ++i)
+                {
+                    x_scalars[idx] = l_vec[2 * i] * inv8;
+                    x_points[idx] = wnla_h[2 * i + 1];
+                    idx++;
+                }
+                for (size_t i = 0; i < half_n; ++i)
+                {
+                    x_scalars[idx] = n_vec[2 * i + 1] * cur_rho * inv8;
+                    x_points[idx] = wnla_g[2 * i];
+                    idx++;
+                }
+                for (size_t i = 0; i < half_n; ++i)
+                {
+                    x_scalars[idx] = n_vec[2 * i] * rho_inv * inv8;
+                    x_points[idx] = wnla_g[2 * i + 1];
+                    idx++;
+                }
                 X_pt = msm_base(x_scalars, x_points, total, vx * inv8);
             }
 
@@ -784,8 +825,18 @@ namespace Crypto::RangeProofs::BulletproofsPP
             {
                 const size_t total = half_l + half_n;
                 size_t idx = 0;
-                for (size_t i = 0; i < half_l; ++i) { w_scalars[idx] = l_vec[2*i+1] * inv8; w_points[idx] = wnla_h[2*i+1]; idx++; }
-                for (size_t i = 0; i < half_n; ++i) { w_scalars[idx] = n_vec[2*i+1] * inv8; w_points[idx] = wnla_g[2*i+1]; idx++; }
+                for (size_t i = 0; i < half_l; ++i)
+                {
+                    w_scalars[idx] = l_vec[2 * i + 1] * inv8;
+                    w_points[idx] = wnla_h[2 * i + 1];
+                    idx++;
+                }
+                for (size_t i = 0; i < half_n; ++i)
+                {
+                    w_scalars[idx] = n_vec[2 * i + 1] * inv8;
+                    w_points[idx] = wnla_g[2 * i + 1];
+                    idx++;
+                }
                 W_pt = msm_base(w_scalars, w_points, total, vr * inv8);
             }
 
@@ -796,13 +847,22 @@ namespace Crypto::RangeProofs::BulletproofsPP
             tr.update(X_pt);
             tr.update(W_pt);
             const auto y = tr.challenge();
-            if (!y.valid()) goto try_again;
+            if (!y.valid())
+                goto try_again;
 
             // Fold generators: h'[i] = h[2i] + y*h[2i+1], g'[i] = rho*g[2i] + y*g[2i+1]
             // Generator folding requires contiguous even/odd arrays for batch_ss_p3
             std::vector<ge_p3> h_even(half_l), h_odd(half_l), g_even(half_n), g_odd(half_n);
-            for (size_t i = 0; i < half_l; ++i) { h_even[i] = wnla_h[2*i]; h_odd[i] = wnla_h[2*i+1]; }
-            for (size_t i = 0; i < half_n; ++i) { g_even[i] = wnla_g[2*i]; g_odd[i] = wnla_g[2*i+1]; }
+            for (size_t i = 0; i < half_l; ++i)
+            {
+                h_even[i] = wnla_h[2 * i];
+                h_odd[i] = wnla_h[2 * i + 1];
+            }
+            for (size_t i = 0; i < half_n; ++i)
+            {
+                g_even[i] = wnla_g[2 * i];
+                g_odd[i] = wnla_g[2 * i + 1];
+            }
 
             wnla_h.resize(half_l);
             wnla_g.resize(half_n);
@@ -816,15 +876,15 @@ namespace Crypto::RangeProofs::BulletproofsPP
 
             // Fold scalar vectors in-place
             for (size_t i = 0; i < half_l; ++i)
-                c_vec[i] = c_vec[2*i] + y * c_vec[2*i+1];
+                c_vec[i] = c_vec[2 * i] + y * c_vec[2 * i + 1];
             c_vec.resize(half_l);
 
             for (size_t i = 0; i < half_l; ++i)
-                l_vec[i] = l_vec[2*i] + y * l_vec[2*i+1];
+                l_vec[i] = l_vec[2 * i] + y * l_vec[2 * i + 1];
             l_vec.resize(half_l);
 
             for (size_t i = 0; i < half_n; ++i)
-                n_vec[i] = rho_inv * n_vec[2*i] + y * n_vec[2*i+1];
+                n_vec[i] = rho_inv * n_vec[2 * i] + y * n_vec[2 * i + 1];
             n_vec.resize(half_n);
 
             ++wnla_round;
@@ -835,10 +895,7 @@ namespace Crypto::RangeProofs::BulletproofsPP
         for (size_t j = 0; j < M; ++j)
             result_commitments[j] = V_all[j];
 
-        return {
-            crypto_bulletproof_pp_t(C_l, C_r, C_o, C_s, R, X_points, W_points, l_vec, n_vec),
-            result_commitments
-        };
+        return {crypto_bulletproof_pp_t(C_l, C_r, C_o, C_s, R, X_points, W_points, l_vec, n_vec), result_commitments};
     }
 
     // ========================================================================
@@ -868,11 +925,14 @@ namespace Crypto::RangeProofs::BulletproofsPP
             const auto nr = proof.X.size();
             const size_t g_full = size_t(1) << nr;
             const size_t h_full = size_t(1) << (nr + 1);
-            if (g_full > max_G) max_G = g_full;
-            if (h_full > max_H) max_H = h_full;
+            if (g_full > max_G)
+                max_G = g_full;
+            if (h_full > max_H)
+                max_H = h_full;
         }
 
-        if (max_G == 0) return false;
+        if (max_G == 0)
+            return false;
 
         const auto [g_vec, h_vec] = generate_exponents(max_G, max_H);
         const auto two = crypto_scalar_t(2);
@@ -899,11 +959,13 @@ namespace Crypto::RangeProofs::BulletproofsPP
             const size_t NV_TOTAL = M_pad * 17;
 
             const auto M = commitments[ii].size();
-            if (M == 0 || M > M_pad) return false;
+            if (M == 0 || M > M_pad)
+                return false;
 
             // Pad commitments to M_pad with identity point
             std::vector<crypto_point_t> V_all(M_pad, Crypto::Z);
-            for (size_t j = 0; j < M; ++j) V_all[j] = commitments[ii][j];
+            for (size_t j = 0; j < M; ++j)
+                V_all[j] = commitments[ii][j];
 
             const auto weight = crypto_scalar_t::random();
             const auto w8 = weight * eight;
@@ -914,7 +976,8 @@ namespace Crypto::RangeProofs::BulletproofsPP
                 tr.update(V_all[j]);
 
             const auto e = tr.challenge();
-            if (!e.valid()) return false;
+            if (!e.valid())
+                return false;
 
             tr.update(proof.C_l);
             tr.update(proof.C_r);
@@ -923,13 +986,17 @@ namespace Crypto::RangeProofs::BulletproofsPP
                 tr.update(V_all[j]);
 
             const auto rho = tr.challenge();
-            if (!rho.valid()) return false;
+            if (!rho.valid())
+                return false;
             const auto lambda = tr.challenge();
-            if (!lambda.valid()) return false;
+            if (!lambda.valid())
+                return false;
             const auto beta = tr.challenge();
-            if (!beta.valid()) return false;
+            if (!beta.valid())
+                return false;
             const auto delta = tr.challenge();
-            if (!delta.valid()) return false;
+            if (!delta.valid())
+                return false;
 
             const auto mu = rho * rho;
 
@@ -938,7 +1005,11 @@ namespace Crypto::RangeProofs::BulletproofsPP
             std::vector<crypto_scalar_t> lambda_vec(lambda_len);
             {
                 auto lp = Crypto::ONE;
-                for (size_t i = 0; i < lambda_len; ++i) { lambda_vec[i] = lp; lp *= lambda; }
+                for (size_t i = 0; i < lambda_len; ++i)
+                {
+                    lambda_vec[i] = lp;
+                    lp *= lambda;
+                }
             }
 
             std::vector<crypto_scalar_t> lcc(M_pad), lambda_sum_vec(M_pad);
@@ -954,7 +1025,11 @@ namespace Crypto::RangeProofs::BulletproofsPP
             std::vector<crypto_scalar_t> mu_vec(NM_TOTAL);
             {
                 auto mp = Crypto::ONE;
-                for (size_t i = 0; i < NM_TOTAL; ++i) { mp *= mu; mu_vec[i] = mp; }
+                for (size_t i = 0; i < NM_TOTAL; ++i)
+                {
+                    mp *= mu;
+                    mu_vec[i] = mp;
+                }
             }
             // c_l0[idx*17+j] = lambda^(idx*17+j+1) for j=0..15, 0 for j=16
             std::vector<crypto_scalar_t> c_l0(NV_TOTAL, Crypto::ZERO);
@@ -965,7 +1040,8 @@ namespace Crypto::RangeProofs::BulletproofsPP
             // ---- C_s transcript, get tau ----
             tr.update(proof.C_s);
             const auto tau = tr.challenge();
-            if (!tau.valid()) return false;
+            if (!tau.valid())
+                return false;
 
             // Batch invert mu, tau, and e+j values
             std::vector<crypto_scalar_t> mu_inv_pow(NM_TOTAL);
@@ -982,7 +1058,11 @@ namespace Crypto::RangeProofs::BulletproofsPP
 
                 const auto mu_inv = inv_batch[0];
                 auto mip = Crypto::ONE;
-                for (size_t i = 0; i < NM_TOTAL; ++i) { mip *= mu_inv; mu_inv_pow[i] = mip; }
+                for (size_t i = 0; i < NM_TOTAL; ++i)
+                {
+                    mip *= mu_inv;
+                    mu_inv_pow[i] = mip;
+                }
 
                 tau_inv = inv_batch[1];
 
@@ -1024,10 +1104,10 @@ namespace Crypto::RangeProofs::BulletproofsPP
                 pn_tau[i] = c_nR[i] * tau - c_nL[i] * tau2;
 
             auto mu_sum = Crypto::ZERO;
-            for (size_t i = 0; i < NM_TOTAL; ++i) mu_sum += mu_vec[i];
+            for (size_t i = 0; i < NM_TOTAL; ++i)
+                mu_sum += mu_vec[i];
 
-            const auto ps_tau = weight_inner_product(pn_tau, pn_tau, mu)
-                                - two * tau3 * mu_sum;
+            const auto ps_tau = weight_inner_product(pn_tau, pn_tau, mu) - two * tau3 * mu_sum;
 
             // ---- Build WNLA c vector ----
             std::vector<crypto_scalar_t> c_vec(H_VEC_FULL, Crypto::ZERO);
@@ -1051,7 +1131,8 @@ namespace Crypto::RangeProofs::BulletproofsPP
                 tr.update(proof.X[r]);
                 tr.update(proof.W[r]);
                 const auto y = tr.challenge();
-                if (!y.valid()) return false;
+                if (!y.valid())
+                    return false;
                 wnla_challenges[r] = y;
             }
 
@@ -1074,8 +1155,7 @@ namespace Crypto::RangeProofs::BulletproofsPP
                 c_folded.resize(half);
             }
 
-            const auto v_wnla = weight_inner_product(n_final, n_final, verify_mu)
-                                + dot(c_folded, l_final);
+            const auto v_wnla = weight_inner_product(n_final, n_final, verify_mu) + dot(c_folded, l_final);
 
             // ---- Generator scalar products via binary expansion ----
             const auto h_sz = H_VEC_FULL;
@@ -1113,11 +1193,14 @@ namespace Crypto::RangeProofs::BulletproofsPP
             G_scalar += weight * v_wnla;
 
             std::vector<crypto_scalar_t> w_l(final_l_sz), w_n(final_n_sz);
-            for (size_t j = 0; j < final_l_sz; ++j) w_l[j] = weight * l_final[j];
-            for (size_t j = 0; j < final_n_sz; ++j) w_n[j] = weight * n_final[j];
+            for (size_t j = 0; j < final_l_sz; ++j)
+                w_l[j] = weight * l_final[j];
+            for (size_t j = 0; j < final_n_sz; ++j)
+                w_n[j] = weight * n_final[j];
 
             std::vector<crypto_scalar_t> w_pn(NM_TOTAL);
-            for (size_t i = 0; i < NM_TOTAL; ++i) w_pn[i] = weight * pn_tau[i];
+            for (size_t i = 0; i < NM_TOTAL; ++i)
+                w_pn[i] = weight * pn_tau[i];
 
             // +<h_folded, l_final>
             for (size_t i = 0; i < h_sz; ++i)
@@ -1161,7 +1244,7 @@ namespace Crypto::RangeProofs::BulletproofsPP
             batch_scalars.append(tau2_w8);
             batch_points.append(proof.C_r);
 
-            batch_scalars.append(neg_2tau3_w8);      // -2*tau^3 * R
+            batch_scalars.append(neg_2tau3_w8); // -2*tau^3 * R
             batch_points.append(proof.R);
 
             // -2*tau^3 * sum_j(lcc[j] * V_j) for all M_pad values

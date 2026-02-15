@@ -27,7 +27,7 @@
 #include <crypto.h>
 
 #define PRINT(value) std::cout << #value << ": " << std::endl << value << std::endl << std::endl
-#define TEST_FAILED                                            \
+#define TEST_FAILED                                       \
     std::cout << "TEST FAILED" << std::endl << std::endl; \
     return 1
 

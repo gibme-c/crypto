@@ -77,9 +77,7 @@ namespace Crypto::AdapterSignature
      * @param witness_y the witness scalar (such that statement_Y = witness_y * G)
      * @return the adapted standard signature
      */
-    crypto_signature_t adapt(
-        const crypto_adapter_signature_t &pre_signature,
-        const crypto_scalar_t &witness_y);
+    crypto_signature_t adapt(const crypto_adapter_signature_t &pre_signature, const crypto_scalar_t &witness_y);
 
     /**
      * Extracts the witness scalar from a pre-signature and its adapted signature.

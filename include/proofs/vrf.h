@@ -51,9 +51,8 @@ namespace Crypto::VRF
      * @param alpha the VRF input (arbitrary byte string)
      * @return (proof, beta) where beta is the VRF output hash
      */
-    std::tuple<crypto_vrf_proof_t, crypto_hash_t> prove(
-        const crypto_scalar_t &secret_key,
-        const std::vector<unsigned char> &alpha);
+    std::tuple<crypto_vrf_proof_t, crypto_hash_t>
+        prove(const crypto_scalar_t &secret_key, const std::vector<unsigned char> &alpha);
 
     /**
      * Verifies a VRF proof and returns the output if valid.
@@ -81,9 +80,8 @@ namespace Crypto::VRF::RFC9381
      * @param alpha the VRF input (arbitrary byte string)
      * @return (proof, beta) where beta is the VRF output hash
      */
-    std::tuple<crypto_vrf_rfc9381_proof_t, crypto_hash_t> prove(
-        const crypto_scalar_t &secret_key,
-        const std::vector<unsigned char> &alpha);
+    std::tuple<crypto_vrf_rfc9381_proof_t, crypto_hash_t>
+        prove(const crypto_scalar_t &secret_key, const std::vector<unsigned char> &alpha);
 
     /**
      * Verifies an RFC 9381 VRF proof and returns the output if valid.

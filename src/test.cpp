@@ -157,23 +157,28 @@ int main()
     {
         const auto point = crypto_point_t();
 
-        if (!check("crypto_point_t empty", point.empty())) return 1;
+        if (!check("crypto_point_t empty", point.empty()))
+            return 1;
 
         const auto scalar = crypto_scalar_t();
 
-        if (!check("crypto_scalar_t empty", scalar.empty())) return 1;
+        if (!check("crypto_scalar_t empty", scalar.empty()))
+            return 1;
 
         const auto signature = crypto_signature_t();
 
-        if (!check("crypto_signature_t empty", signature.empty())) return 1;
+        if (!check("crypto_signature_t empty", signature.empty()))
+            return 1;
 
         const auto hash = crypto_hash_t();
 
-        if (!check("crypto_hash_t empty", hash.empty())) return 1;
+        if (!check("crypto_hash_t empty", hash.empty()))
+            return 1;
 
         const auto entropy = crypto_entropy_t();
 
-        if (!check("crypto_entropy_t empty", entropy.empty())) return 1;
+        if (!check("crypto_entropy_t empty", entropy.empty()))
+            return 1;
     }
 
     std::cout << std::endl << "=== Hashing ===" << std::endl;
@@ -187,7 +192,8 @@ int main()
 
         std::cout << "    sha3: " << hash << std::endl << std::endl;
 
-        if (!check("sha3", hash == SHA3_HASH)) return 1;
+        if (!check("sha3", hash == SHA3_HASH))
+            return 1;
     }
 
     // Blake2b Test
@@ -196,7 +202,8 @@ int main()
 
         std::cout << "    blake2b: " << hash << std::endl << std::endl;
 
-        if (!check("blake2b", hash == BLAKE2B)) return 1;
+        if (!check("blake2b", hash == BLAKE2B))
+            return 1;
     }
 
     // Argon2d Test
@@ -205,7 +212,8 @@ int main()
 
         std::cout << "    argon2d: " << hash << std::endl << std::endl;
 
-        if (!check("argon2d", hash == ARGON2D_4_1024_1)) return 1;
+        if (!check("argon2d", hash == ARGON2D_4_1024_1))
+            return 1;
     }
 
     // Argon2i Test
@@ -214,7 +222,8 @@ int main()
 
         std::cout << "    argon2i: " << hash << std::endl << std::endl;
 
-        if (!check("argon2i", hash == ARGON2I_4_1024_1)) return 1;
+        if (!check("argon2i", hash == ARGON2I_4_1024_1))
+            return 1;
     }
 
     // Argon2id Test
@@ -223,7 +232,8 @@ int main()
 
         std::cout << "    argon2id: " << hash << std::endl << std::endl;
 
-        if (!check("argon2id", hash == ARGON2ID_4_1024_1)) return 1;
+        if (!check("argon2id", hash == ARGON2ID_4_1024_1))
+            return 1;
     }
 
     // SHA-3 slow hash
@@ -232,13 +242,15 @@ int main()
 
         std::cout << "    sha3_slow: " << hash << std::endl << std::endl;
 
-        if (!check("sha3_slow", hash == SHA3_SLOW_0)) return 1;
+        if (!check("sha3_slow", hash == SHA3_SLOW_0))
+            return 1;
 
         hash = crypto_hash_t::sha3_slow(INPUT_DATA, 4096);
 
         std::cout << "    sha3_slow[4096]: " << hash << std::endl << std::endl;
 
-        if (!check("sha3_slow[4096]", hash == SHA3_SLOW_4096)) return 1;
+        if (!check("sha3_slow[4096]", hash == SHA3_SLOW_4096))
+            return 1;
     }
 
     std::cout << std::endl << "=== AES ===" << std::endl;
@@ -261,7 +273,8 @@ int main()
 
         std::cout << "    decrypted: " << decrypted << std::endl << std::endl;
 
-        if (!check("aes encrypt/decrypt", decrypted == input)) return 1;
+        if (!check("aes encrypt/decrypt", decrypted == input))
+            return 1;
     }
 
     std::cout << std::endl << "=== Base58 ===" << std::endl;
@@ -299,7 +312,8 @@ int main()
 
         const auto checkb = reader.pod<crypto_point_t>();
 
-        if (!check("base58 encode/decode", checka == a && checkb == b && prefix == BASE58_PREFIX)) return 1;
+        if (!check("base58 encode/decode", checka == a && checkb == b && prefix == BASE58_PREFIX))
+            return 1;
     }
 
     // Base58 Test #2
@@ -335,7 +349,8 @@ int main()
 
         const auto checkb = reader.pod<crypto_point_t>();
 
-        if (!check("base58 encode_check/decode_check", checka == a && checkb == b && prefix == BASE58_PREFIX)) return 1;
+        if (!check("base58 encode_check/decode_check", checka == a && checkb == b && prefix == BASE58_PREFIX))
+            return 1;
     }
 
     // CryptoNote Base58 Test #1
@@ -371,7 +386,8 @@ int main()
 
         const auto checkb = reader.pod<crypto_point_t>();
 
-        if (!check("cnbase58 encode/decode", checka == a && checkb == b && prefix == BASE58_PREFIX)) return 1;
+        if (!check("cnbase58 encode/decode", checka == a && checkb == b && prefix == BASE58_PREFIX))
+            return 1;
     }
 
     // CryptoNote Base58 Test #2
@@ -417,18 +433,21 @@ int main()
     {
         const auto val = Crypto::pow2_round(13);
 
-        if (!check("pow2_round", val == 16)) return 1;
+        if (!check("pow2_round", val == 16))
+            return 1;
     }
 
     // check for randomness
     {
         const auto points = crypto_point_vector_t(crypto_point_t::random(20)).dedupe_sort();
 
-        if (!check("random points unique", points.size() == 20)) return 1;
+        if (!check("random points unique", points.size() == 20))
+            return 1;
 
         const auto scalars = crypto_scalar_vector_t(crypto_scalar_t::random(20)).dedupe_sort();
 
-        if (!check("random scalars unique", scalars.size() == 20)) return 1;
+        if (!check("random scalars unique", scalars.size() == 20))
+            return 1;
     }
 
     // check tests
@@ -437,13 +456,17 @@ int main()
 
         const auto point = std::string("d555bf22bce71d4eff27aa7597b5590969e7eccdb67a52188d0d73d5ab82d414");
 
-        if (!check("check_scalar valid", Crypto::check_scalar(scalar))) return 1;
+        if (!check("check_scalar valid", Crypto::check_scalar(scalar)))
+            return 1;
 
-        if (!check("check_scalar rejects point", !Crypto::check_scalar(point))) return 1;
+        if (!check("check_scalar rejects point", !Crypto::check_scalar(point)))
+            return 1;
 
-        if (!check("check_point valid", Crypto::check_point(point))) return 1;
+        if (!check("check_point valid", Crypto::check_point(point)))
+            return 1;
 
-        if (!check("check_point rejects scalar", !Crypto::check_point(scalar))) return 1;
+        if (!check("check_point rejects scalar", !Crypto::check_point(scalar)))
+            return 1;
     }
 
     // Scalar bit vector test
@@ -454,7 +477,8 @@ int main()
 
         crypto_scalar_t b(bits);
 
-        if (!check("scalar bit vector roundtrip", b == a)) return 1;
+        if (!check("scalar bit vector roundtrip", b == a))
+            return 1;
     }
 
     std::cout << std::endl << "=== Entropy ===" << std::endl;
@@ -473,7 +497,8 @@ int main()
         std::cout << "    mnemonic:  " << wallet_entropy_2.to_mnemonic_phrase() << std::endl;
         std::cout << "    timestamp: " << wallet_entropy_2.timestamp() << std::endl << std::endl;
 
-        if (!check("entropy 256-bit restore", wallet_entropy_2 == wallet_entropy)) return 1;
+        if (!check("entropy 256-bit restore", wallet_entropy_2 == wallet_entropy))
+            return 1;
     }
 
     {
@@ -489,7 +514,8 @@ int main()
         std::cout << "    mnemonic:  " << wallet_entropy_2.to_mnemonic_phrase() << std::endl;
         std::cout << "    timestamp: " << wallet_entropy_2.timestamp() << std::endl << std::endl;
 
-        if (!check("entropy 128-bit restore", wallet_entropy_2 == wallet_entropy)) return 1;
+        if (!check("entropy 128-bit restore", wallet_entropy_2 == wallet_entropy))
+            return 1;
     }
 
     std::cout << std::endl << "=== Key Derivation ===" << std::endl;
@@ -510,16 +536,21 @@ int main()
     {
         const auto check_key = secret_key.point();
 
-        if (!check("secret_key_to_public_key", check_key == public_key)) return 1;
+        if (!check("secret_key_to_public_key", check_key == public_key))
+            return 1;
     }
 
-    if (!check("entropy binary encoding", test_binary_encoding_v3(wallet_entropy))) return 1;
+    if (!check("entropy binary encoding", test_binary_encoding_v3(wallet_entropy)))
+        return 1;
 
-    if (!check("entropy JSON encoding", test_json_encoding_v3(wallet_entropy))) return 1;
+    if (!check("entropy JSON encoding", test_json_encoding_v3(wallet_entropy)))
+        return 1;
 
-    if (!check("secret_key binary encoding", test_binary_encoding_v3(secret_key))) return 1;
+    if (!check("secret_key binary encoding", test_binary_encoding_v3(secret_key)))
+        return 1;
 
-    if (!check("secret_key JSON encoding", test_json_encoding_v3(secret_key))) return 1;
+    if (!check("secret_key JSON encoding", test_json_encoding_v3(secret_key)))
+        return 1;
 
     // test subwallet-1
     {
@@ -527,7 +558,8 @@ int main()
 
         std::cout << "    subwallet(1):  " << subwallet << std::endl << std::endl;
 
-        if (!check("subwallet(1) differs from root", subwallet != secret_key)) return 1;
+        if (!check("subwallet(1) differs from root", subwallet != secret_key))
+            return 1;
     }
 
     // test subwallet-32
@@ -536,12 +568,14 @@ int main()
 
         std::cout << "    subwallet(32): " << subwallet << std::endl << std::endl;
 
-        if (!check("subwallet(32) differs from root", subwallet != secret_key)) return 1;
+        if (!check("subwallet(32) differs from root", subwallet != secret_key))
+            return 1;
     }
 
     const auto [pub2, secret_key2] = seed.generate_child_key(45, 0, 1, 0, 0).keys();
 
-    if (!check("view key differs from spend key", secret_key2 != secret_key)) return 1;
+    if (!check("view key differs from spend key", secret_key2 != secret_key))
+        return 1;
 
     const auto public_key2 = secret_key2.point();
 
@@ -593,7 +627,8 @@ int main()
         {
             const auto ephemeral_check = secret_ephemeral.point();
 
-            if (!check("public_ephemeral matches", ephemeral_check == expected_public_ephemeral)) return 1;
+            if (!check("public_ephemeral matches", ephemeral_check == expected_public_ephemeral))
+                return 1;
         }
 
         // check underive_public_key
@@ -602,18 +637,21 @@ int main()
 
             std::cout << "    underive_public_key: " << underived_public_key << std::endl << std::endl;
 
-            if (!check("underive_public_key", underived_public_key == public_key2)) return 1;
+            if (!check("underive_public_key", underived_public_key == public_key2))
+                return 1;
         }
 
         key_image = Crypto::generate_key_image(public_ephemeral, secret_ephemeral);
 
-        if (!check("key_image subgroup", key_image.check_subgroup())) return 1;
+        if (!check("key_image subgroup", key_image.check_subgroup()))
+            return 1;
 
         std::cout << "    key_image:    " << key_image << std::endl;
 
         key_image2 = Crypto::generate_key_image_v2(secret_ephemeral);
 
-        if (!check("key_image_v2 subgroup", key_image2.check_subgroup())) return 1;
+        if (!check("key_image_v2 subgroup", key_image2.check_subgroup()))
+            return 1;
 
         std::cout << "    key_image_v2: " << key_image2 << std::endl;
     }
@@ -626,13 +664,15 @@ int main()
 
         const auto [success, proof] = Crypto::Audit::generate_outputs_proof(secret_keys);
 
-        if (!check("generate_outputs_proof", success)) return 1;
+        if (!check("generate_outputs_proof", success))
+            return 1;
 
         std::cout << std::endl << proof << std::endl << std::endl;
 
         const auto [valid, key_images] = Crypto::Audit::check_outputs_proof(public_keys, proof);
 
-        if (!check("check_outputs_proof", valid)) return 1;
+        if (!check("check_outputs_proof", valid))
+            return 1;
     }
 
     std::cout << std::endl << "=== Signatures ===" << std::endl;
@@ -643,7 +683,8 @@ int main()
 
         check("generate_signature", true);
 
-        if (!check("check_signature", Crypto::Signature::check_signature(SHA3_HASH, public_key, signature))) return 1;
+        if (!check("check_signature", Crypto::Signature::check_signature(SHA3_HASH, public_key, signature)))
+            return 1;
     }
 
     // RFC8032 Signature
@@ -667,18 +708,22 @@ int main()
         const auto [gen_success, signature] =
             Crypto::RingSignature::Borromean::generate_ring_signature(SHA3_HASH, secret_ephemeral, public_keys);
 
-        if (!check("borromean generate_ring_signature", gen_success)) return 1;
+        if (!check("borromean generate_ring_signature", gen_success))
+            return 1;
 
         std::cout << signature << std::endl;
         std::cout << "    " << signature.to_string() << std::endl << std::endl;
 
-        if (!check("borromean check_ring_signature",
+        if (!check(
+                "borromean check_ring_signature",
                 Crypto::RingSignature::Borromean::check_ring_signature(SHA3_HASH, key_image, public_keys, signature)))
             return 1;
 
-        if (!check("borromean binary encoding", test_binary_encoding_v2(signature))) return 1;
+        if (!check("borromean binary encoding", test_binary_encoding_v2(signature)))
+            return 1;
 
-        if (!check("borromean JSON encoding", test_json_encoding(signature))) return 1;
+        if (!check("borromean JSON encoding", test_json_encoding(signature)))
+            return 1;
     }
 
     std::cout << std::endl << "=== CLSAG Ring Signature ===" << std::endl;
@@ -692,18 +737,22 @@ int main()
         const auto [gen_sucess, signature] =
             Crypto::RingSignature::CLSAG::generate_ring_signature(SHA3_HASH, secret_ephemeral, public_keys);
 
-        if (!check("clsag generate_ring_signature", gen_sucess)) return 1;
+        if (!check("clsag generate_ring_signature", gen_sucess))
+            return 1;
 
         std::cout << signature << std::endl;
         std::cout << "    " << signature.to_string() << std::endl << std::endl;
 
-        if (!check("clsag check_ring_signature",
+        if (!check(
+                "clsag check_ring_signature",
                 Crypto::RingSignature::CLSAG::check_ring_signature(SHA3_HASH, key_image, public_keys, signature)))
             return 1;
 
-        if (!check("clsag binary encoding", test_binary_encoding(signature))) return 1;
+        if (!check("clsag binary encoding", test_binary_encoding(signature)))
+            return 1;
 
-        if (!check("clsag JSON encoding", test_json_encoding(signature))) return 1;
+        if (!check("clsag JSON encoding", test_json_encoding(signature)))
+            return 1;
     }
 
     std::cout << std::endl << "=== CLSAG Ring Signature w/ Commitments ===" << std::endl;
@@ -734,19 +783,23 @@ int main()
             ps_blindings[0],
             ps_commitments[0]);
 
-        if (!check("clsag+commit generate_ring_signature", gen_sucess)) return 1;
+        if (!check("clsag+commit generate_ring_signature", gen_sucess))
+            return 1;
 
         std::cout << signature << std::endl;
         std::cout << "    " << signature.to_string() << std::endl << std::endl;
 
-        if (!check("clsag+commit check_ring_signature",
+        if (!check(
+                "clsag+commit check_ring_signature",
                 Crypto::RingSignature::CLSAG::check_ring_signature(
                     SHA3_HASH, key_image, public_keys, signature, public_commitments)))
             return 1;
 
-        if (!check("clsag+commit binary encoding", test_binary_encoding(signature))) return 1;
+        if (!check("clsag+commit binary encoding", test_binary_encoding(signature)))
+            return 1;
 
-        if (!check("clsag+commit JSON encoding", test_json_encoding(signature))) return 1;
+        if (!check("clsag+commit JSON encoding", test_json_encoding(signature)))
+            return 1;
     }
 
     std::cout << std::endl << "=== MLSAG Ring Signature ===" << std::endl;
@@ -760,18 +813,22 @@ int main()
         const auto [gen_sucess, signature] =
             Crypto::RingSignature::MLSAG::generate_ring_signature(SHA3_HASH, secret_ephemeral, public_keys);
 
-        if (!check("mlsag generate_ring_signature", gen_sucess)) return 1;
+        if (!check("mlsag generate_ring_signature", gen_sucess))
+            return 1;
 
         std::cout << signature << std::endl;
         std::cout << "    " << signature.to_string() << std::endl << std::endl;
 
-        if (!check("mlsag check_ring_signature",
+        if (!check(
+                "mlsag check_ring_signature",
                 Crypto::RingSignature::MLSAG::check_ring_signature(SHA3_HASH, key_image, public_keys, signature)))
             return 1;
 
-        if (!check("mlsag binary encoding", test_binary_encoding(signature))) return 1;
+        if (!check("mlsag binary encoding", test_binary_encoding(signature)))
+            return 1;
 
-        if (!check("mlsag JSON encoding", test_json_encoding(signature))) return 1;
+        if (!check("mlsag JSON encoding", test_json_encoding(signature)))
+            return 1;
     }
 
     std::cout << std::endl << "=== MLSAG Ring Signature w/ Commitments ===" << std::endl;
@@ -802,19 +859,23 @@ int main()
             ps_blindings[0],
             ps_commitments[0]);
 
-        if (!check("mlsag+commit generate_ring_signature", gen_sucess)) return 1;
+        if (!check("mlsag+commit generate_ring_signature", gen_sucess))
+            return 1;
 
         std::cout << signature << std::endl;
         std::cout << "    " << signature.to_string() << std::endl << std::endl;
 
-        if (!check("mlsag+commit check_ring_signature",
+        if (!check(
+                "mlsag+commit check_ring_signature",
                 Crypto::RingSignature::MLSAG::check_ring_signature(
                     SHA3_HASH, key_image, public_keys, signature, public_commitments)))
             return 1;
 
-        if (!check("mlsag+commit binary encoding", test_binary_encoding(signature))) return 1;
+        if (!check("mlsag+commit binary encoding", test_binary_encoding(signature)))
+            return 1;
 
-        if (!check("mlsag+commit JSON encoding", test_json_encoding(signature))) return 1;
+        if (!check("mlsag+commit JSON encoding", test_json_encoding(signature)))
+            return 1;
     }
 
     std::cout << std::endl << "=== Triptych Ring Signature ===" << std::endl;
@@ -845,19 +906,23 @@ int main()
             ps_blindings[0],
             ps_commitments[0]);
 
-        if (!check("triptych generate_ring_signature", gen_sucess)) return 1;
+        if (!check("triptych generate_ring_signature", gen_sucess))
+            return 1;
 
         std::cout << signature << std::endl;
         std::cout << "    " << signature.to_string() << std::endl << std::endl;
 
-        if (!check("triptych check_ring_signature",
+        if (!check(
+                "triptych check_ring_signature",
                 Crypto::RingSignature::Triptych::check_ring_signature(
                     SHA3_HASH, key_image2, public_keys, signature, public_commitments)))
             return 1;
 
-        if (!check("triptych binary encoding", test_binary_encoding(signature))) return 1;
+        if (!check("triptych binary encoding", test_binary_encoding(signature)))
+            return 1;
 
-        if (!check("triptych JSON encoding", test_json_encoding(signature))) return 1;
+        if (!check("triptych JSON encoding", test_json_encoding(signature)))
+            return 1;
     }
 
     std::cout << std::endl << "=== RingCT ===" << std::endl;
@@ -896,9 +961,11 @@ int main()
 
         const auto PT = crypto_point_vector_t(pseudo_commitments).sum();
 
-        if (!check("generate_pseudo_commitments", PT == CT)) return 1;
+        if (!check("generate_pseudo_commitments", PT == CT))
+            return 1;
 
-        if (!check("check_commitments_parity",
+        if (!check(
+                "check_commitments_parity",
                 Crypto::RingCT::check_commitments_parity(pseudo_commitments, {C_1, C_2}, 100)))
             return 1;
 
@@ -914,7 +981,8 @@ int main()
 
             const auto unmasked_amount = Crypto::RingCT::toggle_masked_amount(amount_mask, masked_amount);
 
-            if (!check("toggle_masked_amount",
+            if (!check(
+                    "toggle_masked_amount",
                     masked_amount.to_uint64_t() != amount.to_uint64_t()
                         && unmasked_amount.to_uint64_t() == amount.to_uint64_t()))
                 return 1;
@@ -927,8 +995,7 @@ int main()
     {
         auto [proof, commitments] = Crypto::RangeProofs::Bulletproofs::prove({1000}, crypto_scalar_t::random(1));
 
-        if (!check("bulletproofs M=1 verify valid",
-                Crypto::RangeProofs::Bulletproofs::verify({proof}, {commitments})))
+        if (!check("bulletproofs M=1 verify valid", Crypto::RangeProofs::Bulletproofs::verify({proof}, {commitments})))
             return 1;
 
         std::cout << proof << std::endl;
@@ -936,30 +1003,34 @@ int main()
 
         proof.taux *= Crypto::TWO;
 
-        if (!check("bulletproofs reject tampered",
-                !Crypto::RangeProofs::Bulletproofs::verify({proof}, {commitments})))
+        if (!check("bulletproofs reject tampered", !Crypto::RangeProofs::Bulletproofs::verify({proof}, {commitments})))
             return 1;
 
         auto [proof2, commitments2] = Crypto::RangeProofs::Bulletproofs::prove({1000}, crypto_scalar_t::random(1), 8);
 
-        if (!check("bulletproofs reject out-of-range",
+        if (!check(
+                "bulletproofs reject out-of-range",
                 !Crypto::RangeProofs::Bulletproofs::verify({proof2}, {commitments2}, 8)))
             return 1;
 
-        if (!check("bulletproofs binary encoding", test_binary_encoding(proof))) return 1;
+        if (!check("bulletproofs binary encoding", test_binary_encoding(proof)))
+            return 1;
 
-        if (!check("bulletproofs JSON encoding", test_json_encoding(proof))) return 1;
+        if (!check("bulletproofs JSON encoding", test_json_encoding(proof)))
+            return 1;
     }
 
     // Bulletproofs M=2,4,8,16
     for (const size_t M : {2, 4, 8, 16})
     {
         std::vector<uint64_t> amounts(M);
-        for (size_t i = 0; i < M; ++i) amounts[i] = 1000 + i * 100;
+        for (size_t i = 0; i < M; ++i)
+            amounts[i] = 1000 + i * 100;
 
         auto [proof, commitments] = Crypto::RangeProofs::Bulletproofs::prove(amounts, crypto_scalar_t::random(M));
 
-        if (!check(("bulletproofs M=" + std::to_string(M) + " verify valid").c_str(),
+        if (!check(
+                ("bulletproofs M=" + std::to_string(M) + " verify valid").c_str(),
                 Crypto::RangeProofs::Bulletproofs::verify({proof}, {commitments})))
             return 1;
 
@@ -976,7 +1047,8 @@ int main()
         auto [proof1, c1] = Crypto::RangeProofs::Bulletproofs::prove({500}, crypto_scalar_t::random(1));
         auto [proof2, c2] = Crypto::RangeProofs::Bulletproofs::prove({600, 700}, crypto_scalar_t::random(2));
 
-        if (!check("bulletproofs mixed batch verify",
+        if (!check(
+                "bulletproofs mixed batch verify",
                 Crypto::RangeProofs::Bulletproofs::verify({proof1, proof2}, {c1, c2})))
             return 1;
     }
@@ -987,7 +1059,8 @@ int main()
     {
         auto [proof, commitments] = Crypto::RangeProofs::BulletproofsPlus::prove({1000}, crypto_scalar_t::random(1));
 
-        if (!check("bulletproofs+ M=1 verify valid",
+        if (!check(
+                "bulletproofs+ M=1 verify valid",
                 Crypto::RangeProofs::BulletproofsPlus::verify({proof}, {commitments})))
             return 1;
 
@@ -996,31 +1069,37 @@ int main()
 
         proof.d1 *= Crypto::TWO;
 
-        if (!check("bulletproofs+ reject tampered",
+        if (!check(
+                "bulletproofs+ reject tampered",
                 !Crypto::RangeProofs::BulletproofsPlus::verify({proof}, {commitments})))
             return 1;
 
         auto [proof2, commitments2] =
             Crypto::RangeProofs::BulletproofsPlus::prove({1000}, crypto_scalar_t::random(1), 8);
 
-        if (!check("bulletproofs+ reject out-of-range",
+        if (!check(
+                "bulletproofs+ reject out-of-range",
                 !Crypto::RangeProofs::BulletproofsPlus::verify({proof2}, {commitments2}, 8)))
             return 1;
 
-        if (!check("bulletproofs+ binary encoding", test_binary_encoding(proof))) return 1;
+        if (!check("bulletproofs+ binary encoding", test_binary_encoding(proof)))
+            return 1;
 
-        if (!check("bulletproofs+ JSON encoding", test_json_encoding(proof))) return 1;
+        if (!check("bulletproofs+ JSON encoding", test_json_encoding(proof)))
+            return 1;
     }
 
     // Bulletproofs+ M=2,4,8,16
     for (const size_t M : {2, 4, 8, 16})
     {
         std::vector<uint64_t> amounts(M);
-        for (size_t i = 0; i < M; ++i) amounts[i] = 1000 + i * 100;
+        for (size_t i = 0; i < M; ++i)
+            amounts[i] = 1000 + i * 100;
 
         auto [proof, commitments] = Crypto::RangeProofs::BulletproofsPlus::prove(amounts, crypto_scalar_t::random(M));
 
-        if (!check(("bulletproofs+ M=" + std::to_string(M) + " verify valid").c_str(),
+        if (!check(
+                ("bulletproofs+ M=" + std::to_string(M) + " verify valid").c_str(),
                 Crypto::RangeProofs::BulletproofsPlus::verify({proof}, {commitments})))
             return 1;
 
@@ -1037,7 +1116,8 @@ int main()
         auto [proof1, c1] = Crypto::RangeProofs::BulletproofsPlus::prove({500}, crypto_scalar_t::random(1));
         auto [proof2, c2] = Crypto::RangeProofs::BulletproofsPlus::prove({600, 700}, crypto_scalar_t::random(2));
 
-        if (!check("bulletproofs+ mixed batch verify",
+        if (!check(
+                "bulletproofs+ mixed batch verify",
                 Crypto::RangeProofs::BulletproofsPlus::verify({proof1, proof2}, {c1, c2})))
             return 1;
     }
@@ -1048,8 +1128,8 @@ int main()
     {
         auto [proof, commitments] = Crypto::RangeProofs::BulletproofsPP::prove({1000}, crypto_scalar_t::random(1));
 
-        if (!check("bulletproofs++ M=1 verify valid",
-                Crypto::RangeProofs::BulletproofsPP::verify({proof}, {commitments})))
+        if (!check(
+                "bulletproofs++ M=1 verify valid", Crypto::RangeProofs::BulletproofsPP::verify({proof}, {commitments})))
             return 1;
 
         std::cout << proof << std::endl;
@@ -1058,7 +1138,8 @@ int main()
         auto tampered = proof;
         tampered.C_l = tampered.C_l + tampered.C_l;
 
-        if (!check("bulletproofs++ reject tampered",
+        if (!check(
+                "bulletproofs++ reject tampered",
                 !Crypto::RangeProofs::BulletproofsPP::verify({tampered}, {commitments})))
             return 1;
 
@@ -1076,20 +1157,24 @@ int main()
                 return 1;
         }
 
-        if (!check("bulletproofs++ binary encoding", test_binary_encoding(proof))) return 1;
+        if (!check("bulletproofs++ binary encoding", test_binary_encoding(proof)))
+            return 1;
 
-        if (!check("bulletproofs++ JSON encoding", test_json_encoding(proof))) return 1;
+        if (!check("bulletproofs++ JSON encoding", test_json_encoding(proof)))
+            return 1;
     }
 
     // Bulletproofs++ M=2,4,8,16
     for (const size_t M : {2, 4, 8, 16})
     {
         std::vector<uint64_t> amounts(M);
-        for (size_t i = 0; i < M; ++i) amounts[i] = 1000 + i * 100;
+        for (size_t i = 0; i < M; ++i)
+            amounts[i] = 1000 + i * 100;
 
         auto [proof, commitments] = Crypto::RangeProofs::BulletproofsPP::prove(amounts, crypto_scalar_t::random(M));
 
-        if (!check(("bulletproofs++ M=" + std::to_string(M) + " verify valid").c_str(),
+        if (!check(
+                ("bulletproofs++ M=" + std::to_string(M) + " verify valid").c_str(),
                 Crypto::RangeProofs::BulletproofsPP::verify({proof}, {commitments})))
             return 1;
 
@@ -1103,22 +1188,21 @@ int main()
 
     // Bulletproofs++ M=3 (tests pow2 padding to M_pad=4)
     {
-        auto [proof, commitments] = Crypto::RangeProofs::BulletproofsPP::prove(
-            {100, 200, 300}, crypto_scalar_t::random(3));
+        auto [proof, commitments] =
+            Crypto::RangeProofs::BulletproofsPP::prove({100, 200, 300}, crypto_scalar_t::random(3));
 
-        if (!check("bulletproofs++ M=3 verify valid",
-                Crypto::RangeProofs::BulletproofsPP::verify({proof}, {commitments})))
+        if (!check(
+                "bulletproofs++ M=3 verify valid", Crypto::RangeProofs::BulletproofsPP::verify({proof}, {commitments})))
             return 1;
     }
 
     // Bulletproofs++ batch verify with mixed M values
     {
-        auto [proof1, c1] = Crypto::RangeProofs::BulletproofsPP::prove(
-            {500}, crypto_scalar_t::random(1));
-        auto [proof2, c2] = Crypto::RangeProofs::BulletproofsPP::prove(
-            {600, 700}, crypto_scalar_t::random(2));
+        auto [proof1, c1] = Crypto::RangeProofs::BulletproofsPP::prove({500}, crypto_scalar_t::random(1));
+        auto [proof2, c2] = Crypto::RangeProofs::BulletproofsPP::prove({600, 700}, crypto_scalar_t::random(2));
 
-        if (!check("bulletproofs++ mixed batch verify",
+        if (!check(
+                "bulletproofs++ mixed batch verify",
                 Crypto::RangeProofs::BulletproofsPP::verify({proof1, proof2}, {c1, c2})))
             return 1;
     }
@@ -1135,9 +1219,11 @@ int main()
 
         const auto proof = Crypto::DLEQ::generate_proof(secret, G_point, H_point);
 
-        if (!check("dleq generate_proof", true)) return 1;
+        if (!check("dleq generate_proof", true))
+            return 1;
 
-        if (!check("dleq check_proof", Crypto::DLEQ::check_proof(A, B, G_point, H_point, proof))) return 1;
+        if (!check("dleq check_proof", Crypto::DLEQ::check_proof(A, B, G_point, H_point, proof)))
+            return 1;
 
         std::cout << proof << std::endl;
 
@@ -1160,9 +1246,11 @@ int main()
                 return 1;
         }
 
-        if (!check("dleq binary encoding", test_binary_encoding(proof))) return 1;
+        if (!check("dleq binary encoding", test_binary_encoding(proof)))
+            return 1;
 
-        if (!check("dleq JSON encoding", test_json_encoding(proof))) return 1;
+        if (!check("dleq JSON encoding", test_json_encoding(proof)))
+            return 1;
     }
 
     std::cout << std::endl << "=== Adapter Signatures ===" << std::endl;
@@ -1175,9 +1263,11 @@ int main()
 
         const auto pre_sig = Crypto::AdapterSignature::pre_sign(SHA3_HASH, signer_sec, statement_Y);
 
-        if (!check("adapter pre_sign", true)) return 1;
+        if (!check("adapter pre_sign", true))
+            return 1;
 
-        if (!check("adapter check_pre_signature",
+        if (!check(
+                "adapter check_pre_signature",
                 Crypto::AdapterSignature::check_pre_signature(SHA3_HASH, signer_pub, statement_Y, pre_sig)))
             return 1;
 
@@ -1185,28 +1275,33 @@ int main()
 
         const auto adapted_sig = Crypto::AdapterSignature::adapt(pre_sig, witness_y);
 
-        if (!check("adapter adapt", true)) return 1;
+        if (!check("adapter adapt", true))
+            return 1;
 
         // Extract witness
         const auto extracted_y = Crypto::AdapterSignature::extract(pre_sig, adapted_sig, statement_Y);
 
         const auto extracted_Y = extracted_y * Crypto::G;
 
-        if (!check("adapter extract witness", extracted_Y == statement_Y)) return 1;
+        if (!check("adapter extract witness", extracted_Y == statement_Y))
+            return 1;
 
         // Tampered pre-signature should fail
         {
             auto tampered = pre_sig;
             tampered.s_prime = tampered.s_prime + Crypto::ONE;
 
-            if (!check("adapter reject tampered pre_sig",
+            if (!check(
+                    "adapter reject tampered pre_sig",
                     !Crypto::AdapterSignature::check_pre_signature(SHA3_HASH, signer_pub, statement_Y, tampered)))
                 return 1;
         }
 
-        if (!check("adapter binary encoding", test_binary_encoding(pre_sig))) return 1;
+        if (!check("adapter binary encoding", test_binary_encoding(pre_sig)))
+            return 1;
 
-        if (!check("adapter JSON encoding", test_json_encoding(pre_sig))) return 1;
+        if (!check("adapter JSON encoding", test_json_encoding(pre_sig)))
+            return 1;
     }
 
     std::cout << std::endl << "=== VRF (Native) ===" << std::endl;
@@ -1218,24 +1313,29 @@ int main()
 
         const auto [proof, beta] = Crypto::VRF::prove(vrf_sec, alpha);
 
-        if (!check("vrf prove", true)) return 1;
+        if (!check("vrf prove", true))
+            return 1;
 
         std::cout << proof << std::endl;
         std::cout << "    beta: " << beta << std::endl << std::endl;
 
         const auto [valid, beta2] = Crypto::VRF::verify(vrf_pub, alpha, proof);
 
-        if (!check("vrf verify", valid)) return 1;
+        if (!check("vrf verify", valid))
+            return 1;
 
-        if (!check("vrf output matches", beta == beta2)) return 1;
+        if (!check("vrf output matches", beta == beta2))
+            return 1;
 
         // Determinism: same (key, input) -> same output
         {
             const auto [proof2, beta3] = Crypto::VRF::prove(vrf_sec, alpha);
             const auto [valid2, beta4] = Crypto::VRF::verify(vrf_pub, alpha, proof2);
 
-            if (!check("vrf deterministic output", beta3 == beta)) return 1;
-            if (!check("vrf deterministic verify", valid2)) return 1;
+            if (!check("vrf deterministic output", beta3 == beta))
+                return 1;
+            if (!check("vrf deterministic verify", valid2))
+                return 1;
         }
 
         // Different input -> different output
@@ -1243,7 +1343,8 @@ int main()
             const std::vector<unsigned char> alpha2 = {0x05, 0x06, 0x07, 0x08};
             const auto [proof3, beta5] = Crypto::VRF::prove(vrf_sec, alpha2);
 
-            if (!check("vrf different input different output", !(beta5 == beta))) return 1;
+            if (!check("vrf different input different output", !(beta5 == beta)))
+                return 1;
         }
 
         // Tampered proof should fail
@@ -1252,12 +1353,15 @@ int main()
             tampered.s = tampered.s + Crypto::ONE;
             const auto [bad_valid, bad_beta] = Crypto::VRF::verify(vrf_pub, alpha, tampered);
 
-            if (!check("vrf reject tampered", !bad_valid)) return 1;
+            if (!check("vrf reject tampered", !bad_valid))
+                return 1;
         }
 
-        if (!check("vrf binary encoding", test_binary_encoding(proof))) return 1;
+        if (!check("vrf binary encoding", test_binary_encoding(proof)))
+            return 1;
 
-        if (!check("vrf JSON encoding", test_json_encoding(proof))) return 1;
+        if (!check("vrf JSON encoding", test_json_encoding(proof)))
+            return 1;
     }
 
     std::cout << std::endl << "=== VRF (RFC 9381) ===" << std::endl;
@@ -1268,38 +1372,46 @@ int main()
 
         const auto [proof, beta] = Crypto::VRF::RFC9381::prove(sk, alpha);
 
-        if (!check("vrf-rfc9381 prove", !beta.empty())) return 1;
+        if (!check("vrf-rfc9381 prove", !beta.empty()))
+            return 1;
 
         std::cout << proof;
         std::cout << "    beta: " << beta << std::endl;
 
         const auto [valid, beta2] = Crypto::VRF::RFC9381::verify(pk, alpha, proof);
 
-        if (!check("vrf-rfc9381 verify", valid)) return 1;
+        if (!check("vrf-rfc9381 verify", valid))
+            return 1;
 
-        if (!check("vrf-rfc9381 output matches", beta == beta2)) return 1;
+        if (!check("vrf-rfc9381 output matches", beta == beta2))
+            return 1;
 
         // Determinism: same key + input -> same output
         const auto [proof2, beta3] = Crypto::VRF::RFC9381::prove(sk, alpha);
 
-        if (!check("vrf-rfc9381 deterministic output", beta == beta3)) return 1;
+        if (!check("vrf-rfc9381 deterministic output", beta == beta3))
+            return 1;
 
         // Different input -> different output
         const std::vector<unsigned char> alpha2 = {0x57, 0x6f, 0x72, 0x6c, 0x64}; // "World"
         const auto [proof3, beta4] = Crypto::VRF::RFC9381::prove(sk, alpha2);
 
-        if (!check("vrf-rfc9381 different input different output", !(beta == beta4))) return 1;
+        if (!check("vrf-rfc9381 different input different output", !(beta == beta4)))
+            return 1;
 
         // Tampered proof fails
         auto bad_proof = proof;
         bad_proof.s = crypto_scalar_t::random();
         const auto [bad_valid, _] = Crypto::VRF::RFC9381::verify(pk, alpha, bad_proof);
 
-        if (!check("vrf-rfc9381 reject tampered", !bad_valid)) return 1;
+        if (!check("vrf-rfc9381 reject tampered", !bad_valid))
+            return 1;
 
-        if (!check("vrf-rfc9381 binary encoding", test_binary_encoding(proof))) return 1;
+        if (!check("vrf-rfc9381 binary encoding", test_binary_encoding(proof)))
+            return 1;
 
-        if (!check("vrf-rfc9381 JSON encoding", test_json_encoding(proof))) return 1;
+        if (!check("vrf-rfc9381 JSON encoding", test_json_encoding(proof)))
+            return 1;
     }
 
     std::cout << std::endl << "=== FROST Threshold Signatures ===" << std::endl;
@@ -1319,7 +1431,8 @@ int main()
             all_commitments[i] = commitments;
         }
 
-        if (!check("frost dkg_part1 (2-of-3)", true)) return 1;
+        if (!check("frost dkg_part1 (2-of-3)", true))
+            return 1;
 
         // DKG Part 2: verify all shares
         bool all_verified = true;
@@ -1335,7 +1448,8 @@ int main()
             }
         }
 
-        if (!check("frost dkg_verify_share", all_verified)) return 1;
+        if (!check("frost dkg_verify_share", all_verified))
+            return 1;
 
         // DKG Part 3: combine shares into key packages
         std::vector<crypto_frost_key_package_t> key_packages(n);
@@ -1352,7 +1466,8 @@ int main()
             key_packages[i] = Crypto::FROST::dkg_part3(i + 1, received, all_commitments);
         }
 
-        if (!check("frost dkg_part3", true)) return 1;
+        if (!check("frost dkg_part3", true))
+            return 1;
 
         // All participants should agree on the group public key
         {
@@ -1366,7 +1481,8 @@ int main()
                 }
             }
 
-            if (!check("frost group key consensus", same_key)) return 1;
+            if (!check("frost group key consensus", same_key))
+                return 1;
         }
 
         const auto pub_key_package = Crypto::FROST::build_public_key_package(n, all_commitments);
@@ -1386,22 +1502,25 @@ int main()
             nonce_commitments[i] = commitment;
         }
 
-        if (!check("frost round1_commit", true)) return 1;
+        if (!check("frost round1_commit", true))
+            return 1;
 
         std::vector<crypto_frost_signature_share_t> sig_shares(signers.size());
 
         for (size_t i = 0; i < signers.size(); ++i)
         {
-            sig_shares[i] = Crypto::FROST::round2_sign(
-                SHA3_HASH, key_packages[signers[i]], nonces[i], nonce_commitments);
+            sig_shares[i] =
+                Crypto::FROST::round2_sign(SHA3_HASH, key_packages[signers[i]], nonces[i], nonce_commitments);
         }
 
-        if (!check("frost round2_sign", true)) return 1;
+        if (!check("frost round2_sign", true))
+            return 1;
 
-        const auto [agg_success, frost_sig] = Crypto::FROST::aggregate(
-            SHA3_HASH, sig_shares, nonce_commitments, pub_key_package);
+        const auto [agg_success, frost_sig] =
+            Crypto::FROST::aggregate(SHA3_HASH, sig_shares, nonce_commitments, pub_key_package);
 
-        if (!check("frost aggregate (2-of-3)", agg_success)) return 1;
+        if (!check("frost aggregate (2-of-3)", agg_success))
+            return 1;
 
         std::cout << "    frost signature: " << frost_sig << std::endl << std::endl;
     }
@@ -1450,10 +1569,11 @@ int main()
             sig_shares[i] = Crypto::FROST::round2_sign(SHA3_HASH, key_packages[i], nonces[i], nonce_commitments);
         }
 
-        const auto [agg_success, frost_sig] = Crypto::FROST::aggregate(
-            SHA3_HASH, sig_shares, nonce_commitments, pub_key_package);
+        const auto [agg_success, frost_sig] =
+            Crypto::FROST::aggregate(SHA3_HASH, sig_shares, nonce_commitments, pub_key_package);
 
-        if (!check("frost 2-of-2 sign+aggregate", agg_success)) return 1;
+        if (!check("frost 2-of-2 sign+aggregate", agg_success))
+            return 1;
     }
 
     // FROST 3-of-5
@@ -1499,29 +1619,33 @@ int main()
 
         for (size_t i = 0; i < signers.size(); ++i)
         {
-            sig_shares[i] = Crypto::FROST::round2_sign(
-                SHA3_HASH, key_packages[signers[i]], nonces[i], nonce_commitments);
+            sig_shares[i] =
+                Crypto::FROST::round2_sign(SHA3_HASH, key_packages[signers[i]], nonces[i], nonce_commitments);
         }
 
-        const auto [agg_success, frost_sig] = Crypto::FROST::aggregate(
-            SHA3_HASH, sig_shares, nonce_commitments, pub_key_package);
+        const auto [agg_success, frost_sig] =
+            Crypto::FROST::aggregate(SHA3_HASH, sig_shares, nonce_commitments, pub_key_package);
 
-        if (!check("frost 3-of-5 sign+aggregate", agg_success)) return 1;
+        if (!check("frost 3-of-5 sign+aggregate", agg_success))
+            return 1;
     }
 
     // FROST serialization round-trip
     {
         const auto share = crypto_frost_secret_share_t(1, crypto_scalar_t::random());
 
-        if (!check("frost secret_share binary encoding", test_binary_encoding(share))) return 1;
+        if (!check("frost secret_share binary encoding", test_binary_encoding(share)))
+            return 1;
 
         const auto commitment = crypto_frost_nonce_commitment_t(1, crypto_point_t::random(), crypto_point_t::random());
 
-        if (!check("frost nonce_commitment binary encoding", test_binary_encoding(commitment))) return 1;
+        if (!check("frost nonce_commitment binary encoding", test_binary_encoding(commitment)))
+            return 1;
 
         const auto sig_share = crypto_frost_signature_share_t(1, crypto_scalar_t::random());
 
-        if (!check("frost signature_share binary encoding", test_binary_encoding(sig_share))) return 1;
+        if (!check("frost signature_share binary encoding", test_binary_encoding(sig_share)))
+            return 1;
     }
 
     std::cout << std::endl << "==================" << std::endl;

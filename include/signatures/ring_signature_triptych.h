@@ -72,7 +72,7 @@ namespace Crypto::RingSignature::Triptych
         const crypto_triptych_signature_t &signature,
         const std::vector<crypto_pedersen_commitment_t> &commitments);
 
-/**
+    /**
      * Generates a complete Triptych ring signature, auto-detecting the signer's position.
      *
      * Scans @p public_keys to find the index matching @p secret_ephemeral, then produces

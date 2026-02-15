@@ -33,9 +33,8 @@
  *        Pedersen commitment binding via mu_P/mu_C aggregation coefficients.
  */
 
-#include <cstring>
-
 #include <crypto_constants.h>
+#include <cstring>
 #include <helpers/dedupe_and_sort_keys.h>
 #include <helpers/scalar_transcript_t.h>
 #include <signatures/ring_signature_clsag.h>
@@ -304,8 +303,14 @@ namespace Crypto::RingSignature::CLSAG
         }
 
         return generate_ring_signature(
-            message_digest, secret_ephemeral, public_keys, real_output_index,
-            input_blinding_factor, public_commitments, pseudo_blinding_factor, pseudo_commitment);
+            message_digest,
+            secret_ephemeral,
+            public_keys,
+            real_output_index,
+            input_blinding_factor,
+            public_commitments,
+            pseudo_blinding_factor,
+            pseudo_commitment);
     }
 
     // ---- Sign (explicit signer index): inlined CLSAG construction ----
@@ -358,8 +363,7 @@ namespace Crypto::RingSignature::CLSAG
         {
             const auto public_commitment = (input_blinding_factor - pseudo_blinding_factor) * Crypto::G;
 
-            const auto derived_commitment =
-                Crypto::EIGHT * (public_commitments[real_output_index] - pseudo_commitment);
+            const auto derived_commitment = Crypto::EIGHT * (public_commitments[real_output_index] - pseudo_commitment);
 
             if (public_commitment != derived_commitment)
             {

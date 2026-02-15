@@ -95,7 +95,10 @@ std::vector<unsigned char> crypto_frost_secret_share_t::serialize() const
     return writer.vector();
 }
 
-size_t crypto_frost_secret_share_t::size() const { return serialize().size(); }
+size_t crypto_frost_secret_share_t::size() const
+{
+    return serialize().size();
+}
 
 void crypto_frost_secret_share_t::toJSON(rapidjson::Writer<rapidjson::StringBuffer> &writer) const
 {
@@ -193,7 +196,10 @@ std::vector<unsigned char> crypto_frost_key_package_t::serialize() const
     return writer.vector();
 }
 
-size_t crypto_frost_key_package_t::size() const { return serialize().size(); }
+size_t crypto_frost_key_package_t::size() const
+{
+    return serialize().size();
+}
 
 void crypto_frost_key_package_t::toJSON(rapidjson::Writer<rapidjson::StringBuffer> &writer) const
 {
@@ -307,7 +313,10 @@ std::vector<unsigned char> crypto_frost_public_key_package_t::serialize() const
     return writer.vector();
 }
 
-size_t crypto_frost_public_key_package_t::size() const { return serialize().size(); }
+size_t crypto_frost_public_key_package_t::size() const
+{
+    return serialize().size();
+}
 
 void crypto_frost_public_key_package_t::toJSON(rapidjson::Writer<rapidjson::StringBuffer> &writer) const
 {
@@ -336,9 +345,7 @@ std::string crypto_frost_public_key_package_t::to_string() const
 
 // ===== crypto_frost_nonce_t =====
 
-crypto_frost_nonce_t::crypto_frost_nonce_t(
-    const crypto_scalar_t &hiding_nonce,
-    const crypto_scalar_t &binding_nonce):
+crypto_frost_nonce_t::crypto_frost_nonce_t(const crypto_scalar_t &hiding_nonce, const crypto_scalar_t &binding_nonce):
     hiding_nonce(hiding_nonce), binding_nonce(binding_nonce)
 {
 }
@@ -413,7 +420,10 @@ std::vector<unsigned char> crypto_frost_nonce_commitment_t::serialize() const
     return writer.vector();
 }
 
-size_t crypto_frost_nonce_commitment_t::size() const { return serialize().size(); }
+size_t crypto_frost_nonce_commitment_t::size() const
+{
+    return serialize().size();
+}
 
 void crypto_frost_nonce_commitment_t::toJSON(rapidjson::Writer<rapidjson::StringBuffer> &writer) const
 {
@@ -494,7 +504,10 @@ std::vector<unsigned char> crypto_frost_signature_share_t::serialize() const
     return writer.vector();
 }
 
-size_t crypto_frost_signature_share_t::size() const { return serialize().size(); }
+size_t crypto_frost_signature_share_t::size() const
+{
+    return serialize().size();
+}
 
 void crypto_frost_signature_share_t::toJSON(rapidjson::Writer<rapidjson::StringBuffer> &writer) const
 {

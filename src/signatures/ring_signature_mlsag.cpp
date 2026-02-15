@@ -127,11 +127,9 @@ namespace Crypto::RingSignature::MLSAG
                 const auto C_diff = Crypto::EIGHT * (commitments[i] - signature.pseudo_commitment);
 
                 // Column 2 (commitment): L2 = s2[i] * G + h * C_diff, R2 = s2[i] * HP + h * D
-                const auto L2 =
-                    temp_h.dbl_mult(C_diff, signature.commitment_scalars[i], Crypto::G);
+                const auto L2 = temp_h.dbl_mult(C_diff, signature.commitment_scalars[i], Crypto::G);
 
-                const auto R2 =
-                    signature.commitment_scalars[i].dbl_mult(HP, temp_h, signature.commitment_image);
+                const auto R2 = signature.commitment_scalars[i].dbl_mult(HP, temp_h, signature.commitment_image);
 
                 auto sub_transcript = transcript;
 
@@ -228,8 +226,14 @@ namespace Crypto::RingSignature::MLSAG
         }
 
         return generate_ring_signature(
-            message_digest, secret_ephemeral, public_keys, real_output_index,
-            input_blinding_factor, public_commitments, pseudo_blinding_factor, pseudo_commitment);
+            message_digest,
+            secret_ephemeral,
+            public_keys,
+            real_output_index,
+            input_blinding_factor,
+            public_commitments,
+            pseudo_blinding_factor,
+            pseudo_commitment);
     }
 
     // ---- Sign (explicit signer index): inlined MLSAG construction ----
@@ -343,8 +347,7 @@ namespace Crypto::RingSignature::MLSAG
 
         if (use_commitments)
         {
-            scalar_transcript_t alpha2_transcript(
-                MLSAG_DOMAIN_1, commitment_image, crypto_scalar_t::random());
+            scalar_transcript_t alpha2_transcript(MLSAG_DOMAIN_1, commitment_image, crypto_scalar_t::random());
 
             alpha2_transcript.update(input_blinding_factor, pseudo_blinding_factor, pseudo_commitment);
 
@@ -446,8 +449,7 @@ namespace Crypto::RingSignature::MLSAG
                 if (use_commitments)
                 {
                     // C_diff = EIGHT * (C[idx] - pseudo_commitment)
-                    const auto C_diff =
-                        Crypto::EIGHT * (public_commitments[idx] - pseudo_commitment);
+                    const auto C_diff = Crypto::EIGHT * (public_commitments[idx] - pseudo_commitment);
 
                     // Column 2: L2 = s2[idx] * G + h * C_diff, R2 = s2[idx] * HP + h * D
                     const auto L2 = h[idx].dbl_mult(C_diff, s2[idx], Crypto::G);
@@ -478,6 +480,7 @@ namespace Crypto::RingSignature::MLSAG
             s2[real_output_index] = alpha2 - h[real_output_index] * z;
         }
 
-        return {true, crypto_mlsag_signature_t(std::move(s1), std::move(s2), h[0], commitment_image, pseudo_commitment)};
+        return {
+            true, crypto_mlsag_signature_t(std::move(s1), std::move(s2), h[0], commitment_image, pseudo_commitment)};
     }
 } // namespace Crypto::RingSignature::MLSAG

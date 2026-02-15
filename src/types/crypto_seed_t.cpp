@@ -31,9 +31,9 @@
 
 #include <cryptopp/pwdbased.h>
 #include <cryptopp/sha.h>
+#include <ed25519/include/ed25519_secure_erase.h>
 #include <helpers/hd_keys.h>
 #include <types/crypto_seed_t.h>
-#include <ed25519/include/ed25519_secure_erase.h>
 
 // BIP-39 key stretching: PBKDF2-HMAC-SHA512 with 2048 iterations, producing a 64-byte seed.
 static std::vector<unsigned char>

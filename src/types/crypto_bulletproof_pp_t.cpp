@@ -43,8 +43,7 @@ crypto_bulletproof_pp_t::crypto_bulletproof_pp_t(
     std::vector<crypto_point_t> W,
     std::vector<crypto_scalar_t> l,
     std::vector<crypto_scalar_t> n):
-    C_l(C_l), C_r(C_r), C_o(C_o), C_s(C_s), R(R),
-    X(std::move(X)), W(std::move(W)), l(std::move(l)), n(std::move(n))
+    C_l(C_l), C_r(C_r), C_o(C_o), C_s(C_s), R(R), X(std::move(X)), W(std::move(W)), l(std::move(l)), n(std::move(n))
 {
 }
 

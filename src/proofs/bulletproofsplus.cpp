@@ -243,7 +243,8 @@ namespace Crypto::RangeProofs::BulletproofsPlus
 
                 {
                     ge_p3 result; // NOLINT: immediately populated by ge_multiscalar_mul
-                    ge_multiscalar_mul_base_vartime(&result, msm_scalars.data(), msm_points.data(), total, base_dL.data());
+                    ge_multiscalar_mul_base_vartime(
+                        &result, msm_scalars.data(), msm_points.data(), total, base_dL.data());
                     L.append(crypto_point_t(result));
                 }
 
@@ -269,7 +270,8 @@ namespace Crypto::RangeProofs::BulletproofsPlus
 
                 {
                     ge_p3 result; // NOLINT: immediately populated by ge_multiscalar_mul
-                    ge_multiscalar_mul_base_vartime(&result, msm_scalars.data(), msm_points.data(), total, base_dR.data());
+                    ge_multiscalar_mul_base_vartime(
+                        &result, msm_scalars.data(), msm_points.data(), total, base_dR.data());
                     R.append(crypto_point_t(result));
                 }
 
@@ -817,9 +819,9 @@ namespace Crypto::RangeProofs::BulletproofsPlus
                 y_sum += y_powers[i];
             }
 
-            H_scalar += weight
-                        * ((proof.r1 * y * proof.s1)
-                           + (xsquared * (((ypow * z) * d_sum) + ((z.squared() - z) * y_sum))));
+            H_scalar +=
+                weight
+                * ((proof.r1 * y * proof.s1) + (xsquared * (((ypow * z) * d_sum) + ((z.squared() - z) * y_sum))));
 
             G_scalar += weight * proof.d1;
 

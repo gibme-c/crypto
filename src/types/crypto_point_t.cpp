@@ -31,9 +31,9 @@
 
 #include <crypto_config.h>
 #include <cryptopp/sha3.h>
+#include <ed25519/include/ed25519_secure_erase.h>
 #include <helpers/random_bytes.h>
 #include <types/crypto_point_t.h>
-#include <ed25519/include/ed25519_secure_erase.h>
 
 // Ed25519 identity point (0, 1) in compressed form: Y=1 with sign bit 0
 static unsigned char z_point[32] = {0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,

@@ -172,10 +172,7 @@ struct crypto_frost_nonce_commitment_t final : Serializable
 {
     crypto_frost_nonce_commitment_t() = default;
 
-    crypto_frost_nonce_commitment_t(
-        size_t identifier,
-        const crypto_point_t &hiding,
-        const crypto_point_t &binding);
+    crypto_frost_nonce_commitment_t(size_t identifier, const crypto_point_t &hiding, const crypto_point_t &binding);
 
     explicit crypto_frost_nonce_commitment_t(Serialization::deserializer_t &reader);
 

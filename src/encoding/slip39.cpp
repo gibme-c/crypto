@@ -33,10 +33,10 @@
  */
 
 #include <algorithm>
-#include <cstring>
 #include <cryptopp/hmac.h>
 #include <cryptopp/pwdbased.h>
 #include <cryptopp/sha.h>
+#include <cstring>
 #include <encoding/languages/slip39_english.h>
 #include <encoding/slip39.h>
 #include <helpers/random_bytes.h>
@@ -69,9 +69,9 @@ static constexpr size_t MAX_SHARE_COUNT = 16;
 
 // Header: id(15) + extendable(1) + iteration_exp(4) + group_index(4) +
 //         group_threshold(4) + group_count(4) + member_index(4) + member_threshold(4) = 40 bits
-static constexpr size_t HEADER_BITS =
-    ID_BITS + EXTENDABLE_BIT + ITERATION_EXP_BITS + GROUP_INDEX_BITS + GROUP_THRESHOLD_BITS + GROUP_COUNT_BITS +
-    MEMBER_INDEX_BITS + MEMBER_THRESHOLD_BITS;
+static constexpr size_t HEADER_BITS = ID_BITS + EXTENDABLE_BIT + ITERATION_EXP_BITS + GROUP_INDEX_BITS
+                                      + GROUP_THRESHOLD_BITS + GROUP_COUNT_BITS + MEMBER_INDEX_BITS
+                                      + MEMBER_THRESHOLD_BITS;
 
 // ============================================================================
 // Internal share structure
@@ -384,8 +384,8 @@ static std::vector<uint8_t> shamir_combine(
 // RS1024 Checksum
 // ============================================================================
 
-static const uint32_t RS1024_GEN[10] = {0xe0e040, 0x1c1c080, 0x3838100, 0x7070200, 0xe0e0009,
-                                         0x1c0c2412, 0x38086c24, 0x3090fc48, 0x21b1f890, 0x3f3f120};
+static const uint32_t RS1024_GEN[10] =
+    {0xe0e040, 0x1c1c080, 0x3838100, 0x7070200, 0xe0e0009, 0x1c0c2412, 0x38086c24, 0x3090fc48, 0x21b1f890, 0x3f3f120};
 
 static uint32_t rs1024_polymod(const std::vector<uint16_t> &values)
 {
@@ -504,14 +504,7 @@ static std::vector<uint8_t> feistel_encrypt(
         std::vector<uint8_t> derived(target.size());
 
         pbkdf2.DeriveKey(
-            derived.data(),
-            derived.size(),
-            0,
-            password.data(),
-            password.size(),
-            salt.data(),
-            salt.size(),
-            iterations);
+            derived.data(), derived.size(), 0, password.data(), password.size(), salt.data(), salt.size(), iterations);
 
         // XOR into target
         for (size_t i = 0; i < target.size(); ++i)
@@ -571,14 +564,7 @@ static std::vector<uint8_t> feistel_decrypt(
         std::vector<uint8_t> derived(target.size());
 
         pbkdf2.DeriveKey(
-            derived.data(),
-            derived.size(),
-            0,
-            password.data(),
-            password.size(),
-            salt.data(),
-            salt.size(),
-            iterations);
+            derived.data(), derived.size(), 0, password.data(), password.size(), salt.data(), salt.size(), iterations);
 
         for (size_t i = 0; i < target.size(); ++i)
         {
@@ -843,8 +829,9 @@ namespace Crypto::Mnemonics::Shamir
 
         // Determine entropy size
         const auto entropy_bytes = entropy.serialize();
-        const bool is_128 = entropy.empty()
-                            || std::all_of(entropy_bytes.begin() + 16, entropy_bytes.end(), [](uint8_t b) { return b == 0; });
+        const bool is_128 =
+            entropy.empty()
+            || std::all_of(entropy_bytes.begin() + 16, entropy_bytes.end(), [](uint8_t b) { return b == 0; });
         const size_t secret_len = is_128 ? 16 : 32;
 
         if (secret_len < MIN_STRENGTH_BITS / 8)
@@ -883,7 +870,7 @@ namespace Crypto::Mnemonics::Shamir
             share.iteration_exponent = iteration_exponent;
             share.group_index = 0;
             share.group_threshold = 0; // encoded as threshold-1, single group = 0
-            share.group_count = 0;     // encoded as count-1, single group = 0
+            share.group_count = 0; // encoded as count-1, single group = 0
             share.member_index = shares[i].first;
             share.member_threshold = static_cast<uint8_t>(threshold - 1); // encoded as threshold-1
             share.value = shares[i].second;
@@ -950,8 +937,8 @@ namespace Crypto::Mnemonics::Shamir
         if (decoded_shares.size() < threshold)
         {
             throw std::invalid_argument(
-                "Not enough shares: need " + std::to_string(threshold) + ", got " +
-                std::to_string(decoded_shares.size()));
+                "Not enough shares: need " + std::to_string(threshold) + ", got "
+                + std::to_string(decoded_shares.size()));
         }
 
         // Check for duplicate member indices
@@ -1004,7 +991,8 @@ namespace Crypto::Mnemonics::Shamir
         }
     }
 
-    std::vector<unsigned char> derive_seed(const crypto_entropy_t &entropy, const std::string &passphrase, bool extendable)
+    std::vector<unsigned char>
+        derive_seed(const crypto_entropy_t &entropy, const std::string &passphrase, bool extendable)
     {
         const auto entropy_bytes = entropy.serialize();
         const bool is_128 =

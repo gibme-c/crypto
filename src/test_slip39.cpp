@@ -60,11 +60,14 @@ int main()
     {
         const auto words = Crypto::Mnemonics::Shamir::word_list();
 
-        if (!check("wordlist has 1024 words", words.size() == 1024)) return 1;
+        if (!check("wordlist has 1024 words", words.size() == 1024))
+            return 1;
 
-        if (!check("wordlist first word is 'academic'", words[0] == "academic")) return 1;
+        if (!check("wordlist first word is 'academic'", words[0] == "academic"))
+            return 1;
 
-        if (!check("wordlist last word is 'zero'", words[1023] == "zero")) return 1;
+        if (!check("wordlist last word is 'zero'", words[1023] == "zero"))
+            return 1;
     }
 
     // ======================================================================
@@ -80,12 +83,15 @@ int main()
 
         const auto shares = Crypto::Mnemonics::Shamir::split(entropy, 2, 3);
 
-        if (!check("split produces 3 shares", shares.size() == 3)) return 1;
+        if (!check("split produces 3 shares", shares.size() == 3))
+            return 1;
 
-        if (!check("shares have 33 words each", shares[0].size() == 33)) return 1;
+        if (!check("shares have 33 words each", shares[0].size() == 33))
+            return 1;
 
         std::cout << "    share 0: ";
-        for (size_t i = 0; i < 5; ++i) std::cout << shares[0][i] << " ";
+        for (size_t i = 0; i < 5; ++i)
+            std::cout << shares[0][i] << " ";
         std::cout << "..." << std::endl;
 
         // Combine shares 0 and 1
@@ -93,7 +99,8 @@ int main()
             std::vector<std::vector<std::string>> subset = {shares[0], shares[1]};
             const auto recovered = Crypto::Mnemonics::Shamir::combine(subset);
 
-            if (!check("combine shares 0+1 recovers entropy", recovered == entropy)) return 1;
+            if (!check("combine shares 0+1 recovers entropy", recovered == entropy))
+                return 1;
         }
 
         // Combine shares 0 and 2
@@ -101,7 +108,8 @@ int main()
             std::vector<std::vector<std::string>> subset = {shares[0], shares[2]};
             const auto recovered = Crypto::Mnemonics::Shamir::combine(subset);
 
-            if (!check("combine shares 0+2 recovers entropy", recovered == entropy)) return 1;
+            if (!check("combine shares 0+2 recovers entropy", recovered == entropy))
+                return 1;
         }
 
         // Combine shares 1 and 2
@@ -109,7 +117,8 @@ int main()
             std::vector<std::vector<std::string>> subset = {shares[1], shares[2]};
             const auto recovered = Crypto::Mnemonics::Shamir::combine(subset);
 
-            if (!check("combine shares 1+2 recovers entropy", recovered == entropy)) return 1;
+            if (!check("combine shares 1+2 recovers entropy", recovered == entropy))
+                return 1;
         }
     }
 
@@ -126,16 +135,19 @@ int main()
 
         const auto shares = Crypto::Mnemonics::Shamir::split(entropy, 2, 3);
 
-        if (!check("split produces 3 shares", shares.size() == 3)) return 1;
+        if (!check("split produces 3 shares", shares.size() == 3))
+            return 1;
 
-        if (!check("128-bit shares have 20 words each", shares[0].size() == 20)) return 1;
+        if (!check("128-bit shares have 20 words each", shares[0].size() == 20))
+            return 1;
 
         // Combine any 2 shares
         {
             std::vector<std::vector<std::string>> subset = {shares[0], shares[2]};
             const auto recovered = Crypto::Mnemonics::Shamir::combine(subset);
 
-            if (!check("128-bit combine recovers entropy", recovered == entropy)) return 1;
+            if (!check("128-bit combine recovers entropy", recovered == entropy))
+                return 1;
         }
     }
 
@@ -150,14 +162,16 @@ int main()
 
         const auto shares = Crypto::Mnemonics::Shamir::split(entropy, 3, 5);
 
-        if (!check("split produces 5 shares", shares.size() == 5)) return 1;
+        if (!check("split produces 5 shares", shares.size() == 5))
+            return 1;
 
         // 3 shares should succeed
         {
             std::vector<std::vector<std::string>> subset = {shares[0], shares[2], shares[4]};
             const auto recovered = Crypto::Mnemonics::Shamir::combine(subset);
 
-            if (!check("3-of-5 with shares 0,2,4 recovers", recovered == entropy)) return 1;
+            if (!check("3-of-5 with shares 0,2,4 recovers", recovered == entropy))
+                return 1;
         }
 
         // 2 shares should fail (below threshold)
@@ -174,7 +188,8 @@ int main()
                 threw = true;
             }
 
-            if (!check("2-of-5 fails (below threshold)", threw)) return 1;
+            if (!check("2-of-5 fails (below threshold)", threw))
+                return 1;
         }
     }
 
@@ -194,7 +209,8 @@ int main()
             std::vector<std::vector<std::string>> subset = {shares[0], shares[1]};
             const auto recovered = Crypto::Mnemonics::Shamir::combine(subset, "test passphrase");
 
-            if (!check("correct passphrase recovers entropy", recovered == entropy)) return 1;
+            if (!check("correct passphrase recovers entropy", recovered == entropy))
+                return 1;
         }
 
         // Wrong passphrase produces different entropy (plausible deniability by design)
@@ -202,7 +218,8 @@ int main()
             std::vector<std::vector<std::string>> subset = {shares[0], shares[1]};
             const auto wrong_recovered = Crypto::Mnemonics::Shamir::combine(subset, "wrong passphrase");
 
-            if (!check("wrong passphrase produces different entropy", wrong_recovered != entropy)) return 1;
+            if (!check("wrong passphrase produces different entropy", wrong_recovered != entropy))
+                return 1;
         }
     }
 
@@ -217,13 +234,15 @@ int main()
 
         const auto shares = Crypto::Mnemonics::Shamir::split(entropy, 2, 3);
 
-        if (!check("valid share passes validation", Crypto::Mnemonics::Shamir::validate_share(shares[0]))) return 1;
+        if (!check("valid share passes validation", Crypto::Mnemonics::Shamir::validate_share(shares[0])))
+            return 1;
 
         // Corrupt a word
         auto corrupted = shares[0];
         corrupted[5] = (corrupted[5] == "academic") ? "acid" : "academic";
 
-        if (!check("corrupted share fails validation", !Crypto::Mnemonics::Shamir::validate_share(corrupted))) return 1;
+        if (!check("corrupted share fails validation", !Crypto::Mnemonics::Shamir::validate_share(corrupted)))
+            return 1;
     }
 
     // ======================================================================
@@ -238,13 +257,16 @@ int main()
         const auto seed1 = Crypto::Mnemonics::Shamir::derive_seed(entropy, "");
         const auto seed2 = Crypto::Mnemonics::Shamir::derive_seed(entropy, "");
 
-        if (!check("seed derivation is deterministic", seed1 == seed2)) return 1;
+        if (!check("seed derivation is deterministic", seed1 == seed2))
+            return 1;
 
-        if (!check("seed is 64 bytes", seed1.size() == 64)) return 1;
+        if (!check("seed is 64 bytes", seed1.size() == 64))
+            return 1;
 
         const auto seed3 = Crypto::Mnemonics::Shamir::derive_seed(entropy, "passphrase");
 
-        if (!check("different passphrase gives different seed", seed1 != seed3)) return 1;
+        if (!check("different passphrase gives different seed", seed1 != seed3))
+            return 1;
     }
 
     // ======================================================================
@@ -258,12 +280,14 @@ int main()
 
         const auto shares = Crypto::Mnemonics::Shamir::split(entropy, 1, 1);
 
-        if (!check("1-of-1 produces 1 share", shares.size() == 1)) return 1;
+        if (!check("1-of-1 produces 1 share", shares.size() == 1))
+            return 1;
 
         std::vector<std::vector<std::string>> subset = {shares[0]};
         const auto recovered = Crypto::Mnemonics::Shamir::combine(subset);
 
-        if (!check("1-of-1 recovers entropy", recovered == entropy)) return 1;
+        if (!check("1-of-1 recovers entropy", recovered == entropy))
+            return 1;
     }
 
     // ======================================================================
@@ -288,7 +312,8 @@ int main()
         const auto [pk_before, sk_before] = key_before.keys();
         const auto [pk_after, sk_after] = key_after.keys();
 
-        if (!check("HD keys match after Shamir round-trip", pk_before == pk_after && sk_before == sk_after)) return 1;
+        if (!check("HD keys match after Shamir round-trip", pk_before == pk_after && sk_before == sk_after))
+            return 1;
     }
 
     // ======================================================================
@@ -306,7 +331,8 @@ int main()
         std::vector<std::vector<std::string>> subset = {shares[0], shares[1]};
         const auto recovered = Crypto::Mnemonics::Shamir::combine(subset);
 
-        if (!check("iteration exponent=1 round-trip", recovered == entropy)) return 1;
+        if (!check("iteration exponent=1 round-trip", recovered == entropy))
+            return 1;
     }
 
     // ======================================================================
@@ -323,9 +349,11 @@ int main()
         std::vector<std::vector<std::string>> subset = {shares[0], shares[1]};
         const auto recovered = Crypto::Mnemonics::Shamir::combine(subset);
 
-        if (!check("non-extendable round-trip", recovered == entropy)) return 1;
+        if (!check("non-extendable round-trip", recovered == entropy))
+            return 1;
 
-        if (!check("non-extendable share validates", Crypto::Mnemonics::Shamir::validate_share(shares[0]))) return 1;
+        if (!check("non-extendable share validates", Crypto::Mnemonics::Shamir::validate_share(shares[0])))
+            return 1;
     }
 
     // ======================================================================

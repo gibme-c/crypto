@@ -77,9 +77,7 @@ namespace Crypto::Mnemonics::Shamir
      * @param passphrase the passphrase used during split (default: empty)
      * @return the reconstructed entropy
      */
-    crypto_entropy_t combine(
-        const std::vector<std::vector<std::string>> &shares,
-        const std::string &passphrase = "");
+    crypto_entropy_t combine(const std::vector<std::vector<std::string>> &shares, const std::string &passphrase = "");
 
     /**
      * Validates a single share's word list and RS1024 checksum.
@@ -104,10 +102,8 @@ namespace Crypto::Mnemonics::Shamir
      * @param extendable if true, uses extendable salt format (default: true)
      * @return 64-byte derived seed
      */
-    std::vector<unsigned char> derive_seed(
-        const crypto_entropy_t &entropy,
-        const std::string &passphrase = "",
-        bool extendable = true);
+    std::vector<unsigned char>
+        derive_seed(const crypto_entropy_t &entropy, const std::string &passphrase = "", bool extendable = true);
 
     /**
      * Returns the 1024-word SLIP-39 English word list.
