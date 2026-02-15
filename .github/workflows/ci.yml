@@ -126,3 +126,14 @@ jobs:
         run: |
           cd build/Release
           ./crypto-slip10-test.exe
+
+      - name: Test SLIP-0039 (Linux & OSX)
+        if: matrix.os != 'windows-latest' || matrix.name == 'mingw-gcc'
+        run: |
+          cd build
+          ./crypto-slip39-test
+      - name: Test SLIP-0039 (Windows)
+        if: matrix.os == 'windows-latest' && matrix.name == 'msvc'
+        run: |
+          cd build/Release
+          ./crypto-slip39-test.exe

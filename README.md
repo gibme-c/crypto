@@ -80,9 +80,9 @@ Recovered entropy feeds directly into the existing HD key flow: `shares → comb
 | [Borromean](https://github.com/Blockstream/borromean_paper/raw/master/borromean_draft_0.01_34241bb.pdf) | O(*n*) | Yes | Linkable ring signature — prove you own one of *n* keys without revealing which |
 | [MLSAG](https://eprint.iacr.org/2015/1098.pdf) | O(*n*) | Yes | Multilayered linkable ring signature with optional Pedersen commitment binding |
 | [CLSAG](https://eprint.iacr.org/2019/654.pdf) | O(*n*) | Yes | Compact linkable ring signature with optional Pedersen commitment binding |
-| [Triptych](https://eprint.iacr.org/2020/018.pdf) | O(log *n*) | Yes | Logarithmic-size ring signature for much larger anonymity sets |
+| [Triptych](https://eprint.iacr.org/2020/018.pdf) | O(log *n*) | Yes | Logarithmic-size ring signature with required Pedersen commitment binding for much larger anonymity sets |
 
-All four ring signature schemes produce a **key image** — a deterministic, unlinkable tag that detects if the same key signs twice. MLSAG, CLSAG, and Triptych optionally support **commitment binding**, tying the signature to confidential transaction amounts.
+All four ring signature schemes produce a **key image** — a deterministic, unlinkable tag that detects if the same key signs twice. MLSAG and CLSAG optionally support **commitment binding**, tying the signature to confidential transaction amounts. Triptych **requires** commitment binding by design.
 
 **Adapter signatures** enable trustless atomic swaps: a pre-signature becomes valid only when a secret witness scalar is revealed, and any observer can extract the witness from the adapted signature.
 
