@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2020, The Bitcoin Core developers
-// Copyright (c) 2020, Brandon Lehmann
+// Copyright (c) 2020-2026, Brandon Lehmann
 //
 // Redistribution and use in source and binary forms, with or without modification, are
 // permitted provided that the following conditions are met:

@@ -64,6 +64,17 @@ Mnemonic encoding supports 10 languages: Chinese (Simplified & Traditional), Cze
 
 All three ring signature schemes produce a **key image** — a deterministic, unlinkable tag that detects if the same key signs twice. CLSAG and Triptych optionally support **commitment binding**, tying the signature to confidential transaction amounts.
 
+**Signature timings** (ring size n=4 where applicable):
+
+| Scheme | Sign | Verify |
+|--------|---:|---:|
+| Ed25519 | ~56 us | ~36 us |
+| RFC-8032 Ed25519 | ~59 us | ~46 us |
+| Borromean (n=4) | ~530 us | ~230 us |
+| CLSAG (n=4) | ~456 us | ~258 us |
+| CLSAG w/ commitments (n=4) | ~740 us | ~527 us |
+| Triptych (n=4) | ~1.2 ms | ~676 us |
+
 ### Zero-Knowledge Proofs
 
 **Pedersen Commitments & RingCT** — hide transaction amounts while preserving verifiable balance:
@@ -73,13 +84,26 @@ All three ring signature schemes produce a **key image** — a deterministic, un
 
 **Range Proofs** — prove a committed value lies in [0, 2^N) without revealing it:
 
-| Scheme | Proof Size (64-bit) | Verify Time | Multi-value | Batch Verify |
-|--------|---------------------|-------------|-------------|--------------|
-| [Bulletproofs](https://eprint.iacr.org/2017/1066.pdf) | ~674 B | ~1.2 ms | Yes | Yes |
-| [Bulletproofs+](https://eprint.iacr.org/2020/735.pdf) | ~578 B | ~1.0 ms | Yes | Yes |
-| [Bulletproofs++](https://eprint.iacr.org/2022/510.pdf) | ~516 B | ~466 us | Single | Yes |
+| Scheme | Multi-value | Batch Verify |
+|--------|-------------|--------------|
+| [Bulletproofs](https://eprint.iacr.org/2017/1066.pdf) | Yes | Yes |
+| [Bulletproofs+](https://eprint.iacr.org/2020/735.pdf) | Yes | Yes |
+| [Bulletproofs++](https://eprint.iacr.org/2022/510.pdf) | Yes | Yes |
 
-All three support variable bit lengths (1–64 bits) and cache generator points for fast repeat calls. Bulletproofs and Bulletproofs+ support proving multiple values in a single proof.
+All three support variable bit lengths (1–64 bits), multi-value aggregated proving, and cache generator points for fast repeat calls. Proof size grows by only 64 bytes per doubling of M (one additional IPA/WNLA round).
+
+**Aggregated proof scaling** (64-bit range):
+
+| M | Bulletproofs | | | Bulletproofs+ | | | Bulletproofs++ | | |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| | Size | Prove | Verify | Size | Prove | Verify | Size | Prove | Verify |
+| 1 | 674 B | ~8.5 ms | ~850 us | 578 B | ~3.6 ms | ~770 us | 516 B | ~3.7 ms | ~470 us |
+| 2 | 738 B | ~16 ms | ~1.3 ms | 642 B | ~5.8 ms | ~1.2 ms | 580 B | ~6.3 ms | ~670 us |
+| 4 | 802 B | ~31 ms | ~2.0 ms | 706 B | ~9.8 ms | ~2.0 ms | 644 B | ~10.8 ms | ~1.1 ms |
+| 8 | 866 B | ~59 ms | ~3.3 ms | 770 B | ~18 ms | ~3.3 ms | 708 B | ~20 ms | ~1.7 ms |
+| 16 | 930 B | ~115 ms | ~6.1 ms | 834 B | ~32 ms | ~6.2 ms | 772 B | ~37 ms | ~3.1 ms |
+
+> **Benchmarks measured on:** AMD Ryzen 7 9800X3D, Windows 11, GCC 13.2.0 (MinGW), with x64 SIMD / AVX2 / AVX-512F enabled via `--autotune`.
 
 **Other Proofs:**
 - **Merkle trees** — compact membership proofs via binary hash trees

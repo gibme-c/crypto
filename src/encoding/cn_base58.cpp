@@ -1,5 +1,5 @@
 // Copyright (c) 2011-2016, The Cryptonote Developers
-// Copyright (c) 2020, Brandon Lehmann
+// Copyright (c) 2020-2026, Brandon Lehmann
 //
 // Redistribution and use in source and binary forms, with or without modification, are
 // permitted provided that the following conditions are met:
