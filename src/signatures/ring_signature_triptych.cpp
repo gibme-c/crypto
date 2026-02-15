@@ -27,6 +27,12 @@
 // Adapted from Python code by Sarang Noether found at
 // https://github.com/SarangNoether/skunkworks/tree/triptych
 
+/**
+ * @file ring_signature_triptych.cpp
+ * @brief Triptych logarithmic-size ring signatures using base-n matrix decomposition of the
+ *        signer index and Gray code optimization for product evaluation.
+ */
+
 #include <cstring>
 
 #include <crypto_constants.h>
@@ -37,6 +43,7 @@
 
 typedef std::vector<std::vector<crypto_scalar_t>> triptych_crypto_scalar_vector_t;
 
+// Compute a Pedersen-like vector commitment: sum(v[i][j] * G_{i,j}) + r*H via MSM
 static inline crypto_point_t commitment_tensor(const triptych_crypto_scalar_vector_t &v, const crypto_scalar_t &r)
 {
     // count total terms: all v[i][j] pairs + the final r*H term
@@ -75,6 +82,7 @@ static inline crypto_point_t commitment_tensor(const triptych_crypto_scalar_vect
     return crypto_point_t(result);
 }
 
+// Allocate an m x n scalar matrix, optionally filled with random values or a constant
 static inline triptych_crypto_scalar_vector_t init_triptych_scalar_vector(
     size_t d1,
     size_t d2,
@@ -100,6 +108,8 @@ static inline triptych_crypto_scalar_vector_t init_triptych_scalar_vector(
 
 namespace Crypto::RingSignature::Triptych
 {
+    // ---- Verify: reconstruct X/Y proof points and check they sum to zero ----
+
     bool check_ring_signature(
         const crypto_hash_t &message_digest,
         const crypto_key_image_t &key_image,
@@ -107,9 +117,9 @@ namespace Crypto::RingSignature::Triptych
         const crypto_triptych_signature_t &signature,
         const std::vector<crypto_pedersen_commitment_t> &commitments)
     {
-        const size_t n = 2;
+        const size_t n = 2; // base of the decomposition (binary)
 
-        // check to verify that there are no duplicate keys in the set
+        // Reject rings with duplicate public keys
         {
             const auto keys = dedupe_and_sort_keys(public_keys);
 
@@ -119,7 +129,7 @@ namespace Crypto::RingSignature::Triptych
             }
         }
 
-        // checks to verify that it is a proper power of two
+        // Ring size must be a power of 2 (N = n^m); m is the number of decomposition digits
         const auto [m_found, m] = Crypto::calculate_base2_exponent(public_keys.size());
 
         if (!m_found || m < 2)
@@ -142,6 +152,7 @@ namespace Crypto::RingSignature::Triptych
             return false;
         }
 
+        // ---- Derive challenges mu and x from the Fiat-Shamir transcript ----
         auto tr = scalar_transcript_t(TRIPTYCH_DOMAIN_0, message_digest);
 
         tr.update(public_keys);
@@ -180,6 +191,8 @@ namespace Crypto::RingSignature::Triptych
             return false;
         }
 
+        // ---- Reconstruct the f matrix from signature data ----
+        // f[j][0] = x - sum(f[j][1..n-1]), ensuring each row sums to x
         auto f = init_triptych_scalar_vector(m, n);
 
         for (size_t j = 0; j < m; ++j)
@@ -194,7 +207,7 @@ namespace Crypto::RingSignature::Triptych
             }
         }
 
-        // A/B Check
+        // ---- Commitment tensor checks: verify A/B and C/D consistency ----
         for (size_t j = 0; j < m; ++j)
         {
             f[j][0] = x;
@@ -227,7 +240,9 @@ namespace Crypto::RingSignature::Triptych
 
         const auto N = public_keys.size();
 
-        // total terms: N (gray code) + m (X[j]/Y[j]) + 1 (z*G or z*I)
+        // ---- Verification equations for X and Y via MSM ----
+        // RX checks the public-key/commitment component; RY checks the key-image component.
+        // Gray code trick: evaluate product(f[j][k_j]) for all k in [0,N) incrementally.
         const auto total_terms = N + m + 1;
 
         // RY: the second point in the gray code loop is constant:
@@ -305,26 +320,11 @@ namespace Crypto::RingSignature::Triptych
         ge_p3 ry_result; // NOLINT: immediately populated by ge_multiscalar_mul
         ge_multiscalar_mul_vartime(&ry_result, ry_scalars.data(), ry_points.data(), ry_total);
 
+        // Both equations must evaluate to the identity point (zero)
         return crypto_point_t(rx_result).empty() && crypto_point_t(ry_result).empty();
     }
 
-    std::tuple<bool, crypto_triptych_signature_t> complete_ring_signature(
-        const crypto_scalar_t &signing_scalar,
-        const crypto_triptych_signature_t &signature,
-        const crypto_scalar_t &xpow)
-    {
-        if (!signing_scalar.valid() || !xpow.valid())
-        {
-            return {false, {}};
-        }
-
-
-        auto finalized_signature = signature;
-
-        finalized_signature.z += (signing_scalar * xpow);
-
-        return {true, finalized_signature};
-    }
+    // ---- Sign (auto-detect signer index): find our key in the ring, then delegate ----
 
     std::tuple<bool, crypto_triptych_signature_t> generate_ring_signature(
         const crypto_hash_t &message_digest,
@@ -372,6 +372,8 @@ namespace Crypto::RingSignature::Triptych
             input_blinding_factor, input_commitments, pseudo_blinding_factor, pseudo_commitment);
     }
 
+    // ---- Sign (explicit signer index): full proof construction ----
+
     std::tuple<bool, crypto_triptych_signature_t> generate_ring_signature(
         const crypto_hash_t &message_digest,
         const crypto_scalar_t &secret_ephemeral,
@@ -382,7 +384,9 @@ namespace Crypto::RingSignature::Triptych
         const crypto_blinding_factor_t &pseudo_blinding_factor,
         const crypto_pedersen_commitment_t &pseudo_commitment)
     {
-        // check to verify that there are no duplicate keys in the set
+        const size_t n = 2; // base of the decomposition (binary)
+
+        // Reject rings with duplicate public keys
         {
             const auto keys = dedupe_and_sort_keys(public_keys);
 
@@ -405,14 +409,14 @@ namespace Crypto::RingSignature::Triptych
             return {false, {}};
         }
 
-        const auto ring_size = public_keys.size();
+        const auto N = public_keys.size();
 
         if (!secret_ephemeral.valid() || !input_blinding_factor.valid() || !pseudo_blinding_factor.valid())
         {
             return {false, {}};
         }
 
-        if (real_output_index >= ring_size)
+        if (real_output_index >= N)
         {
             return {false, {}};
         }
@@ -425,11 +429,15 @@ namespace Crypto::RingSignature::Triptych
             return {false, {}};
         }
 
-        const auto public_commitment = (input_blinding_factor - pseudo_blinding_factor) * Crypto::G;
+        // The blinding factor difference lets us prove the pseudo commitment hides
+        // the same amount as the real input commitment, without revealing either.
+        const auto blinding_factor = input_blinding_factor - pseudo_blinding_factor;
 
-        const auto derived_commitment =
-            Crypto::EIGHT * (input_commitments[real_output_index] - pseudo_commitment);
+        const auto derived_commitment = Crypto::EIGHT * (input_commitments[real_output_index] - pseudo_commitment);
 
+        const auto public_commitment = blinding_factor * Crypto::G;
+
+        // Sanity check: blinding_factor * G must equal the commitment difference
         if (public_commitment != derived_commitment)
         {
             return {false, {}};
@@ -438,7 +446,7 @@ namespace Crypto::RingSignature::Triptych
         // validate uniqueness (defense-in-depth — dedupe_and_sort_keys already rejects duplicates)
         size_t match_count = 0;
 
-        for (size_t i = 0; i < ring_size; i++)
+        for (size_t i = 0; i < N; i++)
         {
             if (public_ephemeral == public_keys[i])
             {
@@ -453,98 +461,15 @@ namespace Crypto::RingSignature::Triptych
 
         const auto key_image = Crypto::generate_key_image_v2(secret_ephemeral);
 
-        const auto [gen_success, signature, x_pow] = prepare_ring_signature(
-            message_digest,
-            key_image,
-            public_keys,
-            real_output_index,
-            input_blinding_factor,
-            input_commitments,
-            pseudo_blinding_factor,
-            pseudo_commitment);
-
-        if (!gen_success)
+        if (!key_image.check_subgroup())
         {
             return {false, {}};
         }
 
-        return complete_ring_signature(secret_ephemeral, signature, x_pow);
-    }
-
-    std::tuple<bool, crypto_triptych_signature_t, crypto_scalar_t> prepare_ring_signature(
-        const crypto_hash_t &message_digest,
-        const crypto_key_image_t &key_image,
-        const std::vector<crypto_public_key_t> &public_keys,
-        size_t real_output_index,
-        const crypto_blinding_factor_t &input_blinding_factor,
-        const std::vector<crypto_pedersen_commitment_t> &input_commitments,
-        const crypto_blinding_factor_t &pseudo_blinding_factor,
-        const crypto_pedersen_commitment_t &pseudo_commitment)
-    {
-        const size_t n = 2;
-
-        // check to verify that there are no duplicate keys in the set
-        {
-            const auto keys = dedupe_and_sort_keys(public_keys);
-
-            if (keys.size() != public_keys.size())
-            {
-                return {false, {}, {}};
-            }
-        }
-
-        // checks to verify that it is a proper power of two
-        const auto [m_found, m] = Crypto::calculate_base2_exponent(public_keys.size());
-
-        if (!m_found || m < 2)
-        {
-            return {false, {}, {}};
-        }
-
-        if (public_keys.size() != input_commitments.size())
-        {
-            return {false, {}, {}};
-        }
-
-        if (!key_image.check_subgroup())
-        {
-            return {false, {}, {}};
-        }
-
-        if (!input_blinding_factor.valid() || !pseudo_blinding_factor.valid())
-        {
-            return {false, {}, {}};
-        }
-
-        // See below for more detail
-        const auto blinding_factor = input_blinding_factor - pseudo_blinding_factor;
-
-        /**
-         * TLDR: If we know the difference between the input blinding scalar and the
-         * pseudo output blinding scalar then we can use that difference as the secret
-         * key for the difference between the input commitment and the pseudo commitment
-         * thus providing no amount component differences in the commitments between the
-         * two and hence we are committing (in a non-revealing way) that the pseudo output
-         * commitment is equivalent to ONE of the input commitments in the set
-         */
-        const auto commitment = Crypto::EIGHT * (input_commitments[real_output_index] - pseudo_commitment);
-
-        const auto public_commitment = blinding_factor * Crypto::G;
-
-        /**
-         * Quick sanity check to make sure that the computed blinding factor delta has a
-         * resulting public point that is the same as the commitment that we can sign for above
-         */
-        if (commitment != public_commitment)
-        {
-            return {false, {}, {}};
-        }
-
-        auto N = public_keys.size();
-
-        const crypto_key_image_t commitment_image = (input_blinding_factor - pseudo_blinding_factor) * key_image;
+        const crypto_key_image_t commitment_image = blinding_factor * key_image;
 
     try_again:
+        // ---- Generate random blinding scalars for the four tensor commitments (A, B, C, D) ----
         const auto rA = crypto_scalar_t::random(), rB = crypto_scalar_t::random(), rC = crypto_scalar_t::random(),
                    rD = crypto_scalar_t::random();
 
@@ -553,6 +478,7 @@ namespace Crypto::RingSignature::Triptych
             goto try_again;
         }
 
+        // Random masking matrix 'a' with each row summing to zero
         auto a = init_triptych_scalar_vector(m, n, true);
 
         for (size_t j = 0; j < m; ++j)
@@ -565,12 +491,15 @@ namespace Crypto::RingSignature::Triptych
             }
         }
 
+        // A = Com(a, rA) — commitment to the masking matrix
         const auto A = commitment_tensor(a, rA);
 
+        // Decompose the real signer index into base-n digits
         const auto gray = gray_code_generator_t(n, m, real_output_index);
 
         const auto decomp_l = gray.v_value();
 
+        // sigma[j][i] = kronecker_delta(decomp_l[j], i) — one-hot encoding of the signer index
         auto sigma = init_triptych_scalar_vector(m, n);
 
         for (size_t j = 0; j < m; ++j)
@@ -581,8 +510,10 @@ namespace Crypto::RingSignature::Triptych
             }
         }
 
+        // B = Com(sigma, rB) — commitment to the one-hot signer encoding
         const auto B = commitment_tensor(sigma, rB);
 
+        // C/D prove that sigma contains only 0s and 1s (quadratic constraint)
         auto a_sigma = init_triptych_scalar_vector(m, n);
 
         for (size_t j = 0; j < m; ++j)
@@ -607,6 +538,8 @@ namespace Crypto::RingSignature::Triptych
 
         const auto D = commitment_tensor(a_sq, rD);
 
+        // ---- Compute polynomial coefficients p[k][j] via convolution ----
+        // p[k] is the convolution of per-digit (a, sigma) pairs, evaluated at each ring index k.
         auto p = init_triptych_scalar_vector(N, 0);
 
         auto decomp_k = std::vector<int>(m, 0);
@@ -629,8 +562,10 @@ namespace Crypto::RingSignature::Triptych
             }
         }
 
+        // ---- Build proof points X[j] and Y[j] ----
         std::vector<crypto_point_t> X(m, Crypto::Z), Y(m, Crypto::Z);
 
+        // Derive first challenge mu from the transcript (binds A, B, C, D)
         auto tr = scalar_transcript_t(TRIPTYCH_DOMAIN_0, message_digest);
 
         tr.update(public_keys);
@@ -685,12 +620,10 @@ namespace Crypto::RingSignature::Triptych
             // X[j] = sum(p[i][j] * combined_point[i]) + rho[j] * G
             {
                 std::vector<unsigned char> scalars(N * 32);
-                auto p_sum = Crypto::ZERO;
 
                 for (size_t i = 0; i < N; ++i)
                 {
                     std::memcpy(&scalars[i * 32], p[i][j].data(), 32);
-                    p_sum += p[i][j];
                 }
 
                 ge_p3 result; // NOLINT: immediately populated by ge_multiscalar_mul
@@ -724,6 +657,7 @@ namespace Crypto::RingSignature::Triptych
             }
         }
 
+        // ---- Derive second challenge x from X and Y, then compute response scalars ----
         tr.update(X);
 
         tr.update(Y);
@@ -735,6 +669,7 @@ namespace Crypto::RingSignature::Triptych
             goto try_again;
         }
 
+        // f[j][i] = sigma[j][i]*x + a[j][i] — only i >= 1 stored (i=0 is implicit)
         auto f = init_triptych_scalar_vector(m, n - 1);
 
         for (size_t j = 0; j < m; ++j)
@@ -745,22 +680,22 @@ namespace Crypto::RingSignature::Triptych
             }
         }
 
+        // Blinding response scalars for the tensor commitments
         const auto zA = rB * x + rA;
 
         const auto zC = rC * x + rD;
 
+        // z aggregates the commitment blinding, per-round rho masking, and secret key
         const auto xpow = x.pow(m);
 
-        auto z = (mu * (input_blinding_factor - pseudo_blinding_factor)) * xpow;
+        auto z = (mu * blinding_factor + secret_ephemeral) * xpow;
 
         for (size_t j = 0; j < m; ++j)
         {
             z -= rho[j] * x.pow(j);
         }
 
-        const auto signature =
-            crypto_triptych_signature_t(commitment_image, pseudo_commitment, A, B, C, D, X, Y, f, zA, zC, z);
-
-        return {true, signature, xpow};
+        return {true,
+            crypto_triptych_signature_t(commitment_image, pseudo_commitment, A, B, C, D, X, Y, f, zA, zC, z)};
     }
 } // namespace Crypto::RingSignature::Triptych

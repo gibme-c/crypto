@@ -27,6 +27,22 @@
 // Adapted from Python code by Sarang Noether found at
 // https://github.com/SarangNoether/skunkworks/tree/triptych
 
+/**
+ * @file ring_signature_triptych.h
+ * @brief Triptych ring signatures with logarithmic proof size.
+ *
+ * Triptych is an advanced linkable ring signature scheme whose proof size grows
+ * **logarithmically** with the ring size (O(log N) group elements), compared to the
+ * linear O(N) scaling of Borromean/CLSAG. This makes it practical to use very large
+ * rings (e.g., 128 or 256 members) for stronger signer anonymity without a proportional
+ * increase in signature size or verification time.
+ *
+ * Like CLSAG, Triptych natively supports Pedersen commitment binding for confidential
+ * transaction amounts.
+ *
+ * @note The ring size must be a power of two.
+ */
+
 #ifndef CRYPTO_PROOFS_TRIPTYCH_H
 #define CRYPTO_PROOFS_TRIPTYCH_H
 
@@ -35,13 +51,19 @@
 namespace Crypto::RingSignature::Triptych
 {
     /**
-     * Checks the Triptych proof presented
-     * @param message_digest
-     * @param key_image
-     * @param public_keys
-     * @param signature
-     * @param commitments
-     * @return
+     * Verifies a Triptych ring signature.
+     *
+     * Checks that the signature is valid for the given message, key image, ring of public
+     * keys, and per-member Pedersen commitments. Verification cost is O(N) point operations
+     * (dominated by the multi-scalar multiplication over the ring), but the signature itself
+     * is only O(log N) in size.
+     *
+     * @param message_digest 32-byte hash of the signed message
+     * @param key_image the key image I for linkability / double-spend detection
+     * @param public_keys the ring of public keys (must be a power-of-two length)
+     * @param signature the Triptych signature to verify
+     * @param commitments per-ring-member Pedersen commitments
+     * @return true if the signature is valid
      */
     bool check_ring_signature(
         const crypto_hash_t &message_digest,
@@ -50,29 +72,20 @@ namespace Crypto::RingSignature::Triptych
         const crypto_triptych_signature_t &signature,
         const std::vector<crypto_pedersen_commitment_t> &commitments);
 
-    /**
-     * Completes the prepared Triptych proof
-     * @param signing_scalar
-     * @param signature
-     * @param xpow
-     * @return
-     */
-    std::tuple<bool, crypto_triptych_signature_t> complete_ring_signature(
-        const crypto_scalar_t &signing_scalar,
-        const crypto_triptych_signature_t &signature,
-        const crypto_scalar_t &xpow);
-
-    /**
-     * Generates a Triptych proof using the secrets provided
-     * Auto-detects the signer's index via constant-time scan
-     * @param message_digest
-     * @param secret_ephemeral
-     * @param public_keys
-     * @param input_blinding_factor
-     * @param input_commitments
-     * @param pseudo_blinding_factor
-     * @param pseudo_commitment
-     * @return
+/**
+     * Generates a complete Triptych ring signature, auto-detecting the signer's position.
+     *
+     * Scans @p public_keys to find the index matching @p secret_ephemeral, then produces
+     * a linkable ring signature with commitment binding. The ring size must be a power of two.
+     *
+     * @param message_digest 32-byte hash of the message to sign
+     * @param secret_ephemeral the signer's one-time secret scalar
+     * @param public_keys the ring of public keys (power-of-two length)
+     * @param input_blinding_factor blinding factor of the real input's Pedersen commitment
+     * @param input_commitments per-ring-member Pedersen commitments
+     * @param pseudo_blinding_factor blinding factor of the pseudo-commitment
+     * @param pseudo_commitment the pseudo-commitment point
+     * @return (success, signature) -- success is false if the secret key does not match any ring member
      */
     std::tuple<bool, crypto_triptych_signature_t> generate_ring_signature(
         const crypto_hash_t &message_digest,
@@ -84,17 +97,20 @@ namespace Crypto::RingSignature::Triptych
         const crypto_pedersen_commitment_t &pseudo_commitment);
 
     /**
-     * Generates a Triptych proof using the secrets provided
-     * Caller specifies the signer's index (still validated)
-     * @param message_digest
-     * @param secret_ephemeral
-     * @param public_keys
-     * @param real_output_index
-     * @param input_blinding_factor
-     * @param input_commitments
-     * @param pseudo_blinding_factor
-     * @param pseudo_commitment
-     * @return
+     * Generates a complete Triptych ring signature with an explicit signer index.
+     *
+     * Same as the auto-detect overload, but you provide @p real_output_index directly.
+     * The index is still validated against the secret key for safety.
+     *
+     * @param message_digest 32-byte hash of the message to sign
+     * @param secret_ephemeral the signer's one-time secret scalar
+     * @param public_keys the ring of public keys (power-of-two length)
+     * @param real_output_index position of the real signer's public key in @p public_keys
+     * @param input_blinding_factor blinding factor of the real input's Pedersen commitment
+     * @param input_commitments per-ring-member Pedersen commitments
+     * @param pseudo_blinding_factor blinding factor of the pseudo-commitment
+     * @param pseudo_commitment the pseudo-commitment point
+     * @return (success, signature) tuple
      */
     std::tuple<bool, crypto_triptych_signature_t> generate_ring_signature(
         const crypto_hash_t &message_digest,
@@ -106,27 +122,5 @@ namespace Crypto::RingSignature::Triptych
         const crypto_blinding_factor_t &pseudo_blinding_factor,
         const crypto_pedersen_commitment_t &pseudo_commitment);
 
-    /**
-     * Prepares a Triptych proof using the primitive values provided
-     * Must be completed via complete_ring_signature before it will validate
-     * @param message_digest
-     * @param key_image
-     * @param public_keys
-     * @param real_output_index
-     * @param input_blinding_factor
-     * @param input_commitments
-     * @param pseudo_blinding_factor
-     * @param pseudo_commitment
-     * @return
-     */
-    std::tuple<bool, crypto_triptych_signature_t, crypto_scalar_t> prepare_ring_signature(
-        const crypto_hash_t &message_digest,
-        const crypto_key_image_t &key_image,
-        const std::vector<crypto_public_key_t> &public_keys,
-        size_t real_output_index,
-        const crypto_blinding_factor_t &input_blinding_factor,
-        const std::vector<crypto_pedersen_commitment_t> &input_commitments,
-        const crypto_blinding_factor_t &pseudo_blinding_factor,
-        const crypto_pedersen_commitment_t &pseudo_commitment);
 } // namespace Crypto::RingSignature::Triptych
 #endif // CRYPTO_PROOFS_TRIPTYCH_H

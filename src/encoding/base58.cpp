@@ -25,6 +25,11 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file base58.cpp
+ * @brief Standard Base58 encoding/decoding with optional SHA-3 checksum (encode_check/decode_check).
+ */
+
 #include <cassert>
 #include <crypto_config.h>
 #include <encoding/base58.h>
@@ -68,8 +73,8 @@ namespace Crypto::Base58
             UNUSED(*data++);
         }
 
-        // allocate enough space in big-endian base256 representation
-        int size = int(strlen(data)) * 733 / 1000 + 1; // log(58) / log(256) rounded up
+        // Allocate big-endian base256 representation: ceil(len * log(58)/log(256))
+        int size = int(strlen(data)) * 733 / 1000 + 1;
 
         std::vector<unsigned char> b256(size);
 

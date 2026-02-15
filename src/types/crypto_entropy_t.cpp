@@ -24,6 +24,11 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file crypto_entropy_t.cpp
+ * @brief BIP-39 entropy: random generation with optional timestamp prefix, mnemonic encoding/decoding.
+ */
+
 #include <chrono>
 #include <crypto_config.h>
 #include <crypto_constants.h>
@@ -63,10 +68,12 @@ crypto_entropy_t
 
     crypto_entropy_t seed;
 
+    // Start with OS-sourced random bytes
     auto hash = crypto_hash_t::random();
 
     Serialization::serializer_t writer;
 
+    // Mix in caller-supplied entropy if provided
     if (!entropy.empty())
     {
         writer.pod(hash);
@@ -76,6 +83,7 @@ crypto_entropy_t
         hash = crypto_hash_t::sha3(writer.vector());
     }
 
+    // Build the entropy payload: optional varint timestamp prefix followed by random bytes
     writer.reset();
     {
         if (encode_timestamp)
@@ -88,6 +96,7 @@ crypto_entropy_t
 
     auto temp = writer.vector();
 
+    // For 128-bit entropy, zero out the upper 16 bytes
     if (bits == 128)
     {
         temp.resize(16);
@@ -126,6 +135,9 @@ void crypto_entropy_t::toJSON(rapidjson::Writer<rapidjson::StringBuffer> &writer
     writer.String(Serialization::to_hex(bytes, sizeof(bytes)));
 }
 
+// Attempts to decode a varint timestamp from the start of the entropy.
+// Returns 0 if the decoded value falls outside the valid timestamp window,
+// indicating no timestamp was encoded (or it is not recoverable).
 uint64_t crypto_entropy_t::timestamp() const
 {
     try
@@ -176,6 +188,7 @@ std::string crypto_entropy_t::to_string() const
 }
 
 
+// 128-bit entropy is stored in the lower 16 bytes with the upper 16 bytes zeroed
 bool crypto_entropy_t::is_128_bit() const
 {
     return std::all_of(std::end(bytes) - 16, std::end(bytes), [](unsigned char byte) { return byte == 0; });

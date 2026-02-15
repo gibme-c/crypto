@@ -24,6 +24,14 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file string_helper.h
+ * @brief Padded string formatting utilities for debug output and display.
+ *
+ * Convenience macros and functions for creating fixed-width, padded string
+ * representations of values. Primarily used by the debug and benchmark output
+ * to produce neatly aligned columns.
+ */
 
 #ifndef CRYPTO_STRING_HELPER_H
 #define CRYPTO_STRING_HELPER_H

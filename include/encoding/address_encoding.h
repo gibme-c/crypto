@@ -24,6 +24,17 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file address_encoding.h
+ * @brief Checksummed address encoding for single-key and dual-key (spend+view) formats.
+ *
+ * Addresses combine a network prefix, one or two public keys, and a checksum into a
+ * single human-readable string. The dual-key format encodes both a spend key and a
+ * view key, which is common in privacy-preserving systems where the view key allows
+ * read-only access to incoming transactions. Both standard Base58 and block-based
+ * Base58 encodings are supported.
+ */
+
 #ifndef CRYPTO_ADDRESS_ENCODING_H
 #define CRYPTO_ADDRESS_ENCODING_H
 
@@ -31,35 +42,36 @@
 
 namespace Crypto::Address
 {
-    /**
-     * Base58 Address Encoding
-     */
+    /** @brief Standard Base58 address encoding with checksum. */
     namespace Base58
     {
         /**
-         * Decodes the given Base58 string into the prefix and key parts
+         * Decodes a Base58 address into its prefix and public key components.
          *
-         * @param address
-         * @return
+         * For single-key addresses, only the first key is meaningful; the second
+         * will be empty. For dual-key addresses, both keys are populated.
+         *
+         * @param address the Base58-encoded address string
+         * @return a tuple of {success, prefix, public_key_1, public_key_2}
          */
         std::tuple<bool, uint64_t, crypto_public_key_t, crypto_public_key_t> decode(const std::string &address);
 
         /**
-         * Encodes the single public key with the given prefix into Base58
+         * Encodes a single public key with a network prefix into a Base58 address.
          *
-         * @param prefix
-         * @param public_key
-         * @return
+         * @param prefix the network prefix (identifies the address type/network)
+         * @param public_key the public key to encode
+         * @return the checksummed Base58 address string
          */
         std::string encode(const uint64_t &prefix, const crypto_public_key_t &public_key);
 
         /**
-         * Encodes the two public keys with the given prefix into Base58
+         * Encodes a spend key and view key with a network prefix into a dual-key Base58 address.
          *
-         * @param prefix
-         * @param public_spend
-         * @param public_view
-         * @return
+         * @param prefix the network prefix (identifies the address type/network)
+         * @param public_spend the public spend key
+         * @param public_view the public view key (allows read-only transaction scanning)
+         * @return the checksummed Base58 address string
          */
         std::string encode(
             const uint64_t &prefix,
@@ -67,34 +79,33 @@ namespace Crypto::Address
             const crypto_public_key_t &public_view);
     } // namespace Base58
 
-    /**
-     * CryptoNote Base58 Address Encoding
-     */
+    /** @brief Block-based Base58 address encoding with checksum. */
     namespace CNBase58
     {
         /**
-         * Decodes the given CryptoNote Base58 string into the prefix and key parts
+         * Decodes a block-based Base58 address into its prefix and public key components.
          *
-         * @param address
-         * @return
+         * @param address the block-based Base58-encoded address string
+         * @return a tuple of {success, prefix, public_key_1, public_key_2}
          */
         std::tuple<bool, uint64_t, crypto_public_key_t, crypto_public_key_t> decode(const std::string &address);
 
         /**
-         * Encodes the single public key with the given prefix into CryptoNote Base58
-         * @param prefix
-         * @param public_key
-         * @return
+         * Encodes a single public key with a network prefix into a block-based Base58 address.
+         *
+         * @param prefix the network prefix
+         * @param public_key the public key to encode
+         * @return the checksummed block-based Base58 address string
          */
         std::string encode(const uint64_t &prefix, const crypto_public_key_t &public_key);
 
         /**
-         * Encodes the two public keys with the given prefix into CryptoNote Base58
+         * Encodes a spend key and view key with a network prefix into a dual-key block-based Base58 address.
          *
-         * @param prefix
-         * @param public_spend
-         * @param public_view
-         * @return
+         * @param prefix the network prefix
+         * @param public_spend the public spend key
+         * @param public_view the public view key
+         * @return the checksummed block-based Base58 address string
          */
         std::string encode(
             const uint64_t &prefix,

@@ -24,6 +24,18 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file scalar_transcript_t.h
+ * @brief Fiat-Shamir transcript for building non-interactive zero-knowledge proofs.
+ *
+ * In an interactive proof, the verifier sends random challenges to the prover. The
+ * Fiat-Shamir heuristic replaces those random challenges with the hash of everything
+ * committed so far (the "transcript"). This struct accumulates serializable values
+ * into a running SHA3 hash and produces deterministic challenge scalars. Every proof
+ * system in this library (Bulletproofs, CLSAG, Triptych, etc.) uses this to derive
+ * challenge scalars in a way that both prover and verifier can independently reproduce.
+ */
+
 #ifndef CRYPTO_SCALAR_TRANSCRIPT_T
 #define CRYPTO_SCALAR_TRANSCRIPT_T
 
@@ -31,8 +43,11 @@
 #include <serialization.h>
 
 /**
- * Structure provides a transcript for hashing arbitrary values in a determinisic way
- * that can be used for constructing challenge scalars during commitments
+ * @brief A Fiat-Shamir transcript that accumulates values and produces challenge scalars.
+ *
+ * Feed in public commitments, points, and scalars via update(), then call challenge()
+ * to get a deterministic challenge scalar derived from the entire transcript so far.
+ * The transcript state is a running SHA3 hash reduced to a scalar.
  */
 struct scalar_transcript_t
 {
@@ -67,9 +82,9 @@ struct scalar_transcript_t
     }
 
     /**
-     * Returns the challenge scalar given the current state of the transcript
+     * Returns the current challenge scalar derived from the transcript state.
      *
-     * @return
+     * @return the challenge scalar (SHA3 hash of all accumulated values, reduced mod l)
      */
     crypto_scalar_t challenge()
     {
@@ -77,10 +92,10 @@ struct scalar_transcript_t
     }
 
     /**
-     * Returns the challenge scalar given the current state of the transcript as the given type
+     * Returns the current challenge scalar, cast to the requested type.
      *
-     * @tparam T
-     * @return
+     * @tparam T the target type (must be constructible from serialized scalar bytes)
+     * @return the challenge value as type T
      */
     template<typename T> T challenge()
     {

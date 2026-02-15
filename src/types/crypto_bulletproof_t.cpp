@@ -27,6 +27,11 @@
 // Inspired by the work of Sarang Noether at
 // https://github.com/SarangNoether/skunkworks/tree/pybullet
 
+/**
+ * @file crypto_bulletproof_t.cpp
+ * @brief Bulletproof range proof serialization, deserialization, and construction validation.
+ */
+
 #include <types/crypto_bulletproof_t.h>
 
 crypto_bulletproof_t::crypto_bulletproof_t(

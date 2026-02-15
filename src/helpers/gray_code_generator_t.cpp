@@ -23,7 +23,12 @@
 // INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
+
+/**
+ * @file gray_code_generator_t.cpp
+ * @brief N-ary Gray code generator for Triptych signature optimizations.
+ */
+
 // Adapted from Python code by Sarang Noether found at
 // https://github.com/SarangNoether/skunkworks/tree/triptych
 
@@ -47,17 +52,22 @@ std::vector<int> gray_code_generator_t::operator[](int i) const
     return changed[i];
 }
 
+// Generates all N^K - 1 transitions of the N-ary Gray code.
+// Each transition records {position, old_digit, new_digit} so that
+// Triptych can incrementally update commitment sums per-position.
 void gray_code_generator_t::generate()
 {
     const auto upper = size_t(crypto_scalar_t(N).pow(K).to_uint64_t()) - 1;
 
     for (size_t idx = 0; idx < upper; ++idx)
     {
+        // Snapshot the digit vector at the signer's index
         if (idx == v)
         {
             v_changed = std::vector<int>(g.begin(), g.end() - 1);
         }
 
+        // Find the lowest position whose digit can be incremented/decremented
         int i = 0, k = g[0] + u[0];
 
         while (k >= N || k < 0)

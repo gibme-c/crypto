@@ -24,6 +24,15 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file dedupe_and_sort_keys.h
+ * @brief Deduplicates and deterministically sorts public keys for ring signature preparation.
+ *
+ * Ring signatures require a canonical ordering of the public keys in the ring. This
+ * template function removes any duplicate keys and sorts the remainder by their raw
+ * byte representation, giving you a clean, deterministic ring.
+ */
+
 #ifndef CRYPTO_DEDUPE_AND_SORT_KEYS_H
 #define CRYPTO_DEDUPE_AND_SORT_KEYS_H
 
@@ -32,10 +41,13 @@
 #include <vector>
 
 /**
- * Removes duplicates from a vector of keys and sorts them by value
- * @tparam T
- * @param keys the keys to dedupe and sort
- * @return the resultant vector of keys
+ * Removes duplicate keys and sorts the remainder by raw byte value.
+ *
+ * Uses memcmp-based ordering for deterministic, platform-independent results.
+ *
+ * @tparam T any type with data() and size() methods (e.g., crypto_public_key_t)
+ * @param keys the input keys (may contain duplicates)
+ * @return a sorted, deduplicated vector of keys
  */
 template<typename T> std::vector<T> dedupe_and_sort_keys(const std::vector<T> &keys)
 {

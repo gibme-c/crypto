@@ -24,6 +24,17 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file crypto.h
+ * @brief Standalone C++17 cryptographic primitive library built around Ed25519 elliptic curve operations.
+ *
+ * Include this single header to access the full API: hashing (SHA3, Argon2), key
+ * derivation (BIP-39/BIP-32/SLIP-10), signatures (Ed25519, Borromean, CLSAG, Triptych),
+ * range proofs (Bulletproofs/+/++), Pedersen commitments, encoding (Base58, addresses,
+ * mnemonics), and hierarchical deterministic keys. Link against the `crypto-static`
+ * CMake target to pull in all dependencies.
+ */
+
 #ifndef CRYPTO_H
 #define CRYPTO_H
 

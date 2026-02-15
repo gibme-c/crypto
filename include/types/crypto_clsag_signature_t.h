@@ -27,6 +27,11 @@
 // Inspired by the work of Sarang Noether found at
 // https://github.com/SarangNoether/skunkworks/tree/clsag
 
+/**
+ * @file crypto_clsag_signature_t.h
+ * @brief CLSAG (Compact Linkable Spontaneous Anonymous Group) ring signature data structure.
+ */
+
 #ifndef CRYPTO_CLSAG_T
 #define CRYPTO_CLSAG_T
 
@@ -34,6 +39,22 @@
 #include <types/crypto_point_t.h>
 #include <types/crypto_scalar_t.h>
 
+/**
+ * @brief A CLSAG (Compact Linkable Spontaneous Anonymous Group) ring signature.
+ *
+ * CLSAG is a ring signature scheme that proves you own one of N public keys in a set (the "ring")
+ * without revealing which key is yours. It is "linkable" because it produces a key image -- a
+ * deterministic tag derived from your secret key -- that lets anyone detect if the same key signs
+ * twice, preventing double-spending in privacy-preserving transactions.
+ *
+ * The key advantage of CLSAG over earlier ring signature schemes (like MLSAG) is compactness:
+ * the signature size is O(n) in the number of ring members, but with significantly smaller
+ * constants -- roughly half the size of MLSAG for the same ring size.
+ *
+ * When used with Pedersen commitments (for confidential amounts), the signature also includes a
+ * commitment_image and pseudo_commitment that prove the signer's commitment belongs to the ring
+ * of commitments without revealing which one, while preserving balance.
+ */
 struct crypto_clsag_signature_t final : Serializable
 {
     crypto_clsag_signature_t() = default;
@@ -55,9 +76,15 @@ struct crypto_clsag_signature_t final : Serializable
     explicit crypto_clsag_signature_t(Serialization::deserializer_t &reader);
 
     /**
-     * Checks that the basic construction of the proof is valid
-     * @param ring_size
-     * @return
+     * Checks that the basic construction of the signature is valid.
+     *
+     * Validates structural properties: correct number of response scalars for the ring size,
+     * non-zero challenge, and (if commitments are used) valid commitment_image and pseudo_commitment.
+     * This is a structural check only -- it does not verify cryptographic correctness.
+     *
+     * @param ring_size the number of public keys in the ring
+     * @param use_commitments whether this signature includes Pedersen commitment components
+     * @return true if the signature has a structurally valid construction
      */
     [[nodiscard]] bool check_construction(size_t ring_size, bool use_commitments = false) const;
 
@@ -88,42 +115,57 @@ struct crypto_clsag_signature_t final : Serializable
 
     /**
      * Provides the hash of the serialized structure
-     * @return
+     * @return the SHA3-256 hash of the serialized byte representation
      */
     [[nodiscard]] crypto_hash_t hash() const;
 
     /**
      * Serializes the struct to a byte array
-     * @param writer
+     * @param writer the serializer to write into
      */
     void serialize(Serialization::serializer_t &writer) const override;
 
     /**
      * Serializes the struct to a byte array
-     * @return
+     * @return the serialized byte vector
      */
     [[nodiscard]] std::vector<unsigned char> serialize() const override;
 
     /**
      * Returns the serialized byte size
-     * @return
+     * @return size in bytes
      */
     [[nodiscard]] size_t size() const override;
+
     /**
      * Writes the structure as JSON to the provided writer
-     * @param writer
+     * @param writer the JSON writer to output into
      */
     void toJSON(rapidjson::Writer<rapidjson::StringBuffer> &writer) const override;
 
     /**
      * Returns the hex encoded serialized byte array
-     * @return
+     * @return hex string of the serialized signature
      */
     [[nodiscard]] std::string to_string() const override;
 
+    /** @brief Response scalars, one per ring member. Each scalar encodes the challenge-response
+     *  for that member's position in the ring. */
     std::vector<crypto_scalar_t> scalars;
+
+    /** @brief Key image for the commitment component (only meaningful when using commitments).
+     *  Derived deterministically from the signer's commitment blinding factor, enabling linkability
+     *  on the commitment side. Set to the identity point when commitments are not used. */
     crypto_key_image_t commitment_image;
+
+    /** @brief The initial challenge scalar (c1) that seeds the ring verification loop.
+     *  The verifier recomputes the challenge chain from c1 and checks that it closes. */
     crypto_scalar_t challenge;
+
+    /** @brief Pseudo output commitment (only meaningful when using commitments).
+     *  A re-blinded Pedersen commitment to the same amount as the real commitment, used to
+     *  prove balance across inputs and outputs without revealing values. Set to the identity
+     *  point when commitments are not used. */
     crypto_pedersen_commitment_t pseudo_commitment;
 };
 

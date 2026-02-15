@@ -24,6 +24,11 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file crypto_common.cpp
+ * @brief Core Crypto:: namespace: AES encrypt/decrypt, key derivation, key images, stealth addresses, utilities.
+ */
+
 #include <crypto_common.h>
 #include <crypto_constants.h>
 #include <cryptopp/aes.h>
@@ -38,6 +43,7 @@
 
 namespace Crypto
 {
+    // ---- AES-128-CBC with PBKDF2 key derivation and HMAC-SHA3-256 authentication ----
     namespace AES
     {
         std::string decrypt(const std::string &input, const std::string &password, size_t iterations)
@@ -216,6 +222,8 @@ namespace Crypto
         return {false, 0};
     }
 
+    // Verify the point has no small-subgroup (torsion) component:
+    // multiplying by 8 then by 1/8 strips torsion; if the result differs, the point is unsafe.
     bool check_torsion(const crypto_point_t &value)
     {
         if (Crypto::INV_EIGHT * (Crypto::EIGHT * value) != value || value.empty())
@@ -241,6 +249,8 @@ namespace Crypto
         return crypto_hash_t::sha3(writer).point();
     }
 
+    // Polynomial convolution of x (arbitrary degree) with y (degree 1).
+    // Used in Triptych for polynomial coefficient accumulation.
     std::vector<crypto_scalar_t> convolve(const crypto_scalar_vector_t &x, const std::vector<crypto_scalar_t> &y)
     {
         if (y.size() != 2)
@@ -375,6 +385,7 @@ namespace Crypto
         return kronecker_delta(crypto_scalar_t(a), crypto_scalar_t(b));
     }
 
+    // Round up to the next power of 2 (returns value unchanged if already a power of 2).
     size_t pow2_round(size_t value)
     {
         size_t count = 0;

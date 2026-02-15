@@ -23,7 +23,12 @@
 // INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
+
+/**
+ * @file bulletproofsplus.cpp
+ * @brief Bulletproofs+ range proofs with weighted inner product argument (WIP).
+ */
+
 // Inspired by the work of Sarang Noether at
 // https://github.com/SarangNoether/skunkworks/tree/pybullet-plus
 
@@ -863,6 +868,7 @@ namespace Crypto::RangeProofs::BulletproofsPlus
             points.append(Hi[i]);
         }
 
+        // Final MSM: if all proofs are valid, the linear combination equals the identity point
         return scalars.inner_product(points).empty();
     }
 

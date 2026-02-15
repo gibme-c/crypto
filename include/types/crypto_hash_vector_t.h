@@ -24,15 +24,35 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file crypto_hash_vector_t.h
+ * @brief A serializable vector of crypto_hash_t values.
+ *
+ * Wraps a std::vector of 256-bit hashes with automatic binary/JSON serialization
+ * support inherited from SerializableVector. Used for Merkle tree leaves, batch
+ * hash collections, and anywhere you need an ordered, serializable set of hashes.
+ */
+
 #ifndef CRYPTO_HASH_VECTOR_T
 #define CRYPTO_HASH_VECTOR_T
 
 #include <types/crypto_hash_t.h>
 
+/**
+ * A serializable vector of crypto_hash_t values.
+ *
+ * Inherits all vector-like behavior from SerializableVector and adds automatic
+ * binary and JSON serialization. Construct from an existing vector of hashes,
+ * or default-construct and populate later.
+ */
 struct crypto_hash_vector_t final : SerializableVector<crypto_hash_t>
 {
     crypto_hash_vector_t() = default;
 
+    /**
+     * Constructs the vector from an existing collection of hashes.
+     * @param hashes the hash values to store
+     */
     explicit crypto_hash_vector_t(std::vector<crypto_hash_t> hashes);
 };
 

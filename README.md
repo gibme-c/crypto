@@ -1,188 +1,172 @@
-# Standalone Cryptography Library
+# Crypto — Standalone C++17 Cryptographic Primitives
 
-This repository a standalone cryptographic primitive wrapper library that can be included in various other projects in a variety of development environments.
+A self-contained cryptographic primitive library built around **Ed25519** elliptic curve operations. Everything you need for key management, signatures, and zero-knowledge proofs in one place — just `#include <crypto.h>` and link against `crypto-static`.
 
-The source code is designed in such a way (using overloads for the majority of cryptographic functions) to make the code base easy for humans to read.
+The API leans heavily on operator overloading so that common operations read naturally: `scalar_a * point_b`, `point_a + point_b`, `commitment - pseudo_commitment`. The public-facing types and functions are designed to be approachable — though fair warning, the proof and signature internals get into serious math territory with heavily optimized multi-scalar multiplications, inner product arguments, and Fiat-Shamir transcripts.
 
-### Features
+## Features
 
-* Core Structure Types
-  * All structures have overloads for [pretty printing](https://wikipedia.org/wiki/Prettyprint) to screen
-  * Primitive Structures
-    * `crypto_hash_t`: 256-bit [Hash](https://wikipedia.org/wiki/Hash_function)
-    * `crypto_point_t`: [ED25519](https://ed25519.cr.yp.to/ed25519-20110926.pdf) Elliptic Curve Point
-      * Caching of commonly used `ge` types
-      * Simple overloads for point:
-        * Addition
-        * Subtraction
-      * Aliases:
-        * `crypto_public_key_t`
-        * `crypto_derivation_t`
-        * `crypto_key_image_t`
-        * `crypto_pedersen_commitment_t`
-    * `crypto_scalar_t`: [ED25519](https://ed25519.cr.yp.to/ed25519-20110926.pdf) Elliptic Curve Scalar
-      * Conform to [RFC-8032](https://datatracker.ietf.org/doc/html/rfc8032) clamping
-      * Simple overloads for scalar:
-        * Addition
-        * Subtraction
-        * Multiplication (with scalars **or** points)
-        * Division
-      * Aliases:
-        * `crypto_blinding_factor_t`
-  * Hierarchical Deterministic Keys
-    * `crypto_entropy_t`: [BIP-0039](https://en.bitcoin.it/wiki/BIP_0039) [Entropy](https://en.wikipedia.org/wiki/Entropy_(computing))
-      * Supports 12-word (128-bit) or 24-word (256-bit) entropy values
-      * Allows for the encoding and decoding of the entropy to/from [Mnemonic](https://en.wikipedia.org/wiki/Mnemonic) words or phrases
-      * Optionally Encodes the [unix time](https://wikipedia.org/wiki/Unix_time) the entropy was created into the entropy
-    * `crypto_seed_t`: [BIP-0039](https://en.bitcoin.it/wiki/BIP_0039) Seed
-      * Allows for generation of the seed using `crypto_entropy_t` or by loading raw bytes
-        * Allows for specifying a [passphrase](https://en.wikipedia.org/wiki/Passphrase) during initialization
-        * Allows for specifying the [HMAC](https://en.wikipedia.org/wiki/HMAC) salt
-      * Generates the [BIP-0032](https://en.bitcoin.it/wiki/BIP_0032) root (or "master") key & chain code
-      * Allows for generating child keys
-        * **Note** All paths are fully hardened per [SLIP-0010](https://github.com/satoshilabs/slips/blob/master/slip-0010.md)
-    * `crypto_hd_key_t`: [BIP-0044](https://en.bitcoin.it/wiki/BIP_0044) Hierarchical Deterministic Key
-      * Equivalent to a private/public [keypair](https://en.wikipedia.org/wiki/Public-key_cryptography)
-      * Allows for generating child keys
-        * **Note** All paths are fully hardened per [SLIP-0010](https://github.com/satoshilabs/slips/blob/master/slip-0010.md)
-    * * `crypto_secret_key_t`: [ED25519](https://datatracker.ietf.org/doc/html/rfc8032) Secret Keys
-      * Allows for loading a RFC-8032 *private* key and then the scalar value and point are derived using SHA512
-      * Overloads to RFC-8032 compliant `crypto_scalar_t` when required
-  * Vector Types
-    * `crypto_hash_vector_t`
-    * `crypto_point_vector_t`
-      * Simple overloads for:
-        * Addition
-        * Subtraction
-        * Multiplication with scalars
-    * `crypto_scalar_vector_t`
-      * Simple overloads for:
-        * Addition
-        * Subtraction
-        * Multiplication
-  * Cryptographic Signature Types
-    * `crypto_signature_t`: 512-bit [ED25519](https://ed25519.cr.yp.to/ed25519-20110926.pdf) signature
-    * `crypto_borromean_signature_t`: [Borromean](https://github.com/Blockstream/borromean_paper/raw/master/borromean_draft_0.01_34241bb.pdf) Ring Signature
-    * `crypto_clsag_signature_t`: [CLSAG](https://eprint.iacr.org/2019/654.pdf) Ring Signature
-    * `crypto_triptych_signature_t`: [Triptych](https://eprint.iacr.org/2020/018.pdf) Signature
-  * Proof Types
-    * `crypto_bulletproof_t`: [Bulletproofs](https://eprint.iacr.org/2017/1066.pdf)
-    * `crypto_bulletproof_plus_t`: [Bulletproofs+](https://eprint.iacr.org/2020/735.pdf)
-    * `crypto_bulletproof_pp_t`: [Bulletproofs++](https://eprint.iacr.org/2022/510.pdf)
-* Core Functionality
-  * [Stealth Addresses](https://bytecoin.org/old/whitepaper.pdf)
-  * Auditing Methods
-    * Prove & Verify output ownership with linking tags (key images)
-  * [SHA3](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.202.pdf) (256-bit)
-    * Simple hashing via `crypto_hash_t::sha3()`
-    * Simple [key stretching](https://wikipedia.org/wiki/Key_stretching) via `crypto_hash_t::sha3_slow()`
-  * [AES](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard)
-    * Simple AES wrapper encrypting/decrypting data to/from hexadecimal encoded strings
-  * [Argon2](https://github.com/P-H-C/phc-winner-argon2/blob/master/argon2-specs.pdf) Hashing
-    * Argon2d via `crypto_hash_t::argon2d()`
-    * Argon2i via `crypto_hash_t::argon2i()`
-    * Argon2id via `crypto_hash_t::argon2id()`
-  * Address Encoding with [Checksums](https://wikipedia.org/wiki/Checksum)
-    * Dual-key (spend & view)
-    * Single-key
-    * Base58 or CryptoNote Base58 encoding
-  * [Base58 Encoding](https://tools.ietf.org/html/draft-msporny-base58-02)
-    * With or Without Checksum Calculations/Checks
-    * **Note:** This implementation is **not** block-based and will not work with block-based Base58 encoding (ie. CryptoNote)
-  * [CryptoNote Base58 Encoding](https://tools.ietf.org/html/draft-msporny-base58-02)
-    * With or Without Checksum Calculations/Checks
-    * **Note:** This implementation is block-based and will not work with non-block-based Base58 encoding
-  * [Mnemonic](https://en.wikipedia.org/wiki/Mnemonic) Encoding
-    * Utilizes SHA3 instead of CRC32 for checksum generation
-    * Languages
-      * [Chinese Simplified](https://github.com/bitcoin/bips/blob/master/bip-0039/chinese_simplified.txt) 
-      * [Chinese Traditional](https://github.com/bitcoin/bips/blob/master/bip-0039/chinese_traditional.txt)
-      * [Czech](https://github.com/bitcoin/bips/blob/master/bip-0039/czech.txt)
-      * [English language](https://github.com/bitcoin/bips/blob/master/bip-0039/english.txt)
-      * [French](https://github.com/bitcoin/bips/blob/master/bip-0039/french.txt)
-      * [Italian](https://github.com/bitcoin/bips/blob/master/bip-0039/italian.txt)
-      * [Japanese](https://github.com/bitcoin/bips/blob/master/bip-0039/japanese.txt)
-      * [Korean](https://github.com/bitcoin/bips/blob/master/bip-0039/korean.txt)
-      * [Portuguese](https://github.com/bitcoin/bips/blob/master/bip-0039/portuguese.txt)
-      * [Spanish](https://github.com/bitcoin/bips/blob/master/bip-0039/spanish.txt)
-  * [ED25519](https://ed25519.cr.yp.to/ed25519-20110926.pdf) Primitives
-  * Scalar Transcripts
-    * Easily generates deterministic scalar values based upon repetitive `update()` calls
-* Signature Generation / Verification
-  * Message Signing & Validation
-    * [RFC-8032 ED25519](https://tools.ietf.org/html/rfc8032)
-    * Non-RFC 8032 (e.g. CryptoNote)
-  * [Borromean](https://github.com/Blockstream/borromean_paper/raw/master/borromean_draft_0.01_34241bb.pdf) Ring Signatures
-  * [CLSAG](https://eprint.iacr.org/2019/654.pdf) Ring Signatures
-    * **Optional** use of pedersen commitment to zero proving
-  * [Triptych](https://eprint.iacr.org/2020/018.pdf) Signatures
-    * **Requires** use of pedersen commitment to zero proving
-* [Zero-knowledge proofs](https://wikipedia.org/Zero-knowledge-proof)
-  * [RingCT](https://eprint.iacr.org/2015/1098.pdf)
-    * [Pedersen Commitments](https://www.cs.cornell.edu/courses/cs754/2001fa/129.PDF)
-    * Pseudo Commitments
-    * Blinding Factors
-    * Amount Masking
-  * [Bulletproofs](https://eprint.iacr.org/2017/1066.pdf) Range Proofs
-    * Variable bit length proofs (1 to 64 bits)
-    * No limits to number of values proved or verified in a single call
-    * Batch Verification
-    * Implements caching of common points for faster repeat calls to `prove()` and `verify()`
-  * [Bulletproofs+](https://eprint.iacr.org/2020/735.pdf) Range Proofs
-    * Variable bit length proofs (1 to 64 bits)
-    * No limits to number of values proved or verified in a single call
-    * Batch Verification
-    * Implements caching of common points for faster repeat calls to `prove()` and `verify()`
-  * [Bulletproofs++](https://eprint.iacr.org/2022/510.pdf) Range Proofs
-    * Reciprocal-argument based range proofs with smaller proof size (~516 bytes vs ~578 for BP+)
-    * Base-16 digit decomposition (N=64, 16 digits)
-    * Single-value proofs
-    * Batch Verification
-    * Weighted Norm Linear Argument (WNLA) inner proof
-* [Serialization](https://github.com/gibme-c/serialization-cpp)
-  * Byte/Binary Serialization & De-Serialization
-  * Structure to/from [JSON](https://wikipedia.org/wiki/JSON) provided via [RapidJSON](https://rapidjson.org)
-  * Structure to/from [Hexadecimal](https://wikipedia.org/wiki/Hexadecimal) encoded string representations
+### Hashing
 
-## C++ Library
+Multiple hash algorithms, all producing a 256-bit `crypto_hash_t`:
 
-A CMakeLists.txt file enables easy builds on most systems. 
+- **[SHA-3](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.202.pdf)** (Keccak-256) — the workhorse hash used throughout the library
+- **SHA-256 / SHA-384 / SHA-512** — standard SHA-2 family
+- **[Blake2b](https://www.blake2.net/)** — high-performance alternative
+- **[Argon2](https://github.com/P-H-C/phc-winner-argon2/blob/master/argon2-specs.pdf)** — memory-hard password hashing in three flavors:
+  - **Argon2d** — GPU/ASIC-resistant (data-dependent access)
+  - **Argon2i** — side-channel resistant (data-independent access)
+  - **Argon2id** — recommended hybrid of both
+- **SHA-3 key stretching** (`sha3_slow`) — iterated hashing with salt mixing for deterministic domain separation
 
-The CMake build system builds an optimized static library for you. 
+### Core Types
 
-However, it is best to simply include this project in your project as a dependency with your CMake project.
+| Type | Description |
+|------|-------------|
+| `crypto_hash_t` | 256-bit hash value with static methods for all supported algorithms. Converts to `scalar()` or `point()` for use in protocols. |
+| `crypto_point_t` | Ed25519 curve point with cached `ge_p3`/`ge_cached` representations for fast repeated arithmetic. Overloads `+`, `-`. |
+| `crypto_scalar_t` | Ed25519 scalar (integer mod the group order *l*) with [RFC-8032](https://datatracker.ietf.org/doc/html/rfc8032) clamping. Overloads `+`, `-`, `*`, `/`, including scalar-point multiplication. |
+| `crypto_secret_key_t` | RFC-8032 private key — a 32-byte seed that derives a signing scalar (via SHA-512 + clamping) and public key. |
+| `crypto_signature_t` | Standard 512-bit Ed25519 signature (commitment point *L* and response scalar *R*). |
 
-Please reference your system documentation on how to compile with CMake.
+**Type aliases** give semantic meaning to points used in different contexts:
+- `crypto_public_key_t` — a point representing a public key (*P = sG*)
+- `crypto_key_image_t` — a deterministic tag for double-spend detection
+- `crypto_pedersen_commitment_t` — a point hiding a value (*C = vH + bG*)
+- `crypto_blinding_factor_t` — a scalar used as a commitment blinding factor
+- `crypto_derivation_t` — a shared secret point from ECDH key exchange
 
-To use this library in your project(s) simply link against the build target (`crypto-static`) and include the following in your relevant source or header file(s).
+**Vector types** (`crypto_hash_vector_t`, `crypto_point_vector_t`, `crypto_scalar_vector_t`) provide batch arithmetic — Hadamard products, inner products, batch modular inversion — used extensively in zero-knowledge proof internals.
 
-```c++
-#include <crypto.h>
-```
+### Hierarchical Deterministic Keys
 
-### Documentation
+Full [BIP-39](https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki) / [BIP-32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki) / [BIP-44](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki) support with all paths fully hardened per [SLIP-10](https://github.com/satoshilabs/slips/blob/master/slip-0010.md) (required for Ed25519 compatibility).
 
-C++ API documentation can be found in the headers (.h)
+| Type | Role |
+|------|------|
+| `crypto_entropy_t` | 128-bit (12 words) or 256-bit (24 words) entropy with optional timestamp embedding |
+| `crypto_seed_t` | PBKDF2-SHA512 seed derived from entropy + optional passphrase |
+| `crypto_hd_key_t` | Derived key pair at any point in a BIP-44 derivation path |
 
-## Cloning this Repository
+The derivation chain: **entropy** → mnemonic words → **seed** → root key → **child keys** at any path.
 
-This repository uses submodules, make sure you pull those before doing anything if you are cloning this project.
+Mnemonic encoding supports 10 languages: Chinese (Simplified & Traditional), Czech, English, French, Italian, Japanese, Korean, Portuguese, and Spanish.
+
+### Signatures
+
+| Scheme | Size | Ring | Description |
+|--------|------|------|-------------|
+| [Ed25519](https://ed25519.cr.yp.to/ed25519-20110926.pdf) | 64 B | — | Standard Schnorr signature (generate + check) |
+| [RFC-8032 Ed25519](https://datatracker.ietf.org/doc/html/rfc8032) | 64 B | — | Strict RFC-8032 — raw seed input, deterministic nonce, arbitrary-length messages |
+| [Borromean](https://github.com/Blockstream/borromean_paper/raw/master/borromean_draft_0.01_34241bb.pdf) | O(*n*) | Yes | Linkable ring signature — prove you own one of *n* keys without revealing which |
+| [CLSAG](https://eprint.iacr.org/2019/654.pdf) | O(*n*) | Yes | Compact linkable ring signature with optional Pedersen commitment binding |
+| [Triptych](https://eprint.iacr.org/2020/018.pdf) | O(log *n*) | Yes | Logarithmic-size ring signature for much larger anonymity sets |
+
+All three ring signature schemes produce a **key image** — a deterministic, unlinkable tag that detects if the same key signs twice. CLSAG and Triptych optionally support **commitment binding**, tying the signature to confidential transaction amounts.
+
+### Zero-Knowledge Proofs
+
+**Pedersen Commitments & RingCT** — hide transaction amounts while preserving verifiable balance:
+- Pedersen commitments: *C = vH + bG* (additive homomorphism lets you verify sums without seeing values)
+- Amount masking and unmasking via XOR with derived keys
+- Pseudo commitment generation for balance proofs
+
+**Range Proofs** — prove a committed value lies in [0, 2^N) without revealing it:
+
+| Scheme | Proof Size (64-bit) | Verify Time | Multi-value | Batch Verify |
+|--------|---------------------|-------------|-------------|--------------|
+| [Bulletproofs](https://eprint.iacr.org/2017/1066.pdf) | ~674 B | ~1.2 ms | Yes | Yes |
+| [Bulletproofs+](https://eprint.iacr.org/2020/735.pdf) | ~578 B | ~1.0 ms | Yes | Yes |
+| [Bulletproofs++](https://eprint.iacr.org/2022/510.pdf) | ~516 B | ~466 us | Single | Yes |
+
+All three support variable bit lengths (1–64 bits) and cache generator points for fast repeat calls. Bulletproofs and Bulletproofs+ support proving multiple values in a single proof.
+
+**Other Proofs:**
+- **Merkle trees** — compact membership proofs via binary hash trees
+- **Ownership proofs** — prove you control a key or that a specific output belongs to you, without revealing the secret
+
+### Encoding
+
+- **[Base58](https://tools.ietf.org/html/draft-msporny-base58-02)** — human-readable encoding without confusing characters (0, O, I, l)
+- **Block-based Base58** — processes input in 8-byte blocks for deterministic output length
+- **Address encoding** — checksummed addresses in single-key or dual-key (spend + view) formats, using either Base58 variant
+- **[BIP-39 Mnemonics](https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki)** — entropy ↔ word sequence conversion (SHA-3 checksum) in 10 languages
+
+### Core Utilities
+
+- **Stealth addresses** — one-time addresses via ECDH key derivation, so a sender can pay a recipient without reusing or revealing their public key
+- **Key images** — deterministic, unlinkable tags derived from a secret key for double-spend detection
+- **Key derivation** — sub-key generation from a shared derivation and output index
+- **AES-256 encryption** — symmetric encrypt/decrypt with PBKDF2 key derivation
+
+### Helpers
+
+- **Fiat-Shamir transcripts** — accumulate values and produce challenge scalars for non-interactive zero-knowledge proofs
+- **CSPRNG** — cryptographically secure random byte generation from OS entropy
+- **Constant-time comparison** — timing side-channel resistant equality checks
+
+### Serialization
+
+All types inherit from `SerializablePod<N>` (via [serialization-cpp](https://github.com/gibme-c/serialization-cpp)), providing:
+- Binary serialization and deserialization
+- JSON conversion (via [RapidJSON](https://rapidjson.org))
+- Hexadecimal string representations
+- Pretty printing to screen
+
+## Getting Started
+
+### Requirements
+
+- C++17 compiler (GCC, Clang, or MSVC)
+- CMake 3.10+
+
+### Building
 
 ```bash
 git clone --recursive https://github.com/gibme-c/crypto
 cd crypto
+mkdir -p build && cd build
+cmake .. -DBUILD_TESTS=1
+cmake --build . -j$(nproc)
+./crypto-test
 ```
 
-### As a dependency
+### Using as a Dependency
+
 ```bash
 git submodule add https://github.com/gibme-c/crypto external/crypto
 git submodule update --init --recursive
 ```
 
+In your `CMakeLists.txt`, add the subdirectory and link against the target:
+
+```cmake
+add_subdirectory(external/crypto)
+target_link_libraries(your_target PRIVATE crypto-static)
+```
+
+Then include the single umbrella header:
+
+```cpp
+#include <crypto.h>
+```
+
+### CMake Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `BUILD_TESTS` | OFF | Build test and benchmark binaries |
+| `BUILD_SHARED` | OFF | Build shared library in addition to static |
+| `ENGLISH_ONLY` | OFF | Include only English mnemonic word lists (smaller binary) |
+| `DEBUG_PRINT` | OFF | Enable debug print statements |
+| `ARCH` | native | Target CPU architecture (`-march` value) |
+
+### Documentation
+
+Full API documentation lives in the header files under `include/`. Every public type, method, and constant has doxygen comments explaining its purpose, parameters, and typical usage.
+
 ## License
 
-External references are provided via libraries in the Public Domain (Unlicense), MIT, and/or BSD from their respective parties. Please see CREDITS or the packages in `external/` for more information.
+This library is provided under the **BSD-3-Clause** license. See [LICENSE](LICENSE) for details.
 
-This wrapper library is provided under the BSD-3-Clause license found in the LICENSE file.
-
-Please make sure when using this library that you follow the licensing requirements set forth in all licenses.
+External dependencies (in `external/`) are provided under Public Domain (Unlicense), MIT, and/or BSD licenses from their respective authors. See [CREDITS](CREDITS) or the individual packages for specifics.

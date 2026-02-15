@@ -24,6 +24,11 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file crypto_signature_t.cpp
+ * @brief Ed25519 signature serialization as a (L, R) scalar pair.
+ */
+
 #include <types/crypto_signature_t.h>
 #include <utility>
 

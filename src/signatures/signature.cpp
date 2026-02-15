@@ -24,6 +24,11 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file signature.cpp
+ * @brief Ed25519 Schnorr signature: generate and verify.
+ */
+
 #include <crypto_constants.h>
 #include <helpers/scalar_transcript_t.h>
 #include <signatures/signature.h>
@@ -40,9 +45,10 @@ namespace Crypto::Signature
             return false;
         }
 
-        // P = [(l * P) + (r * G)] mod l
+        // Reconstruct the commitment point: R' = c*P + r*G
         const auto point = (signature.LR.L * public_key) + (signature.LR.R * G);
 
+        // Recompute the challenge from the same transcript used during signing
         scalar_transcript_t transcript(SIGNATURE_DOMAIN_0, message_digest, public_key, point);
 
         const auto challenge = transcript.challenge();
@@ -52,53 +58,32 @@ namespace Crypto::Signature
             return false;
         }
 
-        // [(c - sL) mod l] == 0
+        // Valid iff recomputed challenge matches the one in the signature
         return !(challenge - signature.LR.L).is_nonzero();
-    }
-
-    crypto_signature_t complete_signature(const crypto_scalar_t &signing_scalar, const crypto_signature_t &signature)
-    {
-        SCALAR_OR_THROW(signing_scalar);
-
-        SCALAR_NZ_OR_THROW(signature.LR.L);
-
-        SCALAR_NZ_OR_THROW(signature.LR.R);
-
-        auto finalized_signature = crypto_signature_t(signature.serialize());
-
-        finalized_signature.LR.R -= (signature.LR.L * signing_scalar);
-
-        return finalized_signature;
     }
 
     crypto_signature_t generate_signature(const crypto_hash_t &message_digest, const crypto_scalar_t &secret_key)
     {
         SCALAR_NZ_OR_THROW(secret_key);
 
-        // A = (a * G) mod l
+        // Derive the public key from the secret scalar
         const auto public_key = secret_key * G;
 
-        const auto signature = prepare_signature(message_digest, public_key);
-
-        return complete_signature(secret_key, signature);
-    }
-
-    crypto_signature_t prepare_signature(const crypto_hash_t &message_digest, const crypto_public_key_t &public_key)
-    {
     try_again:
-        // help to provide stronger RNG for the alpha scalar
+        // Derive a nonce by hashing message, public key, and fresh randomness
         scalar_transcript_t alpha_transcript(message_digest, public_key, crypto_scalar_t::random());
 
-        const auto alpha_scalar = alpha_transcript.challenge();
+        const auto alpha = alpha_transcript.challenge();
 
-        if (!alpha_scalar.valid())
+        if (!alpha.valid())
         {
             goto try_again;
         }
 
-        // P = (a * G) mod l
-        const auto point = alpha_scalar * G;
+        // Commitment point: R = alpha * G
+        const auto point = alpha * G;
 
+        // Challenge: c = H(domain || message || public_key || R)
         scalar_transcript_t transcript(SIGNATURE_DOMAIN_0, message_digest, public_key, point);
 
         crypto_signature_t signature;
@@ -110,7 +95,8 @@ namespace Crypto::Signature
             goto try_again;
         }
 
-        signature.LR.R = alpha_scalar;
+        // Response: r = alpha - c * secret_key (completing the Schnorr proof)
+        signature.LR.R = alpha - (signature.LR.L * secret_key);
 
         return signature;
     }

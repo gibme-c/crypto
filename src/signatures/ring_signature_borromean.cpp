@@ -24,6 +24,11 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file ring_signature_borromean.cpp
+ * @brief Borromean ring signatures with key image linkability for signer anonymity within a ring.
+ */
+
 #include <crypto_constants.h>
 #include <helpers/dedupe_and_sort_keys.h>
 #include <helpers/scalar_transcript_t.h>
@@ -31,13 +36,15 @@
 
 namespace Crypto::RingSignature::Borromean
 {
+    // ---- Verify: reconstruct per-member (L, R) pairs and check challenge sum ----
+
     bool check_ring_signature(
         const crypto_hash_t &message_digest,
         const crypto_key_image_t &key_image,
         const std::vector<crypto_public_key_t> &public_keys,
         const crypto_borromean_signature_t &borromean_signature)
     {
-        // check to verify that there are no duplicate keys in the set
+        // Reject rings with duplicate public keys (prevents trivial forgery)
         {
             const auto keys = dedupe_and_sort_keys(public_keys);
 
@@ -61,22 +68,22 @@ namespace Crypto::RingSignature::Borromean
             return false;
         }
 
+        // Accumulate per-member challenge scalars and reconstruct (L, R) commitment pairs
         crypto_scalar_t sum;
 
         scalar_transcript_t transcript(BORROMEAN_DOMAIN_0, message_digest);
 
         for (size_t i = 0; i < ring_size; i++)
         {
-            // HP = [Hp(P)] mod l
+            // HP = Hp(P_i) — hash-to-point for key image linkability
             const auto HP = crypto_hash_t::sha3(public_keys[i]).point();
 
-            // L = [(s[i].L * P) + (s[i].R * G)] mod l
+            // L_i = c_i*P_i + r_i*G
             const auto L = signature[i].LR.L.dbl_mult(public_keys[i], signature[i].LR.R, Crypto::G);
 
-            // R = [(s[i].R * HP) + (s[i].L * I)] mod l
+            // R_i = r_i*Hp(P_i) + c_i*I
             const auto R = signature[i].LR.R.dbl_mult(HP, signature[i].LR.L, key_image);
 
-            // sum += L
             sum += signature[i].LR.L;
 
             transcript.update(L, R);
@@ -89,9 +96,11 @@ namespace Crypto::RingSignature::Borromean
             return false;
         }
 
-        // ([H(prefix || L || R) - sum] mod l) == 0
+        // Valid iff the sum of per-member challenges equals the recomputed aggregate challenge
         return !(challenge - sum).is_nonzero();
     }
+
+    // ---- Sign (auto-detect signer index): find our key in the ring, then delegate ----
 
     std::tuple<bool, crypto_borromean_signature_t> generate_ring_signature(
         const crypto_hash_t &message_digest,
@@ -128,6 +137,8 @@ namespace Crypto::RingSignature::Borromean
 
         return generate_ring_signature(message_digest, secret_ephemeral, public_keys, real_output_index);
     }
+
+    // ---- Sign (explicit signer index): inlined Borromean construction (no prepare/complete split) ----
 
     std::tuple<bool, crypto_borromean_signature_t> generate_ring_signature(
         const crypto_hash_t &message_digest,
@@ -188,17 +199,14 @@ namespace Crypto::RingSignature::Borromean
         const auto key_image = secret_ephemeral * HP_real;
 
     try_again:
-        // help to provide stronger RNG for the alpha scalar
+        // Derive nonce by hashing message, key image, public keys, and fresh randomness
         scalar_transcript_t alpha_transcript(message_digest, key_image, crypto_scalar_t::random());
 
         alpha_transcript.update(public_keys);
 
         const auto alpha_scalar = alpha_transcript.challenge();
 
-        /**
-         * An alpha_scalar of ZERO results in a leakage of the real signing key in the resulting
-         * signature construction mechanisms
-         */
+        // A zero nonce would leak the secret key in the response scalar computation
         if (alpha_scalar == ZERO)
         {
             return {false, {}};
@@ -210,16 +218,16 @@ namespace Crypto::RingSignature::Borromean
 
         scalar_transcript_t transcript(BORROMEAN_DOMAIN_0, message_digest);
 
+        // Build (L, R) pairs: real member uses the nonce; decoys use random scalars
         for (size_t i = 0; i < ring_size; i++)
         {
             crypto_point_t L, R;
 
             if (i == real_output_index)
             {
-                // L = (alpha_scalar * G) mod l
+                // L = alpha * G, R = alpha * Hp(P) — commitment using the nonce
                 L = alpha_scalar * G;
 
-                // R = (alpha_scalar * HP) mod l — reuse precomputed HP_real
                 R = alpha_scalar * HP_real;
             }
             else
@@ -251,10 +259,10 @@ namespace Crypto::RingSignature::Borromean
             goto try_again;
         }
 
-        // sL = ([H(prefix || L's || R's)] - sum) mod l
+        // Close the ring: real member's challenge absorbs the difference so the sum matches
         signature[real_output_index].LR.L = challenge - sum;
 
-        // s[i].R = [alpha_scalar - (p * sL)] mod l
+        // Response scalar: r = alpha - c_real * x (Schnorr-like closing for the real member)
         signature[real_output_index].LR.R = alpha_scalar - (signature[real_output_index].LR.L * secret_ephemeral);
 
         return {true, crypto_borromean_signature_t(signature)};

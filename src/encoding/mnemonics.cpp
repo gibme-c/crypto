@@ -24,6 +24,11 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file mnemonics.cpp
+ * @brief BIP-39 mnemonic encoding/decoding: entropy to 12/24 word phrases with SHA-256 checksum.
+ */
+
 #include <bitset>
 #include <encoding/mnemonics.h>
 #include <helpers/debug_helper.h>
@@ -37,6 +42,8 @@ static std::map<Crypto::Mnemonics::Language::Language, std::vector<std::string>>
 
 static std::mutex cache_mutex;
 
+// Substring by UTF-8 codepoint count (not byte count), needed for
+// languages where the word list prefix may span multi-byte characters.
 static inline std::string utf8_substr(const std::string &str, size_t length)
 {
     if (length == 0)

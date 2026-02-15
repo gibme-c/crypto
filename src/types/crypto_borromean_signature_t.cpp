@@ -24,6 +24,11 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file crypto_borromean_signature_t.cpp
+ * @brief Borromean ring signature serialization, deserialization, and construction validation.
+ */
+
 #include <types/crypto_borromean_signature_t.h>
 
 crypto_borromean_signature_t::crypto_borromean_signature_t(std::vector<crypto_signature_t> signatures):

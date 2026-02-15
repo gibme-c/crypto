@@ -24,6 +24,11 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file crypto_scalar_t.cpp
+ * @brief Ed25519 scalar arithmetic mod l with RFC-8032 clamping.
+ */
+
 #include <crypto_config.h>
 #include <cryptopp/sha3.h>
 #include <helpers/random_bytes.h>
@@ -361,6 +366,7 @@ void crypto_scalar_t::operator*=(const uint256_t &other)
 
 crypto_scalar_t crypto_scalar_t::operator/(const crypto_scalar_t &other) const
 {
+    // Division as multiplication by modular inverse: a/b = a * b^(-1) mod l
     return *this * other.invert();
 }
 
@@ -403,7 +409,7 @@ crypto_point_t crypto_scalar_t::operator*(const crypto_point_t &point) const
 
     ge_p1p1 temp_p1p1 = {};
 
-    if (point == Crypto::G) // If we're multiplying by G, use the base method, it's faster
+    if (point == Crypto::G) // Use precomputed basepoint table for G — significantly faster
     {
         ge_scalarmult_base_ct(&temp_p1p1, bytes);
 
@@ -415,7 +421,7 @@ crypto_point_t crypto_scalar_t::operator*(const crypto_point_t &point) const
     {
         const auto p = point.p3();
 
-        // aB = (a * B) mod l
+        // Constant-time scalar multiplication for arbitrary points
         ge_scalarmult_ct(&temp_p1p1, bytes, &p);
 
         ge_p1p1_to_p3(&temp_p3, &temp_p1p1);
@@ -427,6 +433,7 @@ crypto_point_t crypto_scalar_t::operator*(const crypto_point_t &point) const
 crypto_point_t
     crypto_scalar_t::dbl_mult(const crypto_point_t &A, const crypto_scalar_t &b, const crypto_point_t &B) const
 {
+    // Computes this*A + b*B using Straus' method (variable-time)
     ge_p1p1 temp_p1p1 = {};
 
     ge_p3 temp_p3 = {};
@@ -454,6 +461,7 @@ crypto_point_t
 
     crypto_point_t point(temp_p3);
 
+    // Map the "alternative" identity encoding ZP to the canonical identity Z
     if (point != Crypto::ZP)
     {
         return point;
@@ -469,7 +477,7 @@ bool crypto_scalar_t::check() const
 
 crypto_scalar_t crypto_scalar_t::invert() const
 {
-    // equivalent to x^(l-2)
+    // Fermat's little theorem: x^(-1) = x^(l-2) mod l, where l is the Ed25519 group order
     return pow({0xeb, 0xd3, 0xf5, 0x5c, 0x1a, 0x63, 0x12, 0x58, 0xd6, 0x9c, 0xf7, 0xa2, 0xde, 0xf9, 0xde, 0x14,
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10});
 }
@@ -481,6 +489,7 @@ bool crypto_scalar_t::is_nonzero() const
 
 crypto_scalar_t crypto_scalar_t::negate() const
 {
+    // -x mod l = (0 - x) mod l
     crypto_scalar_t zero({0});
 
     return zero - *this;
@@ -548,9 +557,10 @@ std::vector<crypto_scalar_t> crypto_scalar_t::pow_expand(size_t count, bool desc
 
     std::vector<crypto_scalar_t> result(count);
 
+    // O(n) running product instead of O(n log n) independent pow(i) calls
     if (include_zero)
     {
-        result[0] = crypto_scalar_t(1);
+        result[0] = crypto_scalar_t(1); // x^0 = 1
 
         for (size_t i = 1; i < count; ++i)
         {
@@ -559,7 +569,7 @@ std::vector<crypto_scalar_t> crypto_scalar_t::pow_expand(size_t count, bool desc
     }
     else
     {
-        result[0] = *this;
+        result[0] = *this; // x^1
 
         for (size_t i = 1; i < count; ++i)
         {
@@ -577,6 +587,8 @@ std::vector<crypto_scalar_t> crypto_scalar_t::pow_expand(size_t count, bool desc
 
 crypto_scalar_t crypto_scalar_t::pow_sum(size_t count) const
 {
+    // Computes 1 + x + x^2 + ... + x^(count-1) using repeated doubling:
+    // S(2n) = S(n) * (1 + x^n), requiring only O(log n) multiplications
     const bool is_power_of_2 = (count & (count - 1)) == 0;
 
     if (!is_power_of_2)
@@ -741,6 +753,8 @@ bool crypto_scalar_t::valid(bool allow_zero) const
 
 void crypto_scalar_t::do_reduce()
 {
+    // RFC-8032 clamping (clear low 3 bits, set bit 254, clear bit 255)
+    // followed by reduction mod l to ensure the result is a valid scalar
     sc_clamp(bytes);
 
     sc_reduce(bytes, 32);

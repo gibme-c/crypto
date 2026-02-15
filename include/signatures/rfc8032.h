@@ -24,6 +24,20 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file rfc8032.h
+ * @brief Strict RFC-8032 Ed25519 signature generation and verification.
+ *
+ * Unlike the custom variant in signature.h (which takes a pre-derived scalar), this
+ * implementation follows RFC-8032 exactly: it uses the raw 32-byte secret key seed and
+ * derives the signing scalar and deterministic nonce internally via SHA-512. This means
+ * signatures are fully deterministic for a given (seed, message) pair and are interoperable
+ * with any standard Ed25519 implementation.
+ *
+ * The sign and verify functions accept arbitrary-length messages (raw bytes), not just
+ * 32-byte digests, since RFC-8032 hashes the message as part of the signing equation.
+ */
+
 #ifndef CRYPTO_SIGNATURE_RFC8032_H
 #define CRYPTO_SIGNATURE_RFC8032_H
 
@@ -32,12 +46,13 @@
 namespace Crypto::RFC8032
 {
     /**
-     * Checks that the supplied signature was generated with the private key for the given public key
-     * @param message
-     * @param message_length
-     * @param public_key
-     * @param signature
-     * @return
+     * Verifies an RFC-8032 Ed25519 signature over an arbitrary-length message.
+     *
+     * @param message pointer to the raw message bytes
+     * @param message_length length of the message in bytes
+     * @param public_key the signer's Ed25519 public key
+     * @param signature the 64-byte signature to verify
+     * @return true if the signature is valid for the given message and public key
      */
     bool check_signature(
         const void *message,
@@ -46,12 +61,16 @@ namespace Crypto::RFC8032
         const crypto_signature_t &signature);
 
     /**
-     * Checks that the supplied signature was generated with the private key for the given public key
-     * @tparam T
-     * @param message
-     * @param public_key
-     * @param signature
-     * @return
+     * Verifies an RFC-8032 Ed25519 signature (templated convenience overload).
+     *
+     * Accepts any type with `.data()` and `.size()` methods (e.g., std::string,
+     * std::vector<uint8_t>, crypto_hash_t).
+     *
+     * @tparam T a type providing data() and size() accessors
+     * @param message the message that was signed
+     * @param public_key the signer's Ed25519 public key
+     * @param signature the 64-byte signature to verify
+     * @return true if the signature is valid
      */
     template<typename T>
     bool check_signature(const T &message, const crypto_public_key_t &public_key, const crypto_signature_t &signature)
@@ -60,21 +79,26 @@ namespace Crypto::RFC8032
     }
 
     /**
-     * Generates a single ED25519 signature using the secret key supplied
-     * @param message
-     * @param message_length
-     * @param secret_key
-     * @return
+     * Generates a deterministic RFC-8032 Ed25519 signature over an arbitrary-length message.
+     *
+     * The nonce is derived deterministically from SHA-512(seed_prefix || message), so
+     * signing the same message with the same key always produces the identical signature.
+     *
+     * @param message pointer to the raw message bytes
+     * @param message_length length of the message in bytes
+     * @param secret_key the 32-byte secret key seed (not a pre-derived scalar)
+     * @return the 64-byte Ed25519 signature
      */
     crypto_signature_t
         generate_signature(const void *message, size_t message_length, const crypto_scalar_t &secret_key);
 
     /**
-     * Generates a single ED25519 signature using the secret key supplied
-     * @tparam T
-     * @param message
-     * @param secret_key
-     * @return
+     * Generates a deterministic RFC-8032 Ed25519 signature (templated convenience overload).
+     *
+     * @tparam T a type providing data() and size() accessors
+     * @param message the message to sign
+     * @param secret_key the 32-byte secret key seed
+     * @return the 64-byte Ed25519 signature
      */
     template<typename T> crypto_signature_t generate_signature(const T &message, const crypto_scalar_t &secret_key)
     {

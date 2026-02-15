@@ -24,11 +24,32 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file constant_time.h
+ * @brief Constant-time comparison to prevent timing side-channel attacks.
+ *
+ * When comparing secret data (like keys, MACs, or signatures), a naive byte-by-byte
+ * comparison that short-circuits on the first mismatch leaks information about how
+ * many leading bytes match. This function always examines every byte, taking the same
+ * amount of time regardless of where (or whether) the inputs differ.
+ */
+
 #ifndef CRYPTO_CONSTANT_TIME_H
 #define CRYPTO_CONSTANT_TIME_H
 
 #include <cstddef>
 
+/**
+ * Compares two byte buffers in constant time.
+ *
+ * Always reads all `len` bytes from both buffers, accumulating differences via XOR.
+ * The result reveals only whether the buffers are equal -- not where they differ.
+ *
+ * @param a pointer to the first buffer
+ * @param b pointer to the second buffer
+ * @param len the number of bytes to compare
+ * @return true if all bytes are identical, false otherwise
+ */
 static inline bool constant_time_equals(const void *a, const void *b, size_t len)
 {
     const auto *x = static_cast<const unsigned char *>(a);

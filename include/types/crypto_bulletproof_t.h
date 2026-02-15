@@ -27,6 +27,11 @@
 // Inspired by the work of Sarang Noether at
 // https://github.com/SarangNoether/skunkworks/tree/pybullet
 
+/**
+ * @file crypto_bulletproof_t.h
+ * @brief Original Bulletproof range proof data structure with logarithmic proof size.
+ */
+
 #ifndef CRYPTO_BULLETPROOF_T
 #define CRYPTO_BULLETPROOF_T
 
@@ -35,7 +40,27 @@
 #include <types/crypto_scalar_t.h>
 
 /**
- * A Bulletproof Range Proof
+ * @brief An original Bulletproof range proof.
+ *
+ * Bulletproofs are zero-knowledge range proofs that let you prove a Pedersen-committed value
+ * lies in the range [0, 2^N) without revealing the value itself. This is essential for
+ * privacy-preserving transactions: you need to guarantee amounts are non-negative (no coins
+ * created from thin air) without actually showing what those amounts are.
+ *
+ * The key innovation is logarithmic proof size -- the proof grows as O(log N) in the bit-length
+ * of the range, achieved through an inner product argument (IPA) that recursively halves the
+ * proof vectors. For N=64 bits, this means only ~6 rounds of L/R commitments instead of 64
+ * individual bit proofs.
+ *
+ * Proof components:
+ * - A, S: vector Pedersen commitments to the bit decomposition and blinding vectors
+ * - T1, T2: commitments to the coefficients of the inner product polynomial t(x)
+ * - taux, mu: blinding factor responses
+ * - L, R: left/right commitments from each IPA folding round (log2(N) pairs)
+ * - g, h: final folded generator scalars from the IPA
+ * - t: the evaluated inner product
+ *
+ * Multiple values can be aggregated into a single proof, sharing the IPA overhead.
  */
 struct crypto_bulletproof_t final : Serializable
 {
@@ -65,8 +90,13 @@ struct crypto_bulletproof_t final : Serializable
     explicit crypto_bulletproof_t(Serialization::deserializer_t &reader);
 
     /**
-     * Checks that the basic construction of the proof is valid
-     * @return
+     * Checks that the basic construction of the proof is valid.
+     *
+     * Validates that L and R vectors have matching lengths, all points are on the curve,
+     * and all scalars are reduced. This is a structural check only -- it does not verify
+     * the zero-knowledge proof itself.
+     *
+     * @return true if the proof has a structurally valid construction
      */
     [[nodiscard]] bool check_construction() const;
 
@@ -97,43 +127,52 @@ struct crypto_bulletproof_t final : Serializable
 
     /**
      * Provides the hash of the serialized structure
-     * @return
+     * @return the SHA3-256 hash of the serialized byte representation
      */
     [[nodiscard]] crypto_hash_t hash() const;
 
     /**
      * Serializes the struct to a byte array
-     * @param writer
+     * @param writer the serializer to write into
      */
     void serialize(Serialization::serializer_t &writer) const override;
 
     /**
      * Serializes the struct to a byte array
-     * @return
+     * @return the serialized byte vector
      */
     [[nodiscard]] std::vector<unsigned char> serialize() const override;
 
     /**
      * Returns the serialized byte size
-     * @return
+     * @return size in bytes
      */
     [[nodiscard]] size_t size() const override;
 
     /**
      * Writes the structure as JSON to the provided writer
-     * @param writer
+     * @param writer the JSON writer to output into
      */
     JSON_TO_FUNC(toJSON) override;
 
     /**
      * Returns the hex encoded serialized byte array
-     * @return
+     * @return hex string of the serialized proof
      */
     [[nodiscard]] std::string to_string() const override;
 
+    /** @brief A: commitment to the bit decomposition vector; S: commitment to the blinding vector. */
     crypto_point_t A, S, T1, T2;
+
+    /** @brief taux: aggregated blinding factor for the polynomial commitment; mu: blinding for the inner product. */
     crypto_scalar_t taux, mu;
+
+    /** @brief Left and right commitments from each round of the inner product argument.
+     *  There are log2(N*M) pairs, where N is the bit-length and M is the number of aggregated values. */
     std::vector<crypto_point_t> L, R;
+
+    /** @brief Final scalars from the IPA: g and h are the folded generator coefficients,
+     *  t is the evaluated inner product t(x) = <l(x), r(x)>. */
     crypto_scalar_t g, h, t;
 };
 

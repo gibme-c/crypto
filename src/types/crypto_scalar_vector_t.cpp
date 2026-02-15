@@ -24,6 +24,11 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file crypto_scalar_vector_t.cpp
+ * @brief Scalar vector operations: Hadamard product, inner products, batch inversion via Montgomery's trick, slicing.
+ */
+
 #include <cstring>
 
 #include <helpers/dedupe_and_sort_keys.h>
@@ -203,6 +208,7 @@ crypto_scalar_vector_t crypto_scalar_vector_t::invert(bool allow_zero) const
 {
     if (allow_zero)
     {
+        // Simple per-element inversion; zeros invert to zero
         std::vector<crypto_scalar_t> result(container);
 
         for (auto &scalar : result)
@@ -214,12 +220,16 @@ crypto_scalar_vector_t crypto_scalar_vector_t::invert(bool allow_zero) const
     }
     else
     {
+        // Montgomery's trick: compute n inversions using only 1 field inversion
+        // plus 3(n-1) multiplications, rather than n independent inversions.
         auto inputs = container;
 
         const auto n = inputs.size();
 
+        // scratch[i] holds the running product of inputs[0..i-1]
         std::vector<crypto_scalar_t> scratch(n, Crypto::ONE);
 
+        // Forward pass: accumulate prefix products
         auto acc = Crypto::ONE;
 
         for (size_t i = 0; i < n; ++i)
@@ -234,8 +244,10 @@ crypto_scalar_vector_t crypto_scalar_vector_t::invert(bool allow_zero) const
             acc *= inputs[i];
         }
 
+        // Single inversion of the full product
         acc = acc.invert();
 
+        // Backward pass: extract individual inverses from the accumulated inverse
         for (size_t i = n; i-- > 0;)
         {
             auto temp = acc * inputs[i];

@@ -23,7 +23,12 @@
 // INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
+
+/**
+ * @file bulletproofs.cpp
+ * @brief Original Bulletproofs range proofs with inner product argument (IPA).
+ */
+
 // Inspired by the work of Sarang Noether at
 // https://github.com/SarangNoether/skunkworks/tree/pybullet
 
@@ -559,7 +564,7 @@ namespace Crypto::RangeProofs::Bulletproofs
 
         crypto_point_vector_t points;
 
-        // loop through all of the proofs in the batch
+        // Batch verification: accumulate all proofs into a single MSM check
         for (size_t ii = 0; ii < proofs.size(); ++ii)
         {
             const auto &proof = proofs[ii];
@@ -809,6 +814,7 @@ namespace Crypto::RangeProofs::Bulletproofs
             points.append(Hi[i]);
         }
 
+        // Final MSM: if all proofs are valid, the linear combination equals the identity point
         return scalars.inner_product(points).empty();
     }
 

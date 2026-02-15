@@ -24,6 +24,11 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file crypto_hd_key_t.cpp
+ * @brief HD key type: HMAC-SHA512 child derivation along BIP-44 paths (all hardened per SLIP-10).
+ */
+
 #include <cryptopp/sha.h>
 #include <helpers/hd_keys.h>
 #include <types/crypto_hd_key_t.h>

@@ -27,6 +27,11 @@
 // Adapted from Python code by Sarang Noether found at
 // https://github.com/SarangNoether/skunkworks/tree/triptych
 
+/**
+ * @file crypto_triptych_signature_t.cpp
+ * @brief Triptych signature serialization, deserialization, and construction validation.
+ */
+
 #include <types/crypto_triptych_signature_t.h>
 
 crypto_triptych_signature_t::crypto_triptych_signature_t(std::initializer_list<unsigned char> input)

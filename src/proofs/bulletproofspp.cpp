@@ -23,7 +23,12 @@
 // INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
+
+/**
+ * @file bulletproofspp.cpp
+ * @brief Bulletproofs++ reciprocal-argument range proofs with WNLA inner proof system.
+ */
+
 // Based on ePrint 2022/510 (Bulletproofs++)
 // Reference: distributed-lab/bp-pp Rust implementation
 
@@ -1118,6 +1123,7 @@ namespace Crypto::RangeProofs::BulletproofsPP
             batch_points.append(g_vec[i]);
         }
 
+        // Final MSM: if all proofs are valid, the linear combination equals the identity point
         return batch_scalars.inner_product(batch_points).empty();
     }
 

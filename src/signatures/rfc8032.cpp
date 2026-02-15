@@ -24,20 +24,17 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file rfc8032.cpp
+ * @brief RFC-8032 Ed25519 signatures using SHA-512 for nonce derivation and wide-hash reduction.
+ */
+
 #include <crypto_constants.h>
 #include <cryptopp/sha.h>
 #include <helpers/scalar_transcript_t.h>
 #include <signatures/rfc8032.h>
 
-/**
- * This method allows us to load a scalar value that is less than 256-bits and
- * is generally only used when attempting to reduce a 512-bit hash into a normal
- * scalar value
- * @param input
- * @param start
- * @param end
- * @return
- */
+// Load a sub-range of a 64-byte buffer into a 32-byte scalar (zero-padded on the right)
 static inline crypto_scalar_t load_partial_scalar(const CryptoPP::byte input[64], size_t start, size_t end)
 {
     std::vector<unsigned char> temp(input + start, input + end);
@@ -47,12 +44,8 @@ static inline crypto_scalar_t load_partial_scalar(const CryptoPP::byte input[64]
     return crypto_scalar_t(temp);
 }
 
-/**
- * This method reduces a 512-bit hash into a 256-bit scalar value that we can
- * use with other cryptographic operations
- * @param input
- * @return
- */
+// Reduce a 512-bit SHA-512 digest into a scalar: split into three limbs and
+// reconstruct as a + b*2^168 + c*2^336 to avoid bias from naive modular reduction
 static inline crypto_scalar_t reduce_wide_hash(const CryptoPP::byte input[64])
 {
     const auto a = load_partial_scalar(input, 0, 21);
@@ -66,6 +59,8 @@ static inline crypto_scalar_t reduce_wide_hash(const CryptoPP::byte input[64])
 
 namespace Crypto::RFC8032
 {
+    // ---- Verify: check that s*G == R + H(R||A||M)*A ----
+
     bool check_signature(
         const void *message,
         size_t message_length,
@@ -84,10 +79,7 @@ namespace Crypto::RFC8032
             return false;
         }
 
-        /**
-         * We need to compute a 512-bit SHA512 digest using the alpha point, the public key
-         * of the private key used to sign, and the message itself
-         */
+        // Compute k = H(R || A || M) as a 512-bit SHA-512 digest, then reduce to scalar
         CryptoPP::byte hramDigest[64];
 
         {
@@ -102,15 +94,15 @@ namespace Crypto::RFC8032
             hash_context.Final(hramDigest);
         }
 
-        // We then reduce the 512-bit SHA512 digest into a scalar value
         const auto k = reduce_wide_hash(hramDigest);
 
-        // [R + (k * A)] mod l
+        // Verification equation: s*G == R + k*A
         const auto challenge = alpha_point + (k * public_key);
 
-        // l * G = [R + (k * A)] mod l
         return challenge == signature.LR.R * G;
     }
+
+    // ---- Sign: produce (R, s) where s = alpha + H(R||A||M)*a ----
 
     crypto_signature_t generate_signature(const void *message, size_t message_length, const crypto_scalar_t &secret_key)
     {
@@ -121,7 +113,7 @@ namespace Crypto::RFC8032
         const auto message_digest = crypto_hash_t::sha512(message, message_length);
 
     try_again:
-        // helps to compute a deterministic scalar value using some entropy
+        // Derive a nonce scalar by hashing the message digest, public key, and fresh randomness
         scalar_transcript_t alpha_transcript(message_digest, public_key, crypto_scalar_t::random());
 
         const auto alpha_scalar = alpha_transcript.challenge();
@@ -133,10 +125,7 @@ namespace Crypto::RFC8032
 
         const auto alpha_point = alpha_scalar.point();
 
-        /**
-         * We need to compute a 512-bit SHA512 digest using the alpha point, the public key
-         * of the private key used to sign, and the message itself
-         */
+        // Compute k = H(R || A || M) as a 512-bit SHA-512 digest, then reduce to scalar
         CryptoPP::byte hramDigest[64];
 
         {
@@ -151,22 +140,14 @@ namespace Crypto::RFC8032
             hash_context.Final(hramDigest);
         }
 
-        // We then reduce the 512-bit SHA512 digest into a scalar value
         const auto k = reduce_wide_hash(hramDigest);
 
         crypto_signature_t signature;
 
-        /**
-         * The left-most 256-bits of the signature are the alpha point; however,
-         * to reuse the existing signature type, we have to force it into
-         * a non-reduced scalar
-         */
+        // L stores the commitment point R (encoded as a scalar to fit the signature type)
         signature.LR.L = crypto_scalar_t(alpha_point.serialize());
 
-        /**
-         * Compute the right-mode 256-bits of the signature using the alpha_scalar,
-         * the reduced digest, and our secret key
-         */
+        // R stores the response scalar: s = alpha + k*a
         signature.LR.R = alpha_scalar + (k * secret_key);
 
         return signature;

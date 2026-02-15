@@ -24,6 +24,11 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file crypto_hash_t.cpp
+ * @brief Hash type implementations: SHA3, SHA2, BLAKE2b, Argon2, and hash-to-curve/scalar conversions.
+ */
+
 #include <crypto_config.h>
 #include <cryptopp/blake2.h>
 #include <cryptopp/sha.h>
@@ -187,6 +192,8 @@ crypto_hash_t crypto_hash_t::sha3(const void *input, size_t length)
 
 crypto_hash_t crypto_hash_t::sha3_slow(const void *input, size_t length, uint64_t iterations)
 {
+    // Key-stretching: iteratively re-hash with a counter to increase computational cost.
+    // Each round feeds H(prev_hash || iteration_index) to make the output depend on all rounds.
     Serialization::serializer_t writer;
 
     auto result = crypto_hash_t::sha3(input, length);
@@ -265,11 +272,13 @@ size_t crypto_hash_t::leading_zeros(bool reversed) const
 
 crypto_point_t crypto_hash_t::point() const
 {
+    // Hash-to-curve via Elligator map + cofactor clearing (see crypto_point_t::reduce)
     return crypto_point_t::reduce(this->data());
 }
 
 crypto_scalar_t crypto_hash_t::scalar() const
 {
+    // Convert hash to scalar with clamping + reduction mod l
     return crypto_scalar_t(this->serialize(), true);
 }
 

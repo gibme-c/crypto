@@ -27,6 +27,22 @@
 // Inspired by the work of Sarang Noether found at
 // https://github.com/SarangNoether/skunkworks/tree/clsag
 
+/**
+ * @file ring_signature_clsag.h
+ * @brief Compact Linkable Spontaneous Anonymous Group (CLSAG) ring signatures.
+ *
+ * CLSAG is a more efficient successor to the classic LSAG/MLSAG ring signature family.
+ * It produces a single-scalar response per ring member (rather than one per signing key
+ * column), cutting signature size roughly in half compared to MLSAG while providing the
+ * same security guarantees: signer ambiguity within the ring plus linkability via a key image.
+ *
+ * CLSAG also natively supports **Pedersen commitment binding**: when you provide the
+ * optional commitment parameters, the signature simultaneously proves knowledge of the
+ * signing key *and* that the pseudo-commitment correctly re-blinds the real input
+ * commitment. This ties the ring signature to confidential transaction amounts without
+ * any additional proof.
+ */
+
 #ifndef CRYPTO_RING_SIGNATURE_CLSAG_H
 #define CRYPTO_RING_SIGNATURE_CLSAG_H
 
@@ -35,13 +51,19 @@
 namespace Crypto::RingSignature::CLSAG
 {
     /**
-     * Checks the CLSAG ring signature presented
-     * @param message_digest
-     * @param key_image
-     * @param public_keys
-     * @param signature
-     * @param commitments
-     * @return
+     * Verifies a CLSAG ring signature.
+     *
+     * When @p commitments is non-empty, the verification also checks that the signature
+     * binds to the provided Pedersen commitments (i.e., the signer knew the blinding
+     * factor difference between the real commitment and the pseudo-commitment stored
+     * in the signature).
+     *
+     * @param message_digest 32-byte hash of the signed message
+     * @param key_image the key image I for linkability / double-spend detection
+     * @param public_keys the ring of public keys
+     * @param signature the CLSAG signature to verify
+     * @param commitments optional per-ring-member Pedersen commitments for confidential amounts
+     * @return true if the signature is valid
      */
     bool check_ring_signature(
         const crypto_hash_t &message_digest,
@@ -51,16 +73,23 @@ namespace Crypto::RingSignature::CLSAG
         const std::vector<crypto_pedersen_commitment_t> &commitments = {});
 
     /**
-     * Generates a CLSAG ring signature using the secrets provided
-     * Auto-detects the signer's index via constant-time scan
-     * @param message_digest
-     * @param secret_ephemeral
-     * @param public_keys
-     * @param input_blinding_factor
-     * @param public_commitments
-     * @param pseudo_blinding_factor
-     * @param pseudo_commitment
-     * @return
+     * Generates a CLSAG ring signature, auto-detecting the signer's position.
+     *
+     * For plain ring signatures (no confidential amounts), omit the commitment parameters.
+     * For commitment-binding signatures used in privacy-preserving transactions, supply:
+     * - @p input_blinding_factor: the blinding factor of the real input commitment
+     * - @p public_commitments: Pedersen commitments for every ring member
+     * - @p pseudo_blinding_factor: the blinding factor of the pseudo (output-side) commitment
+     * - @p pseudo_commitment: the pseudo-commitment itself (C' = pseudo_blinding_factor * G + amount * H)
+     *
+     * @param message_digest 32-byte hash of the message to sign
+     * @param secret_ephemeral the signer's one-time secret scalar
+     * @param public_keys the ring of public keys
+     * @param input_blinding_factor blinding factor for the real input's Pedersen commitment (default: zero)
+     * @param public_commitments per-ring-member Pedersen commitments (default: empty = no commitment binding)
+     * @param pseudo_blinding_factor blinding factor for the pseudo-commitment (default: zero)
+     * @param pseudo_commitment the pseudo-commitment point (default: identity)
+     * @return (success, signature) -- success is false if the secret key does not match any ring member
      */
     std::tuple<bool, crypto_clsag_signature_t> generate_ring_signature(
         const crypto_hash_t &message_digest,
@@ -72,17 +101,20 @@ namespace Crypto::RingSignature::CLSAG
         const crypto_pedersen_commitment_t &pseudo_commitment = Crypto::Z);
 
     /**
-     * Generates a CLSAG ring signature using the secrets provided
-     * Caller specifies the signer's index (still validated)
-     * @param message_digest
-     * @param secret_ephemeral
-     * @param public_keys
-     * @param real_output_index
-     * @param input_blinding_factor
-     * @param public_commitments
-     * @param pseudo_blinding_factor
-     * @param pseudo_commitment
-     * @return
+     * Generates a CLSAG ring signature with an explicit signer index.
+     *
+     * Same as the auto-detect overload, but you provide @p real_output_index directly.
+     * The index is still validated against the secret key for safety.
+     *
+     * @param message_digest 32-byte hash of the message to sign
+     * @param secret_ephemeral the signer's one-time secret scalar
+     * @param public_keys the ring of public keys
+     * @param real_output_index position of the real signer's public key in @p public_keys
+     * @param input_blinding_factor blinding factor for the real input's Pedersen commitment (default: zero)
+     * @param public_commitments per-ring-member Pedersen commitments (default: empty)
+     * @param pseudo_blinding_factor blinding factor for the pseudo-commitment (default: zero)
+     * @param pseudo_commitment the pseudo-commitment point (default: identity)
+     * @return (success, signature) tuple
      */
     std::tuple<bool, crypto_clsag_signature_t> generate_ring_signature(
         const crypto_hash_t &message_digest,

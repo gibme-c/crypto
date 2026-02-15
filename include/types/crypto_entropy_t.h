@@ -24,12 +24,34 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file crypto_entropy_t.h
+ * @brief BIP-39 entropy representation with mnemonic word encoding and decoding.
+ *
+ * This file defines the entropy type that sits at the root of hierarchical deterministic (HD) key
+ * derivation. Entropy is 128 or 256 bits of randomness that can be encoded as a human-readable
+ * sequence of mnemonic words (per BIP-39) for safe backup and recovery. The derivation chain is:
+ *
+ *   entropy -> mnemonic words -> seed (via PBKDF2) -> HD keys
+ *
+ * Mnemonic encoding supports multiple languages and includes a checksum to catch transcription errors.
+ */
+
 #ifndef CRYPTO_ENTROPY_T
 #define CRYPTO_ENTROPY_T
 
 #include <encoding/languages/language.h>
 #include <types/crypto_point_t.h>
 
+/**
+ * @brief BIP-39 entropy -- the root randomness from which mnemonic words and HD keys are derived.
+ *
+ * Represents 128 or 256 bits of cryptographic randomness. You can generate fresh entropy, or
+ * recover it from a mnemonic word sequence. The typical workflow is: generate entropy, back it up
+ * as mnemonic words, then derive a seed and HD keys from it whenever you need them.
+ *
+ * An optional creation timestamp can be embedded in the entropy for bookkeeping purposes.
+ */
 struct crypto_entropy_t final : SerializablePod<32>
 {
   public:
@@ -44,73 +66,89 @@ struct crypto_entropy_t final : SerializablePod<32>
     JSON_STRING_CONSTRUCTOR(crypto_entropy_t, fromJSON)
 
     /**
-     * Generates a random entropy with entropy
+     * Generates new random entropy suitable for HD key derivation.
      *
-     * @param entropy
-     * @param bits
-     * @param encode_timestamp
-     * @return
+     * You can optionally mix in additional entropy bytes (e.g., from a hardware RNG or user
+     * input) for extra paranoia. If @p encode_timestamp is true, a creation timestamp is
+     * embedded in the unused portion of the entropy buffer.
+     *
+     * @param bits the entropy strength -- 128 (12 mnemonic words) or 256 (24 words)
+     * @param entropy optional additional entropy bytes to mix in
+     * @param encode_timestamp if true, store a creation timestamp inside the entropy
+     * @return freshly generated entropy
      */
     static crypto_entropy_t
         random(size_t bits = 256, const std::vector<unsigned char> &entropy = {}, bool encode_timestamp = true);
 
     /**
-     * Recovers a entropy from a vector of words
+     * Recovers entropy from a vector of BIP-39 mnemonic words.
      *
-     * @param words
-     * @param language
-     * @return
+     * This reverses the mnemonic encoding, validating the embedded checksum to catch typos
+     * or word substitutions. Throws on invalid words or checksum mismatch.
+     *
+     * @param words the mnemonic words (12 for 128-bit, 24 for 256-bit entropy)
+     * @param language the word list language to decode against (defaults to English)
+     * @return the recovered entropy
      */
     static crypto_entropy_t recover(
         const std::vector<std::string> &words,
         const Crypto::Mnemonics::Language::Language &language = Crypto::Mnemonics::Language::Language::ENGLISH);
 
     /**
-     * Recovers a entropy from a string of words
+     * Recovers entropy from a space-separated mnemonic phrase string.
      *
-     * @param phrase
-     * @param language
-     * @return
+     * Convenience overload that splits the phrase into words, then delegates to the
+     * vector-based recover() method.
+     *
+     * @param phrase the space-separated mnemonic phrase
+     * @param language the word list language to decode against (defaults to English)
+     * @return the recovered entropy
      */
     static crypto_entropy_t recover(
         const std::string &phrase,
         const Crypto::Mnemonics::Language::Language &language = Crypto::Mnemonics::Language::Language::ENGLISH);
 
     /**
-     * Returns the timestamp the entropy was created
+     * Returns the creation timestamp embedded in the entropy, if one was encoded.
      *
-     * @return
+     * @return the Unix timestamp (seconds since epoch) when this entropy was generated
      */
     [[nodiscard]] uint64_t timestamp() const;
 
     /**
-     * Writes the pod to the supplied json writer as a string
+     * Serializes the entropy to a JSON writer as a hex string.
      *
-     * @param writer
+     * @param writer the JSON writer to output to
      */
     JSON_TO_FUNC(toJSON) override;
 
     /**
-     * Converts the entropy to mnemonic phrase of words
+     * Converts the entropy to a space-separated BIP-39 mnemonic phrase.
      *
-     * @param language
-     * @return
+     * This is the human-friendly representation you would write down on paper or store
+     * in a secure backup. The number of words depends on the entropy size (12 or 24).
+     *
+     * @param language the word list language to encode with (defaults to English)
+     * @return a space-separated string of mnemonic words
      */
     [[nodiscard]] std::string to_mnemonic_phrase(
         const Crypto::Mnemonics::Language::Language &language = Crypto::Mnemonics::Language::Language::ENGLISH) const;
 
     /**
-     * Converts the entropy to a vector of mnemonic words
+     * Converts the entropy to a vector of individual BIP-39 mnemonic words.
      *
-     * @param language
-     * @return
+     * Same as to_mnemonic_phrase() but returns the words as separate strings,
+     * which is handy if you need to display or process them individually.
+     *
+     * @param language the word list language to encode with (defaults to English)
+     * @return a vector of mnemonic words (12 or 24 depending on entropy size)
      */
     [[nodiscard]] std::vector<std::string> to_mnemonic_words(
         const Crypto::Mnemonics::Language::Language &language = Crypto::Mnemonics::Language::Language::ENGLISH) const;
 
     /**
-     * Returns the entropy as a hex encoded string
-     * @return
+     * Returns the entropy as a hex-encoded string.
+     * @return hex string representation of the raw entropy bytes
      */
     [[nodiscard]] std::string to_string() const override;
 

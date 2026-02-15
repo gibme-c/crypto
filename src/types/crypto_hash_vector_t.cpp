@@ -24,6 +24,11 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file crypto_hash_vector_t.cpp
+ * @brief Serializable vector of hash values.
+ */
+
 #include <types/crypto_hash_vector_t.h>
 #include <utility>
 

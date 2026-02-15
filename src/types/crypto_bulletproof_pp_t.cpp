@@ -26,6 +26,11 @@
 //
 // Based on ePrint 2022/510 (Bulletproofs++)
 
+/**
+ * @file crypto_bulletproof_pp_t.cpp
+ * @brief Bulletproof++ range proof serialization, deserialization, and construction validation.
+ */
+
 #include <types/crypto_bulletproof_pp_t.h>
 
 crypto_bulletproof_pp_t::crypto_bulletproof_pp_t(

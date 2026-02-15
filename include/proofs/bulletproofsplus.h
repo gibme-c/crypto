@@ -27,6 +27,16 @@
 // Inspired by the work of Sarang Noether at
 // https://github.com/SarangNoether/skunkworks/tree/pybullet-plus
 
+/**
+ * @file bulletproofsplus.h
+ * @brief Bulletproofs+ range proofs -- a more efficient successor to Bulletproofs.
+ *
+ * Bulletproofs+ use a weighted inner product argument to achieve smaller proof sizes
+ * and faster verification compared to the original Bulletproofs, while providing
+ * the same guarantee: each committed value lies in [0, 2^N). The API mirrors the
+ * original Bulletproofs interface (prove/verify/batch-verify).
+ */
+
 #ifndef CRYPTO_RANGEPROOFS_BULLETPROOFS_PLUS_H
 #define CRYPTO_RANGEPROOFS_BULLETPROOFS_PLUS_H
 
@@ -35,12 +45,15 @@
 namespace Crypto::RangeProofs::BulletproofsPlus
 {
     /**
-     * Generates a Bulletproof+ range proof and the related pedersen commitments
-     * for the given amounts and blinding factors
-     * @param amounts
-     * @param blinding_factors
-     * @param N
-     * @return
+     * Generates a Bulletproofs+ range proof for one or more amounts.
+     *
+     * Produces both the proof and the corresponding Pedersen commitments. Each amount
+     * is proven to be in [0, 2^N). Multiple amounts are aggregated into a single proof.
+     *
+     * @param amounts the plaintext values to create range proofs for
+     * @param blinding_factors the blinding factors for each Pedersen commitment
+     * @param N the bit-length of the range (values proven in [0, 2^N)), defaults to 64
+     * @return a tuple of {proof, commitments} where commitments[i] commits to amounts[i]
      */
     std::tuple<crypto_bulletproof_plus_t, std::vector<crypto_pedersen_commitment_t>> prove(
         const std::vector<uint64_t> &amounts,
@@ -48,12 +61,14 @@ namespace Crypto::RangeProofs::BulletproofsPlus
         size_t N = 64);
 
     /**
-     * Performs batch verification of the range proofs provided for the provided
-     * pedersen commitments to the given values
-     * @param proofs
-     * @param commitments
-     * @param N
-     * @return
+     * Batch-verifies multiple Bulletproofs+ range proofs simultaneously.
+     *
+     * More efficient than individual verification thanks to shared multi-exponentiation.
+     *
+     * @param proofs the range proofs to verify
+     * @param commitments the Pedersen commitments for each proof (one vector per proof)
+     * @param N the bit-length of the range, defaults to 64
+     * @return true if all proofs are valid, false if any proof fails
      */
     bool verify(
         const std::vector<crypto_bulletproof_plus_t> &proofs,
@@ -61,12 +76,12 @@ namespace Crypto::RangeProofs::BulletproofsPlus
         size_t N = 64);
 
     /**
-     * Performs verification of the range proof provided for the provided
-     * pedersen commitments to the given values
-     * @param proof
-     * @param commitments
-     * @param N
-     * @return
+     * Verifies a single Bulletproofs+ range proof.
+     *
+     * @param proof the range proof to verify
+     * @param commitments the Pedersen commitments the proof was generated for
+     * @param N the bit-length of the range, defaults to 64
+     * @return true if the proof is valid, false otherwise
      */
     bool verify(
         const crypto_bulletproof_plus_t &proof,

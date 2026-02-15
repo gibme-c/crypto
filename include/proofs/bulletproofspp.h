@@ -26,6 +26,17 @@
 //
 // Based on ePrint 2022/510 (Bulletproofs++)
 
+/**
+ * @file bulletproofspp.h
+ * @brief Bulletproofs++ range proofs -- the most compact range proof variant (~516 bytes).
+ *
+ * Implements the reciprocal-argument range proof scheme from ePrint 2022/510. This is
+ * the smallest of the three Bulletproof variants, using a base-16 digit decomposition
+ * and Weighted Norm Linear Argument (WNLA) as the inner proof system. Currently
+ * supports single-value proofs only (M=1), with N=64 bits by default. The API follows
+ * the same prove/verify/batch-verify pattern as the other Bulletproof variants.
+ */
+
 #ifndef CRYPTO_RANGEPROOFS_BULLETPROOFS_PP_H
 #define CRYPTO_RANGEPROOFS_BULLETPROOFS_PP_H
 
@@ -34,12 +45,15 @@
 namespace Crypto::RangeProofs::BulletproofsPP
 {
     /**
-     * Generates a Bulletproof++ range proof and the related pedersen commitments
-     * for the given amounts and blinding factors
-     * @param amounts
-     * @param blinding_factors
-     * @param N
-     * @return
+     * Generates a Bulletproofs++ range proof for one or more amounts.
+     *
+     * Produces both the proof and the corresponding Pedersen commitments. Each amount
+     * is proven to be in [0, 2^N). Currently limited to single-value proofs (M=1).
+     *
+     * @param amounts the plaintext values to create range proofs for
+     * @param blinding_factors the blinding factors for each Pedersen commitment
+     * @param N the bit-length of the range (values proven in [0, 2^N)), defaults to 64
+     * @return a tuple of {proof, commitments} where commitments[i] commits to amounts[i]
      */
     std::tuple<crypto_bulletproof_pp_t, std::vector<crypto_pedersen_commitment_t>> prove(
         const std::vector<uint64_t> &amounts,
@@ -47,12 +61,14 @@ namespace Crypto::RangeProofs::BulletproofsPP
         size_t N = 64);
 
     /**
-     * Performs batch verification of the range proofs provided for the provided
-     * pedersen commitments to the given values
-     * @param proofs
-     * @param commitments
-     * @param N
-     * @return
+     * Batch-verifies multiple Bulletproofs++ range proofs simultaneously.
+     *
+     * Combines verification equations across proofs for more efficient multi-exponentiation.
+     *
+     * @param proofs the range proofs to verify
+     * @param commitments the Pedersen commitments for each proof (one vector per proof)
+     * @param N the bit-length of the range, defaults to 64
+     * @return true if all proofs are valid, false if any proof fails
      */
     bool verify(
         const std::vector<crypto_bulletproof_pp_t> &proofs,
@@ -60,12 +76,12 @@ namespace Crypto::RangeProofs::BulletproofsPP
         size_t N = 64);
 
     /**
-     * Performs verification of the range proof provided for the provided
-     * pedersen commitments to the given values
-     * @param proof
-     * @param commitments
-     * @param N
-     * @return
+     * Verifies a single Bulletproofs++ range proof.
+     *
+     * @param proof the range proof to verify
+     * @param commitments the Pedersen commitments the proof was generated for
+     * @param N the bit-length of the range, defaults to 64
+     * @return true if the proof is valid, false otherwise
      */
     bool verify(
         const crypto_bulletproof_pp_t &proof,

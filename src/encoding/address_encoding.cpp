@@ -24,6 +24,11 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file address_encoding.cpp
+ * @brief Checksummed address encoding/decoding via both standard Base58 and CryptoNote Base58.
+ */
+
 #include <encoding/address_encoding.h>
 #include <encoding/base58.h>
 #include <encoding/cn_base58.h>

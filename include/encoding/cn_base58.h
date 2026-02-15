@@ -24,6 +24,16 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file cn_base58.h
+ * @brief Block-based Base58 encoding with deterministic output length.
+ *
+ * Unlike standard Base58, this variant processes the input in 8-byte blocks, each
+ * producing a fixed-width Base58 output. This gives you a deterministic relationship
+ * between input length and output length, which is useful for address encoding where
+ * you need to know the encoded size ahead of time.
+ */
+
 #ifndef CRYPTO_BASE58_CN_H
 #define CRYPTO_BASE58_CN_H
 
@@ -35,70 +45,66 @@
 namespace Crypto::CNBase58
 {
     /**
-     * Decodes the base58 encoded string into the raw bytes
+     * Decodes a block-based Base58 string into raw bytes.
      *
-     * @param input
-     * @return
+     * @param input the block-based Base58-encoded string
+     * @return a tuple of {success, reader} where reader contains the decoded bytes
      */
     [[nodiscard]] std::tuple<bool, Serialization::deserializer_t> decode(const std::string &input);
 
     /**
-     * Decodes the Base58 encoded string into the raw bytes after confirming that
-     * the checksum value is correct for the raw bytes provided
+     * Decodes a block-based Base58 string with checksum verification.
      *
-     * @param input
-     * @return
+     * @param input the block-based Base58-encoded string (with appended checksum)
+     * @return a tuple of {success, reader} where reader contains the decoded bytes (without checksum)
      */
     [[nodiscard]] std::tuple<bool, Serialization::deserializer_t> decode_check(const std::string &input);
 
     /**
-     * Encodes the raw bytes into a Base58 encoded string
+     * Encodes raw bytes into a block-based Base58 string.
      *
-     * @param input
-     * @return
+     * @param input the raw bytes to encode
+     * @return the block-based Base58-encoded string
      */
     [[nodiscard]] std::string encode(const std::vector<uint8_t> &input);
 
     /**
-     * Encodes the contents of the reader into a Base58 encoded string
+     * Encodes the contents of a deserializer into a block-based Base58 string.
      *
-     * @param reader
-     * @return
+     * @param reader the deserializer containing bytes to encode
+     * @return the block-based Base58-encoded string
      */
     [[nodiscard]] std::string encode(const Serialization::deserializer_t &reader);
 
     /**
-     * Encodes the contents of the writer into a Base58 encoded string
+     * Encodes the contents of a serializer into a block-based Base58 string.
      *
-     * @param writer
-     * @return
+     * @param writer the serializer containing bytes to encode
+     * @return the block-based Base58-encoded string
      */
     [[nodiscard]] std::string encode(const Serialization::serializer_t &writer);
 
     /**
-     * Encodes the raw bytes into a Base58 encoded string including a checksum that
-     * allows for ensuring that the raw bytes included inside were not altered
+     * Encodes raw bytes into a block-based Base58 string with an appended checksum.
      *
-     * @param input
-     * @return
+     * @param input the raw bytes to encode
+     * @return the block-based Base58-encoded string with checksum
      */
     [[nodiscard]] std::string encode_check(const std::vector<uint8_t> &input);
 
     /**
-     * Encodes contents of the reader into a Base58 encoded string including a checksum that
-     * allows for ensuring that the raw bytes included inside were not altered
+     * Encodes the contents of a deserializer into a block-based Base58 string with checksum.
      *
-     * @param writer
-     * @return
+     * @param reader the deserializer containing bytes to encode
+     * @return the block-based Base58-encoded string with checksum
      */
     [[nodiscard]] std::string encode_check(const Serialization::deserializer_t &reader);
 
     /**
-     * Encodes contents of the writer into a Base58 encoded string including a checksum that
-     * allows for ensuring that the raw bytes included inside were not altered
+     * Encodes the contents of a serializer into a block-based Base58 string with checksum.
      *
-     * @param writer
-     * @return
+     * @param writer the serializer containing bytes to encode
+     * @return the block-based Base58-encoded string with checksum
      */
     [[nodiscard]] std::string encode_check(const Serialization::serializer_t &writer);
 } // namespace Crypto::CNBase58

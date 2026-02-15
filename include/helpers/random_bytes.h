@@ -25,6 +25,16 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file random_bytes.h
+ * @brief Cryptographically secure pseudorandom number generator (CSPRNG).
+ *
+ * Provides a simple C-compatible interface for filling a buffer with high-quality
+ * random bytes sourced from the operating system's entropy pool (e.g., BCryptGenRandom
+ * on Windows, /dev/urandom on Linux). Used throughout the library for nonce generation,
+ * blinding factors, and key generation.
+ */
+
 #ifndef CRYPTO_RANDOM_BYTES_H
 #define CRYPTO_RANDOM_BYTES_H
 
@@ -43,8 +53,12 @@ extern "C"
 #endif /* _WIN32 */
 
 
-    /*
-     * Write `n` bytes of high quality random bytes to `buf`
+    /**
+     * Fills a buffer with cryptographically secure random bytes.
+     *
+     * @param n the number of random bytes to generate
+     * @param buf pointer to the output buffer (must be at least n bytes)
+     * @return 0 on success, non-zero on failure
      */
     int random_bytes(size_t n, void *buf);
 

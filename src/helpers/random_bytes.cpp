@@ -25,6 +25,11 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file random_bytes.cpp
+ * @brief Platform-specific CSPRNG: CryptGenRandom (Windows), getrandom (Linux), arc4random (BSD).
+ */
+
 // In the case that are compiling on linux, we need to define _GNU_SOURCE
 // *before* random.h is included. Otherwise SYS_getrandom will not be
 // declared.

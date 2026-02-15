@@ -24,6 +24,15 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file signature.h
+ * @brief Basic (non-ring) Ed25519 signature generation and verification.
+ *
+ * Provides a straightforward sign/verify API using Ed25519 with a pre-derived scalar as
+ * the secret key. This is the library's "custom" variant -- for strict RFC-8032 compliance
+ * (deterministic nonce from the raw seed), see rfc8032.h instead.
+ */
+
 #ifndef CRYPTO_SIGNATURE_H
 #define CRYPTO_SIGNATURE_H
 
@@ -33,11 +42,13 @@
 namespace Crypto::Signature
 {
     /**
-     * Checks that the supplied signature was generated with the private key for the given public key
-     * @param message_digest
-     * @param public_key
-     * @param signature
-     * @return
+     * Verifies that @p signature is a valid Ed25519 signature of @p message_digest
+     * under @p public_key.
+     *
+     * @param message_digest the 32-byte hash of the message that was signed
+     * @param public_key the signer's public key
+     * @param signature the signature to verify
+     * @return true if the signature is valid
      */
     bool check_signature(
         const crypto_hash_t &message_digest,
@@ -45,29 +56,16 @@ namespace Crypto::Signature
         const crypto_signature_t &signature);
 
     /**
-     * Completes the prepared signature
-     * @param signing_scalar
-     * @param signature
-     * @return
-     */
-    crypto_signature_t complete_signature(const crypto_scalar_t &signing_scalar, const crypto_signature_t &signature);
-
-    /**
-     * Generates a single signature (non-ring) using the secret key provided
-     * @param message_digest
-     * @param secret_key
-     * @return
+     * Generates an Ed25519 signature in a single call.
+     *
+     * The public key is derived internally from @p secret_key, so you only need to provide
+     * the secret scalar.
+     *
+     * @param message_digest the 32-byte hash of the message to sign
+     * @param secret_key the signer's secret scalar
+     * @return the resulting signature
      */
     crypto_signature_t generate_signature(const crypto_hash_t &message_digest, const crypto_scalar_t &secret_key);
-
-    /**
-     * Prepares a single signature (non-ring) using the primitive values provided
-     * Must be completed via complete_signature before it will validate
-     * @param message_digest
-     * @param public_key
-     * @return
-     */
-    crypto_signature_t prepare_signature(const crypto_hash_t &message_digest, const crypto_public_key_t &public_key);
 } // namespace Crypto::Signature
 
 #endif // CRYPTO_SIGNATURE_H

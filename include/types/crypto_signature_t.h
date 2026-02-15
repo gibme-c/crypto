@@ -24,16 +24,33 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file crypto_signature_t.h
+ * @brief Ed25519 signature type composed of two scalar components (L, R).
+ *
+ * An Ed25519 signature is a 64-byte value split into two 32-byte scalars: L (sometimes
+ * called the commitment or "c" challenge) and R (the response or "r" scalar). During
+ * verification, these are combined with the message hash and public key to check the
+ * signature equation. Serialized as the simple concatenation L || R.
+ */
+
 #ifndef CRYPTO_SIGNATURE_T
 #define CRYPTO_SIGNATURE_T
 
 #include <types/crypto_hash_t.h>
 #include <types/crypto_scalar_t.h>
 
+/**
+ * A 64-byte Ed25519 signature consisting of two scalar components (L and R).
+ *
+ * L is the commitment scalar (often derived from a hash of the ephemeral point and message),
+ * and R is the response scalar computed from the signer's secret key. Together they satisfy
+ * the verification equation that proves knowledge of the signing key without revealing it.
+ */
 struct crypto_signature_t final : Serializable
 {
     /**
-     * Constructor methods
+     * Constructors -- accept raw bytes (64 bytes = L || R), hex strings, or JSON.
      */
 
     crypto_signature_t() = default;
@@ -67,8 +84,8 @@ struct crypto_signature_t final : Serializable
     void deserialize(const std::vector<unsigned char> &data) override;
 
     /**
-     * Returns if the structure is empty (unset)
-     * @return
+     * Returns whether the signature is empty (both L and R are zero / unset).
+     * @return true if the signature has not been initialized
      */
     [[nodiscard]] bool empty() const;
 
@@ -86,8 +103,8 @@ struct crypto_signature_t final : Serializable
     JSON_FROM_KEY_FUNC(fromJSON) override;
 
     /**
-     * Provides the hash of the serialized structure
-     * @return
+     * Computes the SHA-3 hash of the serialized signature bytes.
+     * @return the 256-bit hash of this signature
      */
     [[nodiscard]] crypto_hash_t hash() const;
 
@@ -104,8 +121,9 @@ struct crypto_signature_t final : Serializable
     [[nodiscard]] std::vector<unsigned char> serialize() const override;
 
     /**
-     * Use this method instead of sizeof(crypto_signature_t) to get the resulting size of the value in bytes
-     * @return
+     * Returns the serialized size in bytes (always 64: 32 for L + 32 for R).
+     * Use this instead of sizeof(crypto_signature_t) which includes internal padding.
+     * @return the byte size of the serialized signature
      */
     [[nodiscard]] size_t size() const override;
 
@@ -116,8 +134,8 @@ struct crypto_signature_t final : Serializable
     JSON_TO_FUNC(toJSON) override;
 
     /**
-     * Encodes a signature as a hexadecimal string
-     * @return
+     * Encodes the signature as a 128-character hexadecimal string (L || R).
+     * @return the hex-encoded signature string
      */
     [[nodiscard]] std::string to_string() const override;
 
@@ -129,18 +147,17 @@ struct crypto_signature_t final : Serializable
     void from_string(const std::string &s);
 
     /**
-     * A signature is composes of two scalars concatenated together such that S = (L || R)
+     * Internal layout: two concatenated scalars forming the 64-byte signature S = (L || R).
      */
     struct signature_scalars
     {
-        crypto_scalar_t L;
-        crypto_scalar_t R;
+        crypto_scalar_t L; ///< The commitment/challenge scalar
+        crypto_scalar_t R; ///< The response scalar
     };
 
   public:
     /**
-     * Provides an easy to reference structure for the signature of either the concatenated
-     * L and R values together as a single 64 bytes or via the individual L & R scalars
+     * The signature's two components, accessible as LR.L and LR.R.
      */
     signature_scalars LR;
 };

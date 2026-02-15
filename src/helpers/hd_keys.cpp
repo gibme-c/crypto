@@ -24,6 +24,11 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file hd_keys.cpp
+ * @brief SLIP-0010 / BIP-32 hierarchical deterministic key derivation via HMAC-SHA512.
+ */
+
 #include <cryptopp/hmac.h>
 #include <cryptopp/pwdbased.h>
 #include <cryptopp/sha.h>
@@ -80,10 +85,12 @@ static std::tuple<crypto_hash_t, crypto_hash_t>
 
     crypto_hash_t child_key, child_chain_code;
 
+    // SLIP-0010 hardened child: HMAC-SHA512(chain_code, 0x00 || parent_key || index_BE)
     data[0] = 0x00;
 
     std::copy(parent_key.data(), parent_key.data() + parent_key.size(), data + 1);
 
+    // Index as 4-byte big-endian
     data[33] = (index >> 24) & 0xFF;
 
     data[34] = (index >> 16) & 0xFF;
@@ -94,6 +101,7 @@ static std::tuple<crypto_hash_t, crypto_hash_t>
 
     const auto hash = calculate_hmac_sha512(chain_code.data(), chain_code.size(), data, sizeof(data));
 
+    // Split 64-byte HMAC output: left half = child key, right half = child chain code
     std::vector<unsigned char> temp;
 
     temp.assign(hash.begin(), hash.begin() + 32);

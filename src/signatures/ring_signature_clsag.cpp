@@ -27,6 +27,12 @@
 // Inspired by the work of Sarang Noether found at
 // https://github.com/SarangNoether/skunkworks/tree/clsag
 
+/**
+ * @file ring_signature_clsag.cpp
+ * @brief CLSAG (Compact Linkable Spontaneous Anonymous Group) ring signatures with optional
+ *        Pedersen commitment binding via mu_P/mu_C aggregation coefficients.
+ */
+
 #include <cstring>
 
 #include <crypto_constants.h>
@@ -36,6 +42,8 @@
 
 namespace Crypto::RingSignature::CLSAG
 {
+    // ---- Verify: reconstruct challenge chain and check that it closes back to h0 ----
+
     bool check_ring_signature(
         const crypto_hash_t &message_digest,
         const crypto_key_image_t &key_image,
@@ -47,7 +55,7 @@ namespace Crypto::RingSignature::CLSAG
             (signature.commitment_image.valid() && commitments.size() == public_keys.size()
              && signature.pseudo_commitment.valid());
 
-        // check to verify that there are no duplicate keys in the set
+        // Reject rings with duplicate public keys
         {
             const auto keys = dedupe_and_sort_keys(public_keys);
 
@@ -64,6 +72,7 @@ namespace Crypto::RingSignature::CLSAG
             return false;
         }
 
+        // Key image must be in the prime-order subgroup to prevent small-subgroup attacks
         if (!key_image.check_subgroup())
         {
             return false;
@@ -71,12 +80,15 @@ namespace Crypto::RingSignature::CLSAG
 
         const auto &h0 = signature.challenge;
 
-        // the computational hash vector is only as big as our ring (not including the check hash)
         std::vector<crypto_scalar_t> h(ring_size);
+
+        // ---- Compute aggregation coefficients mu_P and mu_C ----
+        // mu_P weights the public key component; mu_C weights the commitment component.
+        // Both are derived from domain-separated transcripts binding the ring and key image.
 
         crypto_scalar_t mu_P, mu_C;
 
-        // generate mu_P
+        // mu_P: aggregation weight for public key terms
         {
             scalar_transcript_t transcript(CLSAG_DOMAIN_0, key_image);
 
@@ -95,12 +107,11 @@ namespace Crypto::RingSignature::CLSAG
 
             if (!mu_P.valid())
             {
-                // our mu_P cannot be 0
                 return false;
             }
         }
 
-        // generate mu_C
+        // mu_C: aggregation weight for commitment terms (different domain separator)
         if (use_commitments)
         {
             scalar_transcript_t transcript(CLSAG_DOMAIN_2, key_image);
@@ -117,17 +128,13 @@ namespace Crypto::RingSignature::CLSAG
 
             if (!mu_C.valid())
             {
-                // our mu_C cannot be 0
                 return false;
             }
         }
 
-        /**
-         * This transcript is the same for each round so re-computing the state of the
-         * transcript for each round is a waste of processing power, instead we'll
-         * preload this information and make a copy of the state before we use it
-         * for each round's computation
-         */
+        // ---- Challenge chain: preload shared transcript state, then iterate the ring ----
+        // The base transcript (domain, message, keys, commitments) is constant across rounds;
+        // each round forks a copy and appends its own (L, R) before hashing.
         scalar_transcript_t transcript(CLSAG_DOMAIN_1, message_digest);
 
         transcript.update(public_keys);
@@ -139,10 +146,9 @@ namespace Crypto::RingSignature::CLSAG
             transcript.update(signature.pseudo_commitment);
         }
 
-        // pre-extract ge_p3 for key_image (constant across all iterations)
+        // Cache ge_p3 representations outside the loop (constant across iterations)
         const auto key_image_p3 = key_image.p3();
 
-        // if using commitments, pre-extract commitment_image ge_p3
         ge_p3 commitment_image_p3 = {};
 
         if (use_commitments)
@@ -235,8 +241,11 @@ namespace Crypto::RingSignature::CLSAG
             h[(i + 1) % ring_size] = challenge;
         }
 
+        // The ring closes iff the recomputed chain returns to the initial challenge
         return h[0] == h0;
     }
+
+    // ---- Sign (auto-detect signer index): find our key in the ring, then delegate ----
 
     std::tuple<bool, crypto_clsag_signature_t> generate_ring_signature(
         const crypto_hash_t &message_digest,
@@ -299,6 +308,8 @@ namespace Crypto::RingSignature::CLSAG
             input_blinding_factor, public_commitments, pseudo_blinding_factor, pseudo_commitment);
     }
 
+    // ---- Sign (explicit signer index): inlined CLSAG construction ----
+
     std::tuple<bool, crypto_clsag_signature_t> generate_ring_signature(
         const crypto_hash_t &message_digest,
         const crypto_scalar_t &secret_ephemeral,
@@ -314,7 +325,7 @@ namespace Crypto::RingSignature::CLSAG
             return {false, {}};
         }
 
-        // check to verify that there are no duplicate keys in the set
+        // Reject rings with duplicate public keys
         {
             const auto keys = dedupe_and_sort_keys(public_keys);
 
@@ -398,7 +409,8 @@ namespace Crypto::RingSignature::CLSAG
         }
 
     try_again:
-        // help to provide stronger RNG for the alpha scalar
+        // ---- Generate nonce and random decoy scalars ----
+        // Derive nonce by hashing message, key image, commitments, and fresh randomness
         scalar_transcript_t alpha_transcript(message_digest, key_image, crypto_scalar_t::random());
 
         alpha_transcript.update(input_blinding_factor, pseudo_blinding_factor, pseudo_commitment);
@@ -416,9 +428,10 @@ namespace Crypto::RingSignature::CLSAG
 
         std::vector<crypto_scalar_t> h(ring_size);
 
+        // ---- Compute aggregation coefficients (must match verifier's computation) ----
         crypto_scalar_t mu_P, mu_C;
 
-        // generate mu_P
+        // mu_P: aggregation weight for public key terms
         {
             scalar_transcript_t transcript(CLSAG_DOMAIN_0, key_image);
 
@@ -441,7 +454,7 @@ namespace Crypto::RingSignature::CLSAG
             }
         }
 
-        // generate mu_C
+        // mu_C: aggregation weight for commitment terms
         if (use_commitments)
         {
             scalar_transcript_t transcript(CLSAG_DOMAIN_2, key_image);
@@ -462,12 +475,8 @@ namespace Crypto::RingSignature::CLSAG
             }
         }
 
-        /**
-         * This transcript is the same for each round so re-computing the state of the
-         * transcript for each round is a waste of processing power, instead we'll
-         * preload this information and make a copy of the state before we use it
-         * for each round's computation
-         */
+        // ---- Build challenge chain starting from the real signer ----
+        // Preload shared transcript state; each round forks a copy and appends (L, R).
         scalar_transcript_t transcript(CLSAG_DOMAIN_1, message_digest);
 
         transcript.update(public_keys);
@@ -479,7 +488,7 @@ namespace Crypto::RingSignature::CLSAG
             transcript.update(pseudo_commitment);
         }
 
-        // real input
+        // Real input: use alpha nonce for commitment points (L, R)
         {
             // L = (a * G) mod l;
             const auto L = alpha_scalar * G;
@@ -502,12 +511,12 @@ namespace Crypto::RingSignature::CLSAG
             h[(real_output_index + 1) % ring_size] = challenge;
         }
 
+        // Propagate the challenge chain through all decoy members
         if (ring_size > 1)
         {
-            // pre-extract ge_p3 for key_image (constant across all iterations)
+            // Cache ge_p3 representations outside the loop
             const auto key_image_p3 = key_image.p3();
 
-            // if using commitments, pre-extract commitment_image ge_p3
             ge_p3 commitment_image_p3 = {};
 
             if (use_commitments)
@@ -593,10 +602,10 @@ namespace Crypto::RingSignature::CLSAG
             }
         }
 
-        // complete the signature
+        // ---- Close the ring: compute real signer's response scalar ----
+        // s_real = alpha - h_real * (mu_P * x + mu_C * z)
         signature[real_output_index] = alpha_scalar;
 
-        // s = [alpha - (h[real_output_index] * (p * mu_P))] mod l
         signature[real_output_index] -= (h[real_output_index] * (mu_P * secret_ephemeral));
 
         if (use_commitments)

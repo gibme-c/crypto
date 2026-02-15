@@ -24,6 +24,16 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file audit.h
+ * @brief Ownership and output proofs for selective disclosure.
+ *
+ * Sometimes you need to prove to a third party that you own certain outputs or keys
+ * without revealing your secret keys. This module generates and verifies compact
+ * proofs (encoded as Base58 strings) that demonstrate ownership by signing with the
+ * secret ephemeral keys and providing the resulting key images.
+ */
+
 #ifndef CRYPTO_AUDIT_H
 #define CRYPTO_AUDIT_H
 
@@ -33,25 +43,28 @@
 namespace Crypto::Audit
 {
     /**
-     * Verifies the proof provided using the public ephemerals by decoding the Base58 proof,
-     * extracting the key images, and the signatures, and then verifying those signatures if
-     * all of the proofs are valid, the key images are returned as well
+     * Verifies an outputs ownership proof against known public ephemeral keys.
      *
-     * @param public_ephemerals
-     * @param proof
-     * @return
+     * Decodes the Base58-encoded proof string, extracts the key images and signatures,
+     * and verifies each signature. If all signatures check out, the key images are
+     * returned so you can use them for further checks (e.g., detecting double-spends).
+     *
+     * @param public_ephemerals the public ephemeral keys the proof claims to own
+     * @param proof the Base58-encoded proof string
+     * @return a tuple of {valid, key_images} -- key_images is populated only when valid is true
      */
     std::tuple<bool, std::vector<crypto_key_image_t>>
         check_outputs_proof(const std::vector<crypto_public_key_t> &public_ephemerals, const std::string &proof);
 
     /**
-     * Generates proof of having the secret ephemerals specified by generating the relevant
-     * public keys, key images, and signature for each and encoding the necessary information
-     * into a Base58 string that can be given to a verifier that already has the public
-     * ephemerals
+     * Generates a proof that you own the given secret ephemeral keys.
      *
-     * @param secret_ephemerals
-     * @return
+     * For each secret key, this derives the public key and key image, signs a proof
+     * of knowledge, and packs everything into a Base58 string. The verifier only needs
+     * the public ephemerals (which they already have) and this proof string.
+     *
+     * @param secret_ephemerals the secret ephemeral scalars you want to prove ownership of
+     * @return a tuple of {success, proof_string} -- the Base58-encoded proof
      */
     std::tuple<bool, std::string> generate_outputs_proof(const std::vector<crypto_scalar_t> &secret_ephemerals);
 } // namespace Crypto::Audit

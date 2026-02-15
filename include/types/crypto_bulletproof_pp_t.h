@@ -26,6 +26,11 @@
 //
 // Based on ePrint 2022/510 (Bulletproofs++)
 
+/**
+ * @file crypto_bulletproof_pp_t.h
+ * @brief Bulletproofs++ range proof data structure using the reciprocal-argument approach.
+ */
+
 #ifndef CRYPTO_BULLETPROOF_PP_T
 #define CRYPTO_BULLETPROOF_PP_T
 
@@ -34,7 +39,26 @@
 #include <types/crypto_scalar_t.h>
 
 /**
- * A Bulletproof++ Range Proof
+ * @brief A Bulletproofs++ range proof -- the most compact variant using a reciprocal-argument approach.
+ *
+ * Bulletproofs++ (ePrint 2022/510) takes a fundamentally different approach from BP and BP+.
+ * Instead of an inner product argument, it uses a reciprocal argument combined with a Weighted
+ * Norm Linear Argument (WNLA) as the inner proof system. The result is the most compact range
+ * proof in this library: approximately 516 bytes for a single 64-bit range proof, compared to
+ * ~578 bytes for BP+ and ~674 bytes for original BP.
+ *
+ * Verification is also faster at around 466 microseconds per proof, with efficient batch
+ * verification at roughly 680 microseconds for 8 proofs.
+ *
+ * This implementation supports single-value proofs only (M=1) with N=64 bits and uses base-16
+ * digit decomposition (16 digits of 4 bits each), which provides a good balance between proof
+ * size and prover efficiency.
+ *
+ * Proof components:
+ * - C_l, C_r, C_o, C_s: commitment points from the reciprocal-argument encoding
+ * - R: the norm argument commitment
+ * - X, W: auxiliary points from WNLA folding rounds
+ * - l, n: final scalar vectors from the WNLA reduction
  */
 struct crypto_bulletproof_pp_t final : Serializable
 {
@@ -62,8 +86,13 @@ struct crypto_bulletproof_pp_t final : Serializable
     explicit crypto_bulletproof_pp_t(Serialization::deserializer_t &reader);
 
     /**
-     * Checks that the basic construction of the proof is valid
-     * @return
+     * Checks that the basic construction of the proof is valid.
+     *
+     * Validates that X and W vectors have matching lengths, l and n have the expected
+     * final dimensions, all points are on the curve, and all scalars are reduced. This is
+     * a structural check only -- it does not verify the zero-knowledge proof itself.
+     *
+     * @return true if the proof has a structurally valid construction
      */
     [[nodiscard]] bool check_construction() const;
 
@@ -94,43 +123,53 @@ struct crypto_bulletproof_pp_t final : Serializable
 
     /**
      * Provides the hash of the serialized structure
-     * @return
+     * @return the SHA3-256 hash of the serialized byte representation
      */
     [[nodiscard]] crypto_hash_t hash() const;
 
     /**
      * Serializes the struct to a byte array
-     * @param writer
+     * @param writer the serializer to write into
      */
     void serialize(Serialization::serializer_t &writer) const override;
 
     /**
      * Serializes the struct to a byte array
-     * @return
+     * @return the serialized byte vector
      */
     [[nodiscard]] std::vector<unsigned char> serialize() const override;
 
     /**
      * Returns the serialized byte size
-     * @return
+     * @return size in bytes
      */
     [[nodiscard]] size_t size() const override;
 
     /**
      * Writes the structure as JSON to the provided writer
-     * @param writer
+     * @param writer the JSON writer to output into
      */
     JSON_TO_FUNC(toJSON) override;
 
     /**
      * Returns the hex encoded serialized byte array
-     * @return
+     * @return hex string of the serialized proof
      */
     [[nodiscard]] std::string to_string() const override;
 
+    /** @brief Reciprocal-argument commitment points. C_l and C_r encode the left/right digit
+     *  polynomials, C_o encodes the cross-term, and C_s is the shift commitment. */
     crypto_point_t C_l, C_r, C_o, C_s;
+
+    /** @brief Norm argument commitment point from the WNLA initialization. */
     crypto_point_t R;
+
+    /** @brief Auxiliary points from each WNLA folding round. X and W each have one element
+     *  per round (typically 4 rounds for N=64, base-16). */
     std::vector<crypto_point_t> X, W;
+
+    /** @brief Final scalar vectors after WNLA reduction. l and n each contain the remaining
+     *  unreduced elements (typically 1 element each after all folding rounds). */
     std::vector<crypto_scalar_t> l, n;
 };
 

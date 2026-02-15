@@ -24,6 +24,16 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file mnemonics.h
+ * @brief BIP-39 mnemonic word encoding for human-friendly key backup and recovery.
+ *
+ * Converts raw entropy (or a seed) into a sequence of common words drawn from a
+ * standardized word list, and converts them back. Instead of asking users to write
+ * down 32 hex bytes, you give them 24 English words (or another supported language)
+ * that encode the same information with a built-in checksum. Supports 10 languages.
+ */
+
 #ifndef CRYPTO_MNEMONICS_H
 #define CRYPTO_MNEMONICS_H
 
@@ -34,77 +44,84 @@
 namespace Crypto::Mnemonics
 {
     /**
-     * Decodes a vector of mnemonic phrase words into the seed it represents
+     * Decodes a mnemonic phrase back into the entropy it represents.
      *
-     * @param words
-     * @param language
-     * @return
+     * @param words the mnemonic words (typically 12 or 24 words)
+     * @param language the word list language (defaults to English)
+     * @return the recovered entropy
      */
     crypto_entropy_t
         decode(const std::vector<std::string> &words, const Language::Language &language = Language::Language::ENGLISH);
 
     /**
-     * Decodes a vector of mnemonic phrase words into the bytes it represents
+     * Decodes a mnemonic phrase into raw bytes.
      *
-     * @param words
-     * @param language
-     * @return
+     * Similar to decode() but returns the raw byte vector instead of a typed entropy object.
+     *
+     * @param words the mnemonic words
+     * @param language the word list language (defaults to English)
+     * @return the decoded raw bytes
      */
     std::vector<unsigned char> decode_raw(
         const std::vector<std::string> &words,
         const Language::Language &language = Language::Language::ENGLISH);
 
     /**
-     * Encodes the given vector a vector of mnemonic phrase words
+     * Encodes raw bytes into a mnemonic phrase.
      *
-     * @param input
-     * @param language
-     * @return
+     * @param input the raw bytes to encode
+     * @param language the word list language (defaults to English)
+     * @return the mnemonic words
      */
     std::vector<std::string> encode(
         const std::vector<unsigned char> &input,
         const Language::Language &language = Language::Language::ENGLISH);
 
     /**
-     * Encodes the given seed into a vector of mnemonic phrase words
+     * Encodes entropy into a mnemonic phrase.
      *
-     * @param wallet_seed
-     * @param language
-     * @return
+     * @param wallet_seed the entropy to encode
+     * @param language the word list language (defaults to English)
+     * @return the mnemonic words
      */
     std::vector<std::string>
         encode(const crypto_entropy_t &wallet_seed, const Language::Language &language = Language::Language::ENGLISH);
 
     /**
-     * Returns the supported languages
+     * Returns the list of supported mnemonic languages.
      *
-     * @return
+     * @return a vector of available Language enum values
      */
     std::vector<Language::Language> languages();
 
     /**
-     * Finds the index of the given word in the word list or returns std::nullopt if not found
+     * Looks up a word's index in the mnemonic word list.
      *
-     * @param word
-     * @param language
-     * @return
+     * Useful for validating individual words or building custom encoding logic.
+     *
+     * @param word the word to search for
+     * @param language the word list language (defaults to English)
+     * @return the 0-based index, or std::nullopt if the word is not in the list
      */
     std::optional<size_t>
         word_index(const std::string &word, const Language::Language &language = Language::Language::ENGLISH);
 
     /**
-     * Returns the full word list
+     * Returns the complete BIP-39 word list for the given language.
      *
-     * @param language
-     * @return
+     * @param language the word list language (defaults to English)
+     * @return all 2048 words in the word list
      */
     std::vector<std::string> word_list(const Language::Language &language = Language::Language::ENGLISH);
 
     /**
-     * Returns the full word list but trimmed to the minimum number of characters per word
+     * Returns the word list with each word trimmed to its minimum unique prefix.
      *
-     * @param language
-     * @return
+     * BIP-39 word lists are designed so that each word is uniquely identifiable by its
+     * first few characters. This returns those shortened forms.
+     *
+     * @param language the word list language (defaults to English)
+     * @return the trimmed word list
      */
     std::vector<std::string> word_list_trimmed(const Language::Language &language = Language::Language::ENGLISH);
 } // namespace Crypto::Mnemonics

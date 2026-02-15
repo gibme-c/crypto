@@ -24,6 +24,17 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file ring_signature_borromean.h
+ * @brief Borromean ring signature generation and verification.
+ *
+ * A Borromean ring signature lets you prove that you know the secret key for *one* of the
+ * public keys in a ring, without revealing *which* one. The key image parameter makes the
+ * signature **linkable**: if the same secret key signs two different messages, both
+ * signatures will share the same key image, enabling double-spend detection without
+ * breaking signer anonymity.
+ */
+
 #ifndef CRYPTO_RING_SIGNATURE_BORROMEAN_H
 #define CRYPTO_RING_SIGNATURE_BORROMEAN_H
 
@@ -32,12 +43,16 @@
 namespace Crypto::RingSignature::Borromean
 {
     /**
-     * Checks the Borromean ring signature presented
-     * @param message_digest
-     * @param key_image
-     * @param public_keys
-     * @param signature
-     * @return
+     * Verifies a Borromean ring signature.
+     *
+     * Checks that the signature is valid for the given message, key image, and set of
+     * public keys. The verifier does not learn which ring member actually signed.
+     *
+     * @param message_digest 32-byte hash of the signed message
+     * @param key_image the key image I -- must match the one embedded in the signature
+     * @param public_keys the ring of public keys (one of which is the real signer)
+     * @param borromean_signature the Borromean ring signature to verify
+     * @return true if the signature is valid
      */
     bool check_ring_signature(
         const crypto_hash_t &message_digest,
@@ -46,12 +61,16 @@ namespace Crypto::RingSignature::Borromean
         const crypto_borromean_signature_t &borromean_signature);
 
     /**
-     * Generates Borromean ring signature using the secret key provided
-     * Auto-detects the signer's index via constant-time scan
-     * @param message_digest
-     * @param secret_ephemeral
-     * @param public_keys
-     * @return
+     * Generates a Borromean ring signature, auto-detecting the signer's position.
+     *
+     * Scans @p public_keys in constant time to find the index whose public key matches
+     * the one derived from @p secret_ephemeral. The resulting signature hides which
+     * member of the ring actually signed, while the embedded key image allows linkability.
+     *
+     * @param message_digest 32-byte hash of the message to sign
+     * @param secret_ephemeral the signer's one-time secret scalar
+     * @param public_keys the ring of public keys to sign against
+     * @return (success, signature) -- success is false if the secret key does not match any ring member
      */
     std::tuple<bool, crypto_borromean_signature_t> generate_ring_signature(
         const crypto_hash_t &message_digest,
@@ -59,13 +78,16 @@ namespace Crypto::RingSignature::Borromean
         const std::vector<crypto_public_key_t> &public_keys);
 
     /**
-     * Generates Borromean ring signature using the secret key provided
-     * Caller specifies the signer's index (still validated)
-     * @param message_digest
-     * @param secret_ephemeral
-     * @param public_keys
-     * @param real_output_index
-     * @return
+     * Generates a Borromean ring signature with an explicit signer index.
+     *
+     * Same as the auto-detect overload, but you provide @p real_output_index directly.
+     * The index is still validated against the secret key for safety.
+     *
+     * @param message_digest 32-byte hash of the message to sign
+     * @param secret_ephemeral the signer's one-time secret scalar
+     * @param public_keys the ring of public keys to sign against
+     * @param real_output_index position of the real signer's public key in @p public_keys
+     * @return (success, signature) tuple
      */
     std::tuple<bool, crypto_borromean_signature_t> generate_ring_signature(
         const crypto_hash_t &message_digest,

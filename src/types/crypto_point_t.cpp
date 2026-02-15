@@ -24,12 +24,18 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file crypto_point_t.cpp
+ * @brief Ed25519 curve point operations with cached ge representations.
+ */
+
 #include <crypto_config.h>
 #include <cryptopp/sha3.h>
 #include <helpers/random_bytes.h>
 #include <types/crypto_point_t.h>
 #include <ed25519/include/ed25519_secure_erase.h>
 
+// Ed25519 identity point (0, 1) in compressed form: Y=1 with sign bit 0
 static unsigned char z_point[32] = {0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
@@ -88,6 +94,7 @@ crypto_point_t::crypto_point_t(const uint64_t &number)
 
 crypto_point_t::~crypto_point_t()
 {
+    // Wipe all representations to prevent key material from lingering in memory
     ed25519_secure_erase(bytes, sizeof(bytes));
 
     ed25519_secure_erase(&point3, sizeof(point3));
@@ -108,7 +115,7 @@ crypto_point_t crypto_point_t::operator+(const crypto_point_t &other) const
 {
     ge_p1p1 tmp2 = {};
 
-    // AB = (a + b) mod l
+    // Point addition using cached representation of RHS for efficiency
     ge_add(&tmp2, &point3, &other.cached_point);
 
     ge_p3 final = {};
@@ -127,7 +134,7 @@ crypto_point_t crypto_point_t::operator-(const crypto_point_t &other) const
 {
     ge_p1p1 tmp2 = {};
 
-    // AB = (a - b) mod l
+    // Point subtraction using cached representation of RHS for efficiency
     ge_sub(&tmp2, &point3, &other.cached_point);
 
     ge_p3 final = {};
@@ -139,7 +146,8 @@ crypto_point_t crypto_point_t::operator-(const crypto_point_t &other) const
 
 crypto_point_t crypto_point_t::operator-() const
 {
-    crypto_point_t other({1}); // Z = (0, 1)
+    // Unary negation: identity - P = -P
+    crypto_point_t other({1}); // identity point (0, 1)
 
     return other - *this;
 }
@@ -163,6 +171,7 @@ bool crypto_point_t::check() const
 
 bool crypto_point_t::check_subgroup() const
 {
+    // Verify the point lies in the prime-order subgroup (not a small-subgroup element)
     ge_dsmp tmp;
 
     ge_dsm_precomp(tmp, &point3);
@@ -177,6 +186,7 @@ bool crypto_point_t::empty() const
 
 crypto_point_t crypto_point_t::mul8() const
 {
+    // Multiply by cofactor 8 to project into the prime-order subgroup
     ge_p1p1 tmp = {};
 
     ge_p2 point2 = {};
@@ -194,11 +204,13 @@ crypto_point_t crypto_point_t::mul8() const
 
 crypto_point_t crypto_point_t::negate() const
 {
+    // Negate in extended coordinates: -P = (-X, Y, Z, -T) but since Ed25519
+    // compressed form encodes the sign of X in the high bit of Y, we negate Y
+    // in the internal representation to flip the X-coordinate sign on re-encoding.
     ge_p3 tmp = {};
 
     fe_copy(tmp.X, point3.X);
 
-    // Flip the sign on the Y-coordinate
     fe_neg(tmp.Y, point3.Y);
 
     fe_copy(tmp.T, point3.T);
@@ -247,6 +259,8 @@ std::vector<crypto_point_t> crypto_point_t::random(size_t count)
 
 crypto_point_t crypto_point_t::reduce(const unsigned char *bytes)
 {
+    // Hash-to-curve: Elligator map to get a curve point, then mul8 to clear
+    // the cofactor and land in the prime-order subgroup
     ge_p2 point = {};
 
     ge_p1p1 point2 = {};
@@ -296,6 +310,8 @@ bool crypto_point_t::valid(bool allow_identity) const
 
 void crypto_point_t::load_hook()
 {
+    // Decode compressed point and pre-compute both ge_p3 and ge_cached forms.
+    // ge_cached is needed for efficient point addition/subtraction later.
     if (ge_frombytes_vartime(&point3, bytes) != 0)
     {
         throw std::runtime_error("could not load point");

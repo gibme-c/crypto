@@ -25,6 +25,11 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file cn_base58.cpp
+ * @brief CryptoNote block-based Base58: encodes in fixed 8-byte blocks for constant-length output.
+ */
+
 #include <cassert>
 #include <crypto_config.h>
 #include <encoding/cn_base58.h>

@@ -24,6 +24,11 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file crypto_point_vector_t.cpp
+ * @brief Element-wise point arithmetic, scalar-point batch multiplication, and MSM-based inner product.
+ */
+
 #include <helpers/dedupe_and_sort_keys.h>
 #include <types/crypto_point_vector_t.h>
 #include <utility>
@@ -84,6 +89,8 @@ crypto_point_vector_t crypto_point_vector_t::operator*(const crypto_scalar_t &ot
     return crypto_point_vector_t(result);
 }
 
+// Computes result[i] = a*this[i] + b*B[i] using double-scalar multiplication per element.
+// Used in IPA generator folding where all elements share the same challenge scalar pair.
 crypto_point_vector_t crypto_point_vector_t::dbl_mult(
     const crypto_scalar_t &a,
     const crypto_point_vector_t &B,

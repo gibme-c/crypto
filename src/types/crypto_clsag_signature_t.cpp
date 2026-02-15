@@ -27,6 +27,11 @@
 // Inspired by the work of Sarang Noether found at
 // https://github.com/SarangNoether/skunkworks/tree/clsag
 
+/**
+ * @file crypto_clsag_signature_t.cpp
+ * @brief CLSAG signature serialization, deserialization, and construction validation.
+ */
+
 #include <types/crypto_clsag_signature_t.h>
 
 crypto_clsag_signature_t::crypto_clsag_signature_t(
@@ -168,6 +173,7 @@ void crypto_clsag_signature_t::serialize(Serialization::serializer_t &writer) co
 
     writer.pod(challenge);
 
+    // Commitment fields are optional: only present when signing with Pedersen commitments (RingCT mode)
     if (commitment_image.valid())
     {
         writer.boolean(true);

@@ -24,6 +24,11 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file crypto_secret_key_t.cpp
+ * @brief RFC-8032 Ed25519 secret key: SHA-512 expansion with clamping to derive the signing scalar.
+ */
+
 #include <cryptopp/sha.h>
 #include <ed25519/include/ed25519_secure_erase.h>
 #include <types/crypto_secret_key_t.h>
@@ -127,6 +132,9 @@ crypto_point_t crypto_secret_key_t::point() const
 
 void crypto_secret_key_t::load_hook()
 {
+    // RFC-8032 key expansion: SHA-512(secret_key), then take the lower 32 bytes
+    // and apply clamping + reduction to produce the signing scalar.
+    // The upper 32 bytes (discarded here) are used as nonce prefix during signing.
     std::vector<unsigned char> hash(64);
 
     CryptoPP::SHA512 hash_context;
@@ -135,7 +143,7 @@ void crypto_secret_key_t::load_hook()
 
     hash_context.Final(hash.data());
 
-    hash.resize(32); // truncate the hash to 32-bytes
+    hash.resize(32);
 
     _scalar = crypto_scalar_t(hash, true);
 

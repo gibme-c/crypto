@@ -24,6 +24,11 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file merkle.cpp
+ * @brief Merkle tree construction, branch extraction, and root verification using SHA-3.
+ */
+
 #include <proofs/merkle.h>
 
 static inline std::vector<crypto_hash_t> slice(const std::vector<crypto_hash_t> &values, size_t start, size_t count)
@@ -63,6 +68,7 @@ namespace Crypto::Merkle
         }
         else
         {
+            // Round down to the largest power of 2 <= count
             auto cnt = count - 1;
 
             for (size_t i = 1; i < 8 * sizeof(size_t); i <<= 1)
@@ -72,6 +78,7 @@ namespace Crypto::Merkle
 
             cnt &= ~(cnt >> 1);
 
+            // Hash excess leaves pairwise into the bottom layer, then fold upward
             const auto rounds = (2 * cnt) - count;
 
             std::vector<crypto_hash_t> temp_hashes = slice(hashes, 0, cnt);
@@ -81,6 +88,7 @@ namespace Crypto::Merkle
                 temp_hashes[j] = crypto_hash_t::sha3(slice(hashes, i, 2));
             }
 
+            // Iteratively combine pairs until 2 remain
             while (cnt > 2)
             {
                 cnt >>= 1;

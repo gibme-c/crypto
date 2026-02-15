@@ -24,6 +24,11 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file ringct.cpp
+ * @brief RingCT primitives: Pedersen commitments (C = vH + bG), amount masking, and pseudo commitment generation.
+ */
+
 #include <crypto_constants.h>
 #include <helpers/scalar_transcript_t.h>
 #include <proofs/ringct.h>
@@ -132,14 +137,11 @@ namespace Crypto::RingCT
 
         SCALAR_NZ_OR_THROW(amount);
 
-        /**
-         * By creating a new scalar of just the first 8 bytes of the amount then
-         * we are guaranteed to have the last 24 bytes as empty (zeros) and thus
-         * if we look at the resulting scalar via debugging and elsewhere we
-         * instantly know that it's representing either a masked or unmasked uint64_t
-         */
+        // Truncate to the low 8 bytes (uint64_t range) so the upper 24 bytes
+        // remain zero — making masked/unmasked amounts visually distinguishable.
         crypto_scalar_t temp = crypto_scalar_t(amount.to_uint64_t());
 
+        // XOR the amount with the mask (self-inverse: mask XOR mask = identity)
         for (size_t i = 0; i < sizeof(uint64_t); ++i)
         {
             temp[i] ^= amount_mask[i];

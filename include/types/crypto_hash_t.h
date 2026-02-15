@@ -24,6 +24,15 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file crypto_hash_t.h
+ * @brief 256-bit cryptographic hash type with multiple algorithm support and hash-to-curve operations.
+ *
+ * Provides a uniform 32-byte hash value that can be produced by SHA-3, SHA-256, SHA-384,
+ * SHA-512, Blake2b, or Argon2 (d/i/id variants). Also includes the critical hash-to-point
+ * and hash-to-scalar conversions used throughout the library's signature and proof systems.
+ */
+
 #ifndef CRYPTO_HASH_T
 #define CRYPTO_HASH_T
 
@@ -31,7 +40,11 @@
 #include <types/crypto_scalar_t.h>
 
 /**
- * A structure representing a 256-bit hash value
+ * A 256-bit (32-byte) cryptographic hash value.
+ *
+ * This type is the workhorse for hashing throughout the library. Beyond plain hashing, it
+ * provides conversions to scalars and curve points -- the building blocks for Fiat-Shamir
+ * challenges, key images, and deterministic domain separation constants.
  */
 struct crypto_hash_t final : SerializablePod<32>
 {
@@ -46,16 +59,20 @@ struct crypto_hash_t final : SerializablePod<32>
     explicit crypto_hash_t(const char value[65]);
 
     /**
-     * Hashes the given data with the given salt using Argon2d into a 256-bit hash
+     * Hashes the given data with the given salt using Argon2d into a 256-bit hash.
+     * Argon2d is data-dependent (memory access patterns depend on the input), making it
+     * maximally GPU/ASIC-resistant but potentially vulnerable to side-channel attacks.
+     * Best for non-interactive use cases like proof-of-work or key derivation where
+     * side channels are not a concern.
      *
-     * @param input
-     * @param length
-     * @param salt
-     * @param salt_length
-     * @param iterations number of iterations
+     * @param input pointer to the data to hash
+     * @param length byte length of the input data
+     * @param salt pointer to the salt bytes
+     * @param salt_length byte length of the salt
+     * @param iterations number of iterations (time cost)
      * @param memory memory use in kilobytes
      * @param threads number of threads and compute lanes
-     * @return
+     * @return the resulting 256-bit Argon2d hash
      */
     static crypto_hash_t argon2d(
         const void *input,
@@ -67,14 +84,14 @@ struct crypto_hash_t final : SerializablePod<32>
         size_t threads = 1);
 
     /**
-     * Hashes the given vector of data (using itself as salt) using Argon2d into a 256-bit hash
+     * Hashes the given vector of data (using itself as salt) using Argon2d into a 256-bit hash.
      *
-     * @tparam T
-     * @param input
-     * @param iterations number of iterations
+     * @tparam T element type of the input vector
+     * @param input the data to hash (also used as its own salt)
+     * @param iterations number of iterations (time cost)
      * @param memory memory use in kilobytes
      * @param threads number of threads and compute lanes
-     * @return
+     * @return the resulting 256-bit Argon2d hash
      */
     template<typename T>
     static crypto_hash_t argon2d(
@@ -88,14 +105,14 @@ struct crypto_hash_t final : SerializablePod<32>
     }
 
     /**
-     * Hashes the given data (using itself as salt) using Argon2d into a 256-bit hash
+     * Hashes the given data (using itself as salt) using Argon2d into a 256-bit hash.
      *
-     * @tparam T
-     * @param input
-     * @param iterations number of iterations
+     * @tparam T input type (must have .data() and .size())
+     * @param input the data to hash (also used as its own salt)
+     * @param iterations number of iterations (time cost)
      * @param memory memory use in kilobytes
      * @param threads number of threads and compute lanes
-     * @return
+     * @return the resulting 256-bit Argon2d hash
      */
     template<typename T>
     static crypto_hash_t
@@ -106,16 +123,19 @@ struct crypto_hash_t final : SerializablePod<32>
     }
 
     /**
-     * Hashes the given data with the given salt using Argon2i into a 256-bit hash
+     * Hashes the given data with the given salt using Argon2i into a 256-bit hash.
+     * Argon2i is data-independent (memory access patterns are fixed), making it resistant
+     * to side-channel attacks. Use this variant when the hashing environment may be shared
+     * or observed (e.g., password hashing on multi-tenant servers).
      *
-     * @param input
-     * @param length
-     * @param salt
-     * @param salt_length
-     * @param iterations number of iterations
+     * @param input pointer to the data to hash
+     * @param length byte length of the input data
+     * @param salt pointer to the salt bytes
+     * @param salt_length byte length of the salt
+     * @param iterations number of iterations (time cost)
      * @param memory memory use in kilobytes
      * @param threads number of threads and compute lanes
-     * @return
+     * @return the resulting 256-bit Argon2i hash
      */
     static crypto_hash_t argon2i(
         const void *input,
@@ -127,14 +147,14 @@ struct crypto_hash_t final : SerializablePod<32>
         size_t threads = 1);
 
     /**
-     * Hashes the given vector of data (using itself as salt) using Argon2i into a 256-bit hash
+     * Hashes the given vector of data (using itself as salt) using Argon2i into a 256-bit hash.
      *
-     * @tparam T
-     * @param input
-     * @param iterations number of iterations
+     * @tparam T element type of the input vector
+     * @param input the data to hash (also used as its own salt)
+     * @param iterations number of iterations (time cost)
      * @param memory memory use in kilobytes
      * @param threads number of threads and compute lanes
-     * @return
+     * @return the resulting 256-bit Argon2i hash
      */
     template<typename T>
     static crypto_hash_t argon2i(
@@ -148,14 +168,14 @@ struct crypto_hash_t final : SerializablePod<32>
     }
 
     /**
-     * Hashes the given data (using itself as salt) using Argon2i into a 256-bit hash
+     * Hashes the given data (using itself as salt) using Argon2i into a 256-bit hash.
      *
-     * @tparam T
-     * @param input
-     * @param iterations number of iterations
+     * @tparam T input type (must have .data() and .size())
+     * @param input the data to hash (also used as its own salt)
+     * @param iterations number of iterations (time cost)
      * @param memory memory use in kilobytes
      * @param threads number of threads and compute lanes
-     * @return
+     * @return the resulting 256-bit Argon2i hash
      */
     template<typename T>
     static crypto_hash_t
@@ -166,16 +186,19 @@ struct crypto_hash_t final : SerializablePod<32>
     }
 
     /**
-     * Hashes the given data with the given salt using Argon2id into a 256-bit hash
+     * Hashes the given data with the given salt using Argon2id into a 256-bit hash.
+     * Argon2id is the recommended hybrid: the first pass is data-independent (side-channel
+     * resistant like Argon2i), then subsequent passes are data-dependent (GPU-resistant
+     * like Argon2d). This is the best general-purpose choice for password hashing.
      *
-     * @param input
-     * @param length
-     * @param salt
-     * @param salt_length
-     * @param iterations number of iterations
+     * @param input pointer to the data to hash
+     * @param length byte length of the input data
+     * @param salt pointer to the salt bytes
+     * @param salt_length byte length of the salt
+     * @param iterations number of iterations (time cost)
      * @param memory memory use in kilobytes
      * @param threads number of threads and compute lanes
-     * @return
+     * @return the resulting 256-bit Argon2id hash
      */
     static crypto_hash_t argon2id(
         const void *input,
@@ -187,14 +210,14 @@ struct crypto_hash_t final : SerializablePod<32>
         size_t threads = 1);
 
     /**
-     * Hashes the given vector of data (using itself as salt) using Argon2id into a 256-bit hash
+     * Hashes the given vector of data (using itself as salt) using Argon2id into a 256-bit hash.
      *
-     * @tparam T
-     * @param input
-     * @param iterations number of iterations
+     * @tparam T element type of the input vector
+     * @param input the data to hash (also used as its own salt)
+     * @param iterations number of iterations (time cost)
      * @param memory memory use in kilobytes
      * @param threads number of threads and compute lanes
-     * @return
+     * @return the resulting 256-bit Argon2id hash
      */
     template<typename T>
     static crypto_hash_t argon2id(
@@ -208,14 +231,14 @@ struct crypto_hash_t final : SerializablePod<32>
     }
 
     /**
-     * Hashes the given data (using itself as salt) using Argon2id into a 256-bit hash
+     * Hashes the given data (using itself as salt) using Argon2id into a 256-bit hash.
      *
-     * @tparam T
-     * @param input
-     * @param iterations number of iterations
+     * @tparam T input type (must have .data() and .size())
+     * @param input the data to hash (also used as its own salt)
+     * @param iterations number of iterations (time cost)
      * @param memory memory use in kilobytes
      * @param threads number of threads and compute lanes
-     * @return
+     * @return the resulting 256-bit Argon2id hash
      */
     template<typename T>
     static crypto_hash_t
@@ -226,20 +249,20 @@ struct crypto_hash_t final : SerializablePod<32>
     }
 
     /**
-     * Hashes the given data using Blake2b into a 256-bit hash
+     * Hashes the given data using Blake2b into a 256-bit hash.
      *
-     * @param input
-     * @param length
-     * @return
+     * @param input pointer to the data to hash
+     * @param length byte length of the input data
+     * @return the resulting 256-bit Blake2b hash
      */
     static crypto_hash_t blake2b(const void *input, size_t length);
 
     /**
-     * Hashes the given data using Blake2b into a 256-bit hash
+     * Hashes the given vector of data using Blake2b into a 256-bit hash.
      *
-     * @tparam T
-     * @param input
-     * @return
+     * @tparam T element type of the input vector
+     * @param input the data to hash
+     * @return the resulting 256-bit Blake2b hash
      */
     template<typename T> static crypto_hash_t blake2b(const std::vector<T> &input)
     {
@@ -247,11 +270,11 @@ struct crypto_hash_t final : SerializablePod<32>
     }
 
     /**
-     * Hashes the given data using Blake2b into a 256-bit hash
+     * Hashes the given data using Blake2b into a 256-bit hash.
      *
-     * @tparam T
-     * @param input
-     * @return
+     * @tparam T input type (must have .data() and .size())
+     * @param input the data to hash
+     * @return the resulting 256-bit Blake2b hash
      */
     template<typename T> static crypto_hash_t blake2b(const T &input)
     {
@@ -259,42 +282,43 @@ struct crypto_hash_t final : SerializablePod<32>
     }
 
     /**
-     * Returns the number of leading 0s of the hash using it's hexadecimal representation
-     * @param reversed
-     * @return
+     * Counts leading zero hex characters in the hash string. Useful for proof-of-work
+     * difficulty checks where you need the hash to start with a certain number of zeros.
+     * @param reversed if true, count from the end of the hex string instead
+     * @return number of leading zero hex characters
      */
     [[nodiscard]] size_t hex_leading_zeros(bool reversed = false) const;
 
     /**
-     * Generates a random crypto hash
-     *
-     * @return
+     * Generates a random 256-bit hash from cryptographically secure random bytes.
+     * @return a random hash value
      */
     [[nodiscard]] static crypto_hash_t random();
 
     /**
-     * Generates a vector of random hashes
-     *
-     * @param count
-     * @return
+     * Generates a vector of random hashes.
+     * @param count how many random hashes to generate
+     * @return vector of independently sampled random hashes
      */
     [[nodiscard]] static std::vector<crypto_hash_t> random(size_t count);
 
     /**
-     * Hashes the given input data using SHA-3 into a 256-bit hash
+     * Hashes the given input data using SHA-3 (Keccak-256) into a 256-bit hash. This is the
+     * primary hash function used throughout the library for Fiat-Shamir challenges, key
+     * derivation, and transcript hashing.
      *
-     * @param input
-     * @param length
-     * @return
+     * @param input pointer to the data to hash
+     * @param length byte length of the input data
+     * @return the resulting 256-bit SHA-3 hash
      */
     static crypto_hash_t sha3(const void *input, size_t length);
 
     /**
-     * Hashes the given input data using SHA-3 into a 256-bit hash
+     * Hashes the given input data using SHA-3 (Keccak-256) into a 256-bit hash.
      *
-     * @tparam T
-     * @param input
-     * @return
+     * @tparam T input type (must have .data() and .size())
+     * @param input the data to hash
+     * @return the resulting 256-bit SHA-3 hash
      */
     template<typename T> static crypto_hash_t sha3(const T &input)
     {
@@ -302,28 +326,28 @@ struct crypto_hash_t final : SerializablePod<32>
     }
 
     /**
-     * Hashes the given input using SHA-3 for the number of rounds indicated by iterations
-     * this method also performs basic key stretching whereby the input data is appended
-     * to the resulting hash each round to "salt" each round of hashing to prevent simply
-     * iterating the hash over itself
+     * Iterated SHA-3 with key stretching for deterministic domain separation.
      *
-     * @param input
-     * @param length
-     * @param iterations number of iterations
-     * @return
+     * Each round appends the original input to the previous hash before re-hashing, so
+     * the result depends on both the input and the iteration count. This is used internally
+     * to generate the library's domain separation constants (salt scalars/points) -- NOT
+     * intended as a password hashing replacement (use Argon2 for that).
+     *
+     * @param input pointer to the data to hash
+     * @param length byte length of the input data
+     * @param iterations number of SHA-3 stretching rounds
+     * @return the resulting stretched 256-bit hash
      */
     static crypto_hash_t sha3_slow(const void *input, size_t length, uint64_t iterations);
 
     /**
-     * Hashes the given POD using SHA-3 for the number of rounds indicated by iterations
-     * this method also performs basic key stretching whereby the input data is appended
-     * to the resulting hash each round to "salt" each round of hashing to prevent simply
-     * iterating the hash over itself
+     * Iterated SHA-3 with key stretching (POD/string overload). See the raw-pointer
+     * overload for details on what "slow" means here.
      *
-     * @tparam T
-     * @param input
-     * @param iterations number of iterations
-     * @return
+     * @tparam T input type (must have .data() and .size())
+     * @param input the data to hash
+     * @param iterations number of SHA-3 stretching rounds (0 = single hash)
+     * @return the resulting stretched 256-bit hash
      */
     template<typename T> static crypto_hash_t sha3_slow(const T &input, uint64_t iterations = 0)
     {
@@ -331,18 +355,18 @@ struct crypto_hash_t final : SerializablePod<32>
     }
 
     /**
-     * Hashes the given input data using SHA-256 into a 256-bit hash
-     * @param input
-     * @param length
-     * @return
+     * Hashes the given input data using SHA-256 into a 256-bit hash.
+     * @param input pointer to the data to hash
+     * @param length byte length of the input data
+     * @return the resulting 256-bit SHA-256 hash
      */
     static crypto_hash_t sha256(const void *input, size_t length);
 
     /**
-     * Hashes the given input data using SHA-256 into a 256-bit hash
-     * @tparam T
-     * @param input
-     * @return
+     * Hashes the given input data using SHA-256 into a 256-bit hash.
+     * @tparam T input type (must have .data() and .size())
+     * @param input the data to hash
+     * @return the resulting 256-bit SHA-256 hash
      */
     template<typename T> static crypto_hash_t sha256(const T &input)
     {
@@ -350,18 +374,18 @@ struct crypto_hash_t final : SerializablePod<32>
     }
 
     /**
-     * Hashes the given input data using SHA-384 into a 256-bit hash
-     * @param input
-     * @param length
-     * @return
+     * Hashes the given input data using SHA-384 (truncated to 256 bits) into a 256-bit hash.
+     * @param input pointer to the data to hash
+     * @param length byte length of the input data
+     * @return the resulting 256-bit truncated SHA-384 hash
      */
     static crypto_hash_t sha384(const void *input, size_t length);
 
     /**
-     * Hashes the given input data using SHA-384 into a 256-bit hash
-     * @tparam T
-     * @param input
-     * @return
+     * Hashes the given input data using SHA-384 (truncated to 256 bits) into a 256-bit hash.
+     * @tparam T input type (must have .data() and .size())
+     * @param input the data to hash
+     * @return the resulting 256-bit truncated SHA-384 hash
      */
     template<typename T> static crypto_hash_t sha384(const T &input)
     {
@@ -369,18 +393,18 @@ struct crypto_hash_t final : SerializablePod<32>
     }
 
     /**
-     * Hashes the given input data using SHA-512 into a 256-bit hash
-     * @param input
-     * @param length
-     * @return
+     * Hashes the given input data using SHA-512 (truncated to 256 bits) into a 256-bit hash.
+     * @param input pointer to the data to hash
+     * @param length byte length of the input data
+     * @return the resulting 256-bit truncated SHA-512 hash
      */
     static crypto_hash_t sha512(const void *input, size_t length);
 
     /**
-     * Hashes the given input data using SHA-512 into a 256-bit hash
-     * @tparam T
-     * @param input
-     * @return
+     * Hashes the given input data using SHA-512 (truncated to 256 bits) into a 256-bit hash.
+     * @tparam T input type (must have .data() and .size())
+     * @param input the data to hash
+     * @return the resulting 256-bit truncated SHA-512 hash
      */
     template<typename T> static crypto_hash_t sha512(const T &input)
     {
@@ -388,37 +412,39 @@ struct crypto_hash_t final : SerializablePod<32>
     }
 
     /**
-     * Returns the number of leading 0s of the hash using the bits of the hash
-     * @param reversed
-     * @return
+     * Counts leading zero bits in the hash. Like hex_leading_zeros() but at bit granularity,
+     * giving finer difficulty resolution for proof-of-work checks.
+     * @param reversed if true (default), count from the high bits; if false, from the low bits
+     * @return number of leading zero bits
      */
     [[nodiscard]] size_t leading_zeros(bool reversed = true) const;
 
     /**
-     * Reduces the hash into a point
-     *
-     * @return
+     * Hash-to-point: deterministically maps this hash to an Ed25519 curve point. This is a
+     * critical operation used to generate key images (which must be unique per secret key)
+     * and to derive generator points for ring signatures and proofs.
+     * @return a curve point deterministically derived from the hash bytes
      */
     [[nodiscard]] crypto_point_t point() const;
 
     /**
-     * Reduces the hash into a scalar
-     *
-     * @return
+     * Hash-to-scalar: reduces the hash bytes modulo l to produce a canonical scalar. Used
+     * extensively for Fiat-Shamir challenge generation in non-interactive proofs and signatures.
+     * @return a scalar in [0, l) derived from the hash bytes
      */
     [[nodiscard]] crypto_scalar_t scalar() const;
 
     /**
-     * Generates a vector of the individual bits within the hash without regard to the
-     * endianness of the value by using the individual bytes represented in the hash
-     * @param reversed
-     * @return
+     * Decomposes the hash into individual bits (as bytes, each 0 or 1), processing bytes
+     * in storage order without endianness conversion.
+     * @param reversed if true, reverse the bit order
+     * @return vector of 256 bytes, each representing one bit of the hash
      */
     [[nodiscard]] std::vector<unsigned char> to_bits(bool reversed = false) const;
 
     /**
-     * Returns the hash as an uint256_t
-     * @return
+     * Returns the hash bytes interpreted as a 256-bit unsigned integer.
+     * @return the hash as a uint256_t
      */
     [[nodiscard]] uint256_t to_uint256_t() const;
 };

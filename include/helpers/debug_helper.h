@@ -24,6 +24,16 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/**
+ * @file debug_helper.h
+ * @brief Debug printing macros and helpers, conditional on the DEBUG_PRINT compile flag.
+ *
+ * When DEBUG_PRINT is defined at compile time, the PRINTF() macro prints a value along
+ * with its file and line number. When DEBUG_PRINT is not defined, PRINTF() compiles
+ * to a no-op. Also provides RETHROW and SMART_CATCH macros for augmenting exception
+ * messages with source location information.
+ */
+
 #ifndef CRYPTO_DEBUG_HELPER_H
 #define CRYPTO_DEBUG_HELPER_H
 

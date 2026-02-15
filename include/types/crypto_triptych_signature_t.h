@@ -27,6 +27,11 @@
 // Adapted from Python code by Sarang Noether found at
 // https://github.com/SarangNoether/skunkworks/tree/triptych
 
+/**
+ * @file crypto_triptych_signature_t.h
+ * @brief Triptych logarithmic-size ring signature data structure.
+ */
+
 #ifndef CRYPTO_TRIPTYCH_T
 #define CRYPTO_TRIPTYCH_T
 
@@ -34,6 +39,26 @@
 #include <types/crypto_point_t.h>
 #include <types/crypto_scalar_t.h>
 
+/**
+ * @brief A Triptych ring signature with logarithmic proof size.
+ *
+ * Triptych is a next-generation ring signature scheme where the proof size grows as O(log n)
+ * in the number of ring members, rather than O(n) like CLSAG. This makes it practical to use
+ * much larger anonymity sets -- a ring of 1024 members produces a signature only modestly
+ * larger than one for 64 members.
+ *
+ * Like CLSAG, Triptych is linkable (it produces a key image to detect double-spending) and
+ * supports Pedersen commitments for confidential amounts. The signature additionally supports
+ * a split signing flow via prepare/complete for use cases where the secret key is split across
+ * multiple parties or devices.
+ *
+ * The proof is structured around a matrix decomposition of the signer's index in base n with
+ * m digits. The ring size is n^m, and the proof contains O(m) group elements and scalars.
+ * Typical parameters are n=2 (binary decomposition), giving log2(ring_size) proof components.
+ *
+ * The proof elements A, B, C, D are commitment points, X and Y are per-digit auxiliary points,
+ * f is the m-by-(n-1) matrix of response scalars, and zA, zC, z are the final response scalars.
+ */
 struct crypto_triptych_signature_t final : Serializable
 {
     crypto_triptych_signature_t() = default;
@@ -63,10 +88,15 @@ struct crypto_triptych_signature_t final : Serializable
     explicit crypto_triptych_signature_t(Serialization::deserializer_t &reader);
 
     /**
-     * Checks that the basic construction of the proof is valid
-     * @param m
-     * @param n
-     * @return
+     * Checks that the basic construction of the signature is valid.
+     *
+     * Validates that all proof components have the expected dimensions for the given
+     * decomposition parameters. This is a structural check only -- it does not verify
+     * cryptographic correctness.
+     *
+     * @param m the number of digits in the base-n decomposition of the ring index
+     * @param n the base of the decomposition (default 2 for binary)
+     * @return true if all component dimensions are consistent with the (m, n) parameters
      */
     [[nodiscard]] bool check_construction(size_t m, size_t n = 2) const;
 
@@ -93,45 +123,60 @@ struct crypto_triptych_signature_t final : Serializable
 
     /**
      * Provides the hash of the serialized structure
-     * @return
+     * @return the SHA3-256 hash of the serialized byte representation
      */
     [[nodiscard]] crypto_hash_t hash() const;
 
     /**
      * Serializes the struct to a byte array
-     * @return
+     * @param writer the serializer to write into
      */
     void serialize(Serialization::serializer_t &writer) const override;
 
     /**
      * Serializes the struct to a byte array
-     * @return
+     * @return the serialized byte vector
      */
     [[nodiscard]] std::vector<unsigned char> serialize() const override;
 
     /**
      * Returns the serialized byte size
-     * @return
+     * @return size in bytes
      */
     [[nodiscard]] size_t size() const override;
 
     /**
      * Writes the structure as JSON to the provided writer
-     * @param writer
+     * @param writer the JSON writer to output into
      */
     JSON_TO_FUNC(toJSON) override;
 
     /**
      * Returns the hex encoded serialized byte array
-     * @return
+     * @return hex string of the serialized signature
      */
     [[nodiscard]] std::string to_string() const override;
 
+    /** @brief Key image for the commitment blinding factor, enabling linkability on commitments. */
     crypto_key_image_t commitment_image;
+
+    /** @brief Pseudo output commitment -- a re-blinded commitment to the same value, used for balance proofs. */
     crypto_pedersen_commitment_t pseudo_commitment;
+
+    /** @brief Proof commitment points. A and B commit to the signer's index decomposition,
+     *  C commits to the blinding factor difference, and D is an auxiliary commitment for linkability. */
     crypto_point_t A, B, C, D;
+
+    /** @brief Per-digit auxiliary points (m elements each). X and Y encode the one-of-many proof
+     *  structure across each digit position of the decomposed index. */
     std::vector<crypto_point_t> X, Y;
+
+    /** @brief Response scalar matrix (m rows, each with n-1 scalars). Encodes the sigma-protocol
+     *  responses for the one-of-n proof at each digit position. */
     std::vector<std::vector<crypto_scalar_t>> f;
+
+    /** @brief Final response scalars. zA responds for the A commitment, zC for the C commitment,
+     *  and z ties together the overall proof. */
     crypto_scalar_t zA, zC, z;
 };
 
