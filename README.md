@@ -58,6 +58,8 @@ Mnemonic encoding supports 10 languages: Chinese (Simplified & Traditional), Cze
 |--------|------|------|-------------|
 | [Ed25519](https://ed25519.cr.yp.to/ed25519-20110926.pdf) | 64 B | — | Standard Schnorr signature (generate + check) |
 | [RFC-8032 Ed25519](https://datatracker.ietf.org/doc/html/rfc8032) | 64 B | — | Strict RFC-8032 — raw seed input, deterministic nonce, arbitrary-length messages |
+| [Adapter Signatures](https://eprint.iacr.org/2020/476.pdf) | 128 B | — | Schnorr-based pre-signatures for trustless atomic swaps (pre-sign, adapt, extract) |
+| [FROST](https://eprint.iacr.org/2020/852.pdf) | 64 B | — | *t*-of-*n* threshold Schnorr signatures with Feldman VSS DKG |
 | [Borromean](https://github.com/Blockstream/borromean_paper/raw/master/borromean_draft_0.01_34241bb.pdf) | O(*n*) | Yes | Linkable ring signature — prove you own one of *n* keys without revealing which |
 | [MLSAG](https://eprint.iacr.org/2015/1098.pdf) | O(*n*) | Yes | Multilayered linkable ring signature with optional Pedersen commitment binding |
 | [CLSAG](https://eprint.iacr.org/2019/654.pdf) | O(*n*) | Yes | Compact linkable ring signature with optional Pedersen commitment binding |
@@ -65,12 +67,20 @@ Mnemonic encoding supports 10 languages: Chinese (Simplified & Traditional), Cze
 
 All four ring signature schemes produce a **key image** — a deterministic, unlinkable tag that detects if the same key signs twice. MLSAG, CLSAG, and Triptych optionally support **commitment binding**, tying the signature to confidential transaction amounts.
 
+**Adapter signatures** enable trustless atomic swaps: a pre-signature becomes valid only when a secret witness scalar is revealed, and any observer can extract the witness from the adapted signature.
+
+**FROST** (Flexible Round-Optimized Schnorr Threshold) enables *t*-of-*n* multi-party signing where any *t* participants can produce a standard Ed25519 signature. Includes a full Feldman VSS distributed key generation (DKG) protocol.
+
 **Signature timings** (ring size n=4 where applicable):
 
 | Scheme | Sign | Verify |
 |--------|---:|---:|
 | Ed25519 | ~56 us | ~36 us |
 | RFC-8032 Ed25519 | ~59 us | ~46 us |
+| Adapter pre-sign | ~134 us | ~258 us |
+| Adapter adapt | <1 us | — |
+| FROST sign (2-of-3) | ~659 us | — |
+| FROST DKG (2-of-3) | ~354 us | — |
 | Borromean (n=4) | ~530 us | ~230 us |
 | MLSAG (n=4) | ~437 us | ~235 us |
 | MLSAG w/ commitments (n=4) | ~964 us | ~573 us |
@@ -107,6 +117,19 @@ All three support variable bit lengths (1–64 bits), multi-value aggregated pro
 | 16 | 930 B | ~115 ms | ~6.1 ms | 834 B | ~32 ms | ~6.2 ms | 772 B | ~37 ms | ~3.1 ms |
 
 > **Benchmarks measured on:** AMD Ryzen 7 9800X3D, Windows 11, GCC 13.2.0 (MinGW), with x64 SIMD / AVX2 / AVX-512F enabled via `--autotune`.
+
+**DLEQ Proofs** (Discrete Log Equality) — Chaum-Pedersen protocol proving that two points *A = aG* and *B = aH* share the same discrete log *a*. Building block for adapter signatures and VRFs.
+
+| Scheme | Prove | Verify |
+|--------|---:|---:|
+| DLEQ | ~108 us | ~170 us |
+
+**VRF** (Verifiable Random Function) — produces a pseudorandom output along with a proof that the output was computed correctly from a given secret key and input:
+
+| Variant | Prove | Verify |
+|---------|---:|---:|
+| VRF (native, SHA-3) | ~149 us | ~164 us |
+| VRF (RFC 9381, SHA-512) | ~109 us | ~171 us |
 
 **Other Proofs:**
 - **Merkle trees** — compact membership proofs via binary hash trees

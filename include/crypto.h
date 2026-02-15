@@ -56,19 +56,26 @@
 #include <proofs/bulletproofs.h>
 #include <proofs/bulletproofsplus.h>
 #include <proofs/bulletproofspp.h>
+#include <proofs/dleq.h>
 #include <proofs/merkle.h>
 #include <proofs/ringct.h>
+#include <proofs/vrf.h>
+#include <signatures/adapter_signature.h>
+#include <signatures/frost.h>
 #include <signatures/rfc8032.h>
 #include <signatures/ring_signature_borromean.h>
 #include <signatures/ring_signature_clsag.h>
 #include <signatures/ring_signature_mlsag.h>
 #include <signatures/ring_signature_triptych.h>
 #include <signatures/signature.h>
+#include <types/crypto_adapter_signature_t.h>
 #include <types/crypto_borromean_signature_t.h>
 #include <types/crypto_bulletproof_t.h>
 #include <types/crypto_bulletproof_plus_t.h>
 #include <types/crypto_bulletproof_pp_t.h>
 #include <types/crypto_clsag_signature_t.h>
+#include <types/crypto_dleq_proof_t.h>
+#include <types/crypto_frost_types.h>
 #include <types/crypto_mlsag_signature_t.h>
 #include <types/crypto_entropy_t.h>
 #include <types/crypto_hash_t.h>
@@ -82,5 +89,6 @@
 #include <types/crypto_seed_t.h>
 #include <types/crypto_signature_t.h>
 #include <types/crypto_triptych_signature_t.h>
+#include <types/crypto_vrf_proof_t.h>
 
 #endif // CRYPTO_H

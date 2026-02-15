@@ -865,6 +865,184 @@ int main(int argc, char **argv)
             10);
     }
 
+    // DLEQ
+    {
+        const auto secret = crypto_scalar_t::random();
+        const auto G_point = Crypto::G;
+        const auto H_point = crypto_hash_t::sha3(G_point).point();
+        const auto A = secret * G_point;
+        const auto B = secret * H_point;
+
+        crypto_dleq_proof_t dleq_proof;
+
+        std::cout << std::endl;
+
+        benchmark(
+            [&dleq_proof, &secret, &G_point, &H_point]()
+            { dleq_proof = Crypto::DLEQ::generate_proof(secret, G_point, H_point); },
+            "DLEQ::prove",
+            100);
+
+        benchmark(
+            [&A, &B, &G_point, &H_point, &dleq_proof]()
+            { Crypto::DLEQ::check_proof(A, B, G_point, H_point, dleq_proof); },
+            "DLEQ::verify",
+            100);
+    }
+
+    // Adapter Signatures
+    {
+        const auto [adapter_pub, adapter_sec] = Crypto::generate_keys();
+        const auto witness_y = crypto_scalar_t::random();
+        const auto statement_Y = witness_y * Crypto::G;
+
+        crypto_adapter_signature_t adapter_pre_sig;
+
+        std::cout << std::endl;
+
+        benchmark(
+            [&adapter_pre_sig, &adapter_sec, &statement_Y]()
+            { adapter_pre_sig = Crypto::AdapterSignature::pre_sign(SHA3_HASH, adapter_sec, statement_Y); },
+            "Adapter::pre_sign",
+            100);
+
+        benchmark(
+            [&adapter_pub, &statement_Y, &adapter_pre_sig]()
+            { Crypto::AdapterSignature::check_pre_signature(SHA3_HASH, adapter_pub, statement_Y, adapter_pre_sig); },
+            "Adapter::verify_pre",
+            100);
+
+        benchmark(
+            [&adapter_pre_sig, &witness_y]()
+            { Crypto::AdapterSignature::adapt(adapter_pre_sig, witness_y); },
+            "Adapter::adapt",
+            100);
+    }
+
+    // VRF (native)
+    {
+        const auto [vrf_pub, vrf_sec] = Crypto::generate_keys();
+        const std::vector<unsigned char> vrf_alpha = {0x01, 0x02, 0x03, 0x04};
+
+        crypto_vrf_proof_t vrf_proof;
+        crypto_hash_t vrf_beta;
+
+        std::cout << std::endl;
+
+        benchmark(
+            [&vrf_proof, &vrf_beta, &vrf_sec, &vrf_alpha]()
+            {
+                const auto [p, b] = Crypto::VRF::prove(vrf_sec, vrf_alpha);
+                vrf_proof = p;
+                vrf_beta = b;
+            },
+            "VRF::prove",
+            100);
+
+        benchmark(
+            [&vrf_pub, &vrf_alpha, &vrf_proof]()
+            { Crypto::VRF::verify(vrf_pub, vrf_alpha, vrf_proof); },
+            "VRF::verify",
+            100);
+    }
+
+    // VRF RFC 9381
+    {
+        const auto rfc_vrf_sk = crypto_scalar_t::random();
+        const auto rfc_vrf_pub = rfc_vrf_sk * Crypto::G;
+        const std::vector<unsigned char> rfc_vrf_alpha = {0x48, 0x65, 0x6c, 0x6c, 0x6f};
+
+        benchmark(
+            [&rfc_vrf_sk, &rfc_vrf_alpha]()
+            { Crypto::VRF::RFC9381::prove(rfc_vrf_sk, rfc_vrf_alpha); },
+            "VRF::RFC9381::prove",
+            100);
+
+        const auto [rfc_vrf_proof, rfc_vrf_beta] = Crypto::VRF::RFC9381::prove(rfc_vrf_sk, rfc_vrf_alpha);
+
+        benchmark(
+            [&rfc_vrf_pub, &rfc_vrf_alpha, &rfc_vrf_proof]()
+            { Crypto::VRF::RFC9381::verify(rfc_vrf_pub, rfc_vrf_alpha, rfc_vrf_proof); },
+            "VRF::RFC9381::verify",
+            100);
+    }
+
+    // FROST (2-of-3)
+    {
+        const size_t n = 3, t = 2;
+
+        // Set up DKG once outside the benchmark
+        std::vector<std::vector<crypto_frost_secret_share_t>> all_shares(n);
+        std::vector<crypto_point_vector_t> all_commitments(n);
+
+        for (size_t i = 0; i < n; ++i)
+        {
+            auto [shares, commitments] = Crypto::FROST::dkg_part1(i + 1, n, t);
+            all_shares[i] = shares;
+            all_commitments[i] = commitments;
+        }
+
+        std::vector<crypto_frost_key_package_t> key_packages(n);
+
+        for (size_t i = 0; i < n; ++i)
+        {
+            std::vector<crypto_frost_secret_share_t> received;
+            for (size_t sender = 0; sender < n; ++sender)
+                received.push_back(all_shares[sender][i]);
+            key_packages[i] = Crypto::FROST::dkg_part3(i + 1, received, all_commitments);
+        }
+
+        const auto pub_key_package = Crypto::FROST::build_public_key_package(n, all_commitments);
+
+        std::cout << std::endl;
+
+        benchmark(
+            [n, t]()
+            {
+                std::vector<std::vector<crypto_frost_secret_share_t>> sh(n);
+                std::vector<crypto_point_vector_t> cm(n);
+                for (size_t i = 0; i < n; ++i)
+                {
+                    auto [s, c] = Crypto::FROST::dkg_part1(i + 1, n, t);
+                    sh[i] = s;
+                    cm[i] = c;
+                }
+                for (size_t i = 0; i < n; ++i)
+                {
+                    std::vector<crypto_frost_secret_share_t> rec;
+                    for (size_t j = 0; j < n; ++j) rec.push_back(sh[j][i]);
+                    Crypto::FROST::dkg_part3(i + 1, rec, cm);
+                }
+            },
+            "FROST::DKG(2-of-3)",
+            10);
+
+        // Signing benchmark (2-of-3 with participants 1,2)
+        const std::vector<size_t> signers = {0, 1};
+
+        benchmark(
+            [&key_packages, &pub_key_package, &signers]()
+            {
+                std::vector<crypto_frost_nonce_t> nonces(signers.size());
+                std::vector<crypto_frost_nonce_commitment_t> nonce_commitments(signers.size());
+                for (size_t i = 0; i < signers.size(); ++i)
+                {
+                    auto [nonce, commitment] = Crypto::FROST::round1_commit(signers[i] + 1);
+                    nonces[i] = nonce;
+                    nonce_commitments[i] = commitment;
+                }
+                std::vector<crypto_frost_signature_share_t> sig_shares(signers.size());
+                for (size_t i = 0; i < signers.size(); ++i)
+                {
+                    sig_shares[i] = Crypto::FROST::round2_sign(
+                        SHA3_HASH, key_packages[signers[i]], nonces[i], nonce_commitments);
+                }
+                Crypto::FROST::aggregate(SHA3_HASH, sig_shares, nonce_commitments, pub_key_package);
+            },
+            "FROST::sign(2-of-3)",
+            100);
+    }
+
     std::cout << std::endl << std::endl;
 
     if (!advanced_only)

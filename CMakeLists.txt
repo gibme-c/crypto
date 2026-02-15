@@ -156,19 +156,26 @@ set(SOURCES
     src/proofs/bulletproofs.cpp
     src/proofs/bulletproofsplus.cpp
     src/proofs/bulletproofspp.cpp
+    src/proofs/dleq.cpp
     src/proofs/merkle.cpp
     src/proofs/ringct.cpp
+    src/proofs/vrf.cpp
+    src/signatures/adapter_signature.cpp
+    src/signatures/frost.cpp
     src/signatures/rfc8032.cpp
     src/signatures/ring_signature_borromean.cpp
     src/signatures/ring_signature_clsag.cpp
     src/signatures/ring_signature_mlsag.cpp
     src/signatures/ring_signature_triptych.cpp
     src/signatures/signature.cpp
+    src/types/crypto_adapter_signature_t.cpp
     src/types/crypto_borromean_signature_t.cpp
     src/types/crypto_bulletproof_plus_t.cpp
     src/types/crypto_bulletproof_pp_t.cpp
     src/types/crypto_bulletproof_t.cpp
     src/types/crypto_clsag_signature_t.cpp
+    src/types/crypto_dleq_proof_t.cpp
+    src/types/crypto_frost_types.cpp
     src/types/crypto_mlsag_signature_t.cpp
     src/types/crypto_entropy_t.cpp
     src/types/crypto_hash_t.cpp
@@ -182,6 +189,7 @@ set(SOURCES
     src/types/crypto_seed_t.cpp
     src/types/crypto_signature_t.cpp
     src/types/crypto_triptych_signature_t.cpp
+    src/types/crypto_vrf_proof_t.cpp
     src/crypto_common.cpp
 )
 

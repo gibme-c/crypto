@@ -1123,6 +1123,407 @@ int main()
             return 1;
     }
 
+    std::cout << std::endl << "=== DLEQ Proofs ===" << std::endl;
+
+    // DLEQ basic generate/verify
+    {
+        const auto secret = crypto_scalar_t::random();
+        const auto G_point = Crypto::G;
+        const auto H_point = crypto_hash_t::sha3(G_point).point();
+        const auto A = secret * G_point;
+        const auto B = secret * H_point;
+
+        const auto proof = Crypto::DLEQ::generate_proof(secret, G_point, H_point);
+
+        if (!check("dleq generate_proof", true)) return 1;
+
+        if (!check("dleq check_proof", Crypto::DLEQ::check_proof(A, B, G_point, H_point, proof))) return 1;
+
+        std::cout << proof << std::endl;
+
+        // Wrong secret should fail
+        {
+            const auto bad_secret = crypto_scalar_t::random();
+            const auto bad_A = bad_secret * G_point;
+            const auto bad_B = bad_secret * H_point;
+
+            if (!check("dleq reject wrong points", !Crypto::DLEQ::check_proof(bad_A, bad_B, G_point, H_point, proof)))
+                return 1;
+        }
+
+        // Tampered proof should fail
+        {
+            auto tampered = proof;
+            tampered.s = tampered.s + Crypto::ONE;
+
+            if (!check("dleq reject tampered", !Crypto::DLEQ::check_proof(A, B, G_point, H_point, tampered)))
+                return 1;
+        }
+
+        if (!check("dleq binary encoding", test_binary_encoding(proof))) return 1;
+
+        if (!check("dleq JSON encoding", test_json_encoding(proof))) return 1;
+    }
+
+    std::cout << std::endl << "=== Adapter Signatures ===" << std::endl;
+
+    // Adapter Signature full flow
+    {
+        const auto [signer_pub, signer_sec] = Crypto::generate_keys();
+        const auto witness_y = crypto_scalar_t::random();
+        const auto statement_Y = witness_y * Crypto::G;
+
+        const auto pre_sig = Crypto::AdapterSignature::pre_sign(SHA3_HASH, signer_sec, statement_Y);
+
+        if (!check("adapter pre_sign", true)) return 1;
+
+        if (!check("adapter check_pre_signature",
+                Crypto::AdapterSignature::check_pre_signature(SHA3_HASH, signer_pub, statement_Y, pre_sig)))
+            return 1;
+
+        std::cout << pre_sig << std::endl;
+
+        const auto adapted_sig = Crypto::AdapterSignature::adapt(pre_sig, witness_y);
+
+        if (!check("adapter adapt", true)) return 1;
+
+        // Extract witness
+        const auto extracted_y = Crypto::AdapterSignature::extract(pre_sig, adapted_sig, statement_Y);
+
+        const auto extracted_Y = extracted_y * Crypto::G;
+
+        if (!check("adapter extract witness", extracted_Y == statement_Y)) return 1;
+
+        // Tampered pre-signature should fail
+        {
+            auto tampered = pre_sig;
+            tampered.s_prime = tampered.s_prime + Crypto::ONE;
+
+            if (!check("adapter reject tampered pre_sig",
+                    !Crypto::AdapterSignature::check_pre_signature(SHA3_HASH, signer_pub, statement_Y, tampered)))
+                return 1;
+        }
+
+        if (!check("adapter binary encoding", test_binary_encoding(pre_sig))) return 1;
+
+        if (!check("adapter JSON encoding", test_json_encoding(pre_sig))) return 1;
+    }
+
+    std::cout << std::endl << "=== VRF (Native) ===" << std::endl;
+
+    // VRF native prove/verify
+    {
+        const auto [vrf_pub, vrf_sec] = Crypto::generate_keys();
+        const std::vector<unsigned char> alpha = {0x01, 0x02, 0x03, 0x04};
+
+        const auto [proof, beta] = Crypto::VRF::prove(vrf_sec, alpha);
+
+        if (!check("vrf prove", true)) return 1;
+
+        std::cout << proof << std::endl;
+        std::cout << "    beta: " << beta << std::endl << std::endl;
+
+        const auto [valid, beta2] = Crypto::VRF::verify(vrf_pub, alpha, proof);
+
+        if (!check("vrf verify", valid)) return 1;
+
+        if (!check("vrf output matches", beta == beta2)) return 1;
+
+        // Determinism: same (key, input) -> same output
+        {
+            const auto [proof2, beta3] = Crypto::VRF::prove(vrf_sec, alpha);
+            const auto [valid2, beta4] = Crypto::VRF::verify(vrf_pub, alpha, proof2);
+
+            if (!check("vrf deterministic output", beta3 == beta)) return 1;
+            if (!check("vrf deterministic verify", valid2)) return 1;
+        }
+
+        // Different input -> different output
+        {
+            const std::vector<unsigned char> alpha2 = {0x05, 0x06, 0x07, 0x08};
+            const auto [proof3, beta5] = Crypto::VRF::prove(vrf_sec, alpha2);
+
+            if (!check("vrf different input different output", !(beta5 == beta))) return 1;
+        }
+
+        // Tampered proof should fail
+        {
+            auto tampered = proof;
+            tampered.s = tampered.s + Crypto::ONE;
+            const auto [bad_valid, bad_beta] = Crypto::VRF::verify(vrf_pub, alpha, tampered);
+
+            if (!check("vrf reject tampered", !bad_valid)) return 1;
+        }
+
+        if (!check("vrf binary encoding", test_binary_encoding(proof))) return 1;
+
+        if (!check("vrf JSON encoding", test_json_encoding(proof))) return 1;
+    }
+
+    std::cout << std::endl << "=== VRF (RFC 9381) ===" << std::endl;
+    {
+        const auto sk = crypto_scalar_t::random();
+        const auto pk = sk * Crypto::G;
+        const std::vector<unsigned char> alpha = {0x48, 0x65, 0x6c, 0x6c, 0x6f}; // "Hello"
+
+        const auto [proof, beta] = Crypto::VRF::RFC9381::prove(sk, alpha);
+
+        if (!check("vrf-rfc9381 prove", !beta.empty())) return 1;
+
+        std::cout << proof;
+        std::cout << "    beta: " << beta << std::endl;
+
+        const auto [valid, beta2] = Crypto::VRF::RFC9381::verify(pk, alpha, proof);
+
+        if (!check("vrf-rfc9381 verify", valid)) return 1;
+
+        if (!check("vrf-rfc9381 output matches", beta == beta2)) return 1;
+
+        // Determinism: same key + input -> same output
+        const auto [proof2, beta3] = Crypto::VRF::RFC9381::prove(sk, alpha);
+
+        if (!check("vrf-rfc9381 deterministic output", beta == beta3)) return 1;
+
+        // Different input -> different output
+        const std::vector<unsigned char> alpha2 = {0x57, 0x6f, 0x72, 0x6c, 0x64}; // "World"
+        const auto [proof3, beta4] = Crypto::VRF::RFC9381::prove(sk, alpha2);
+
+        if (!check("vrf-rfc9381 different input different output", !(beta == beta4))) return 1;
+
+        // Tampered proof fails
+        auto bad_proof = proof;
+        bad_proof.s = crypto_scalar_t::random();
+        const auto [bad_valid, _] = Crypto::VRF::RFC9381::verify(pk, alpha, bad_proof);
+
+        if (!check("vrf-rfc9381 reject tampered", !bad_valid)) return 1;
+
+        if (!check("vrf-rfc9381 binary encoding", test_binary_encoding(proof))) return 1;
+
+        if (!check("vrf-rfc9381 JSON encoding", test_json_encoding(proof))) return 1;
+    }
+
+    std::cout << std::endl << "=== FROST Threshold Signatures ===" << std::endl;
+
+    // FROST 2-of-3
+    {
+        const size_t n = 3, t = 2;
+
+        // DKG Part 1: each participant generates shares and commitments
+        std::vector<std::vector<crypto_frost_secret_share_t>> all_shares(n);
+        std::vector<crypto_point_vector_t> all_commitments(n);
+
+        for (size_t i = 0; i < n; ++i)
+        {
+            auto [shares, commitments] = Crypto::FROST::dkg_part1(i + 1, n, t);
+            all_shares[i] = shares;
+            all_commitments[i] = commitments;
+        }
+
+        if (!check("frost dkg_part1 (2-of-3)", true)) return 1;
+
+        // DKG Part 2: verify all shares
+        bool all_verified = true;
+
+        for (size_t receiver = 0; receiver < n; ++receiver)
+        {
+            for (size_t sender = 0; sender < n; ++sender)
+            {
+                if (!Crypto::FROST::dkg_verify_share(all_shares[sender][receiver], all_commitments[sender]))
+                {
+                    all_verified = false;
+                }
+            }
+        }
+
+        if (!check("frost dkg_verify_share", all_verified)) return 1;
+
+        // DKG Part 3: combine shares into key packages
+        std::vector<crypto_frost_key_package_t> key_packages(n);
+
+        for (size_t i = 0; i < n; ++i)
+        {
+            std::vector<crypto_frost_secret_share_t> received;
+
+            for (size_t sender = 0; sender < n; ++sender)
+            {
+                received.push_back(all_shares[sender][i]);
+            }
+
+            key_packages[i] = Crypto::FROST::dkg_part3(i + 1, received, all_commitments);
+        }
+
+        if (!check("frost dkg_part3", true)) return 1;
+
+        // All participants should agree on the group public key
+        {
+            bool same_key = true;
+
+            for (size_t i = 1; i < n; ++i)
+            {
+                if (!(key_packages[i].group_public_key == key_packages[0].group_public_key))
+                {
+                    same_key = false;
+                }
+            }
+
+            if (!check("frost group key consensus", same_key)) return 1;
+        }
+
+        const auto pub_key_package = Crypto::FROST::build_public_key_package(n, all_commitments);
+
+        std::cout << "    group_public_key: " << pub_key_package.group_public_key << std::endl << std::endl;
+
+        // Signing: participants 1 and 2 (indices 0 and 1) sign
+        const std::vector<size_t> signers = {0, 1};
+
+        std::vector<crypto_frost_nonce_t> nonces(signers.size());
+        std::vector<crypto_frost_nonce_commitment_t> nonce_commitments(signers.size());
+
+        for (size_t i = 0; i < signers.size(); ++i)
+        {
+            auto [nonce, commitment] = Crypto::FROST::round1_commit(signers[i] + 1);
+            nonces[i] = nonce;
+            nonce_commitments[i] = commitment;
+        }
+
+        if (!check("frost round1_commit", true)) return 1;
+
+        std::vector<crypto_frost_signature_share_t> sig_shares(signers.size());
+
+        for (size_t i = 0; i < signers.size(); ++i)
+        {
+            sig_shares[i] = Crypto::FROST::round2_sign(
+                SHA3_HASH, key_packages[signers[i]], nonces[i], nonce_commitments);
+        }
+
+        if (!check("frost round2_sign", true)) return 1;
+
+        const auto [agg_success, frost_sig] = Crypto::FROST::aggregate(
+            SHA3_HASH, sig_shares, nonce_commitments, pub_key_package);
+
+        if (!check("frost aggregate (2-of-3)", agg_success)) return 1;
+
+        std::cout << "    frost signature: " << frost_sig << std::endl << std::endl;
+    }
+
+    // FROST 2-of-2
+    {
+        const size_t n = 2, t = 2;
+
+        std::vector<std::vector<crypto_frost_secret_share_t>> all_shares(n);
+        std::vector<crypto_point_vector_t> all_commitments(n);
+
+        for (size_t i = 0; i < n; ++i)
+        {
+            auto [shares, commitments] = Crypto::FROST::dkg_part1(i + 1, n, t);
+            all_shares[i] = shares;
+            all_commitments[i] = commitments;
+        }
+
+        std::vector<crypto_frost_key_package_t> key_packages(n);
+
+        for (size_t i = 0; i < n; ++i)
+        {
+            std::vector<crypto_frost_secret_share_t> received;
+            for (size_t sender = 0; sender < n; ++sender)
+                received.push_back(all_shares[sender][i]);
+            key_packages[i] = Crypto::FROST::dkg_part3(i + 1, received, all_commitments);
+        }
+
+        const auto pub_key_package = Crypto::FROST::build_public_key_package(n, all_commitments);
+
+        // All signers sign
+        std::vector<crypto_frost_nonce_t> nonces(n);
+        std::vector<crypto_frost_nonce_commitment_t> nonce_commitments(n);
+
+        for (size_t i = 0; i < n; ++i)
+        {
+            auto [nonce, commitment] = Crypto::FROST::round1_commit(i + 1);
+            nonces[i] = nonce;
+            nonce_commitments[i] = commitment;
+        }
+
+        std::vector<crypto_frost_signature_share_t> sig_shares(n);
+
+        for (size_t i = 0; i < n; ++i)
+        {
+            sig_shares[i] = Crypto::FROST::round2_sign(SHA3_HASH, key_packages[i], nonces[i], nonce_commitments);
+        }
+
+        const auto [agg_success, frost_sig] = Crypto::FROST::aggregate(
+            SHA3_HASH, sig_shares, nonce_commitments, pub_key_package);
+
+        if (!check("frost 2-of-2 sign+aggregate", agg_success)) return 1;
+    }
+
+    // FROST 3-of-5
+    {
+        const size_t n = 5, t = 3;
+
+        std::vector<std::vector<crypto_frost_secret_share_t>> all_shares(n);
+        std::vector<crypto_point_vector_t> all_commitments(n);
+
+        for (size_t i = 0; i < n; ++i)
+        {
+            auto [shares, commitments] = Crypto::FROST::dkg_part1(i + 1, n, t);
+            all_shares[i] = shares;
+            all_commitments[i] = commitments;
+        }
+
+        std::vector<crypto_frost_key_package_t> key_packages(n);
+
+        for (size_t i = 0; i < n; ++i)
+        {
+            std::vector<crypto_frost_secret_share_t> received;
+            for (size_t sender = 0; sender < n; ++sender)
+                received.push_back(all_shares[sender][i]);
+            key_packages[i] = Crypto::FROST::dkg_part3(i + 1, received, all_commitments);
+        }
+
+        const auto pub_key_package = Crypto::FROST::build_public_key_package(n, all_commitments);
+
+        // Sign with participants 1, 3, 5
+        const std::vector<size_t> signers = {0, 2, 4};
+
+        std::vector<crypto_frost_nonce_t> nonces(signers.size());
+        std::vector<crypto_frost_nonce_commitment_t> nonce_commitments(signers.size());
+
+        for (size_t i = 0; i < signers.size(); ++i)
+        {
+            auto [nonce, commitment] = Crypto::FROST::round1_commit(signers[i] + 1);
+            nonces[i] = nonce;
+            nonce_commitments[i] = commitment;
+        }
+
+        std::vector<crypto_frost_signature_share_t> sig_shares(signers.size());
+
+        for (size_t i = 0; i < signers.size(); ++i)
+        {
+            sig_shares[i] = Crypto::FROST::round2_sign(
+                SHA3_HASH, key_packages[signers[i]], nonces[i], nonce_commitments);
+        }
+
+        const auto [agg_success, frost_sig] = Crypto::FROST::aggregate(
+            SHA3_HASH, sig_shares, nonce_commitments, pub_key_package);
+
+        if (!check("frost 3-of-5 sign+aggregate", agg_success)) return 1;
+    }
+
+    // FROST serialization round-trip
+    {
+        const auto share = crypto_frost_secret_share_t(1, crypto_scalar_t::random());
+
+        if (!check("frost secret_share binary encoding", test_binary_encoding(share))) return 1;
+
+        const auto commitment = crypto_frost_nonce_commitment_t(1, crypto_point_t::random(), crypto_point_t::random());
+
+        if (!check("frost nonce_commitment binary encoding", test_binary_encoding(commitment))) return 1;
+
+        const auto sig_share = crypto_frost_signature_share_t(1, crypto_scalar_t::random());
+
+        if (!check("frost signature_share binary encoding", test_binary_encoding(sig_share))) return 1;
+    }
+
     std::cout << std::endl << "==================" << std::endl;
     std::cout << "Total:  " << tests_run << std::endl;
     std::cout << "Passed: " << tests_passed << std::endl;

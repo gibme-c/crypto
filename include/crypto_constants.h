@@ -159,6 +159,21 @@ const auto MLSAG_DOMAIN_0 = generate_salt_scalar(23);
 /** @brief MLSAG ring signature -- commitment nonce derivation. */
 const auto MLSAG_DOMAIN_1 = generate_salt_scalar(24);
 
+/** @brief DLEQ proof challenge hash. */
+const auto DLEQ_DOMAIN_0 = generate_salt_scalar(25);
+
+/** @brief Adapter signature challenge hash. */
+const auto ADAPTER_DOMAIN_0 = generate_salt_scalar(26);
+
+/** @brief VRF native challenge hash. */
+const auto VRF_DOMAIN_0 = generate_salt_scalar(27);
+
+/** @brief FROST binding factor and challenge hash. */
+const auto FROST_DOMAIN_0 = generate_salt_scalar(28);
+
+/** @brief FROST nonce generation. */
+const auto FROST_DOMAIN_1 = generate_salt_scalar(29);
+
 /** @} */
 
 #endif
