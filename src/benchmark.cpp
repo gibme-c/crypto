@@ -872,7 +872,9 @@ int main(int argc, char **argv)
 
     // Adapter Signatures
     {
-        const auto [adapter_pub, adapter_sec] = Crypto::generate_keys();
+        const auto _adapter_keys = Crypto::generate_keys();
+        const auto &adapter_pub = std::get<0>(_adapter_keys);
+        const auto &adapter_sec = std::get<1>(_adapter_keys);
         const auto witness_y = crypto_scalar_t::random();
         const auto statement_Y = witness_y * Crypto::G;
 
@@ -900,7 +902,9 @@ int main(int argc, char **argv)
 
     // VRF (native)
     {
-        const auto [vrf_pub, vrf_sec] = Crypto::generate_keys();
+        const auto _vrf_keys = Crypto::generate_keys();
+        const auto &vrf_pub = std::get<0>(_vrf_keys);
+        const auto &vrf_sec = std::get<1>(_vrf_keys);
         const std::vector<unsigned char> vrf_alpha = {0x01, 0x02, 0x03, 0x04};
 
         crypto_vrf_proof_t vrf_proof;
@@ -935,7 +939,8 @@ int main(int argc, char **argv)
             "VRF::RFC9381::prove",
             100);
 
-        const auto [rfc_vrf_proof, rfc_vrf_beta] = Crypto::VRF::RFC9381::prove(rfc_vrf_sk, rfc_vrf_alpha);
+        const auto _rfc_vrf_result = Crypto::VRF::RFC9381::prove(rfc_vrf_sk, rfc_vrf_alpha);
+        const auto &rfc_vrf_proof = std::get<0>(_rfc_vrf_result);
 
         benchmark(
             [&rfc_vrf_pub, &rfc_vrf_alpha, &rfc_vrf_proof]()
