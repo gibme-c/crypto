@@ -47,6 +47,7 @@ namespace Crypto::RingSignature::Borromean
 
     /**
      * Generates Borromean ring signature using the secret key provided
+     * Auto-detects the signer's index via constant-time scan
      * @param message_digest
      * @param secret_ephemeral
      * @param public_keys
@@ -56,6 +57,21 @@ namespace Crypto::RingSignature::Borromean
         const crypto_hash_t &message_digest,
         const crypto_scalar_t &secret_ephemeral,
         const std::vector<crypto_public_key_t> &public_keys);
+
+    /**
+     * Generates Borromean ring signature using the secret key provided
+     * Caller specifies the signer's index (still validated)
+     * @param message_digest
+     * @param secret_ephemeral
+     * @param public_keys
+     * @param real_output_index
+     * @return
+     */
+    std::tuple<bool, crypto_borromean_signature_t> generate_ring_signature(
+        const crypto_hash_t &message_digest,
+        const crypto_scalar_t &secret_ephemeral,
+        const std::vector<crypto_public_key_t> &public_keys,
+        size_t real_output_index);
 } // namespace Crypto::RingSignature::Borromean
 
 #endif // CRYPTO_RING_SIGNATURE_BORROMEAN_H

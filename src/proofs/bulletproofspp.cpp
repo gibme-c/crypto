@@ -132,7 +132,7 @@ static crypto_point_t msm(
     {
         std::memcpy(&s[i * 32], scalars[i].data(), 32);
     }
-    ge_p3 result;
+    ge_p3 result; // NOLINT: immediately populated by ge_multiscalar_mul
     ge_multiscalar_mul_vartime(&result, s.data(), points.data(), n);
     return crypto_point_t(result);
 }
@@ -149,7 +149,7 @@ static crypto_point_t msm_base(
     {
         std::memcpy(&s[i * 32], scalars[i].data(), 32);
     }
-    ge_p3 result;
+    ge_p3 result; // NOLINT: immediately populated by ge_multiscalar_mul
     ge_multiscalar_mul_base_vartime(&result, s.data(), points.data(), n, base_scalar.data());
     return crypto_point_t(result);
 }

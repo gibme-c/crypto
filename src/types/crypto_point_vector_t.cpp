@@ -128,6 +128,11 @@ crypto_point_vector_t crypto_point_vector_t::slice(size_t start, size_t end) con
         throw std::range_error("ending offset must be greater than or equal to starting offset");
     }
 
+    if (start > container.size() || end > container.size())
+    {
+        throw std::range_error("slice bounds exceed vector size");
+    }
+
     return crypto_point_vector_t(std::vector<crypto_point_t>(container.begin() + start, container.begin() + end));
 }
 

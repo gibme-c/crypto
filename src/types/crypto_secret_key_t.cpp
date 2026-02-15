@@ -25,6 +25,7 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <cryptopp/sha.h>
+#include <ed25519/include/ed25519_secure_erase.h>
 #include <types/crypto_secret_key_t.h>
 
 crypto_secret_key_t::crypto_secret_key_t(std::initializer_list<unsigned char> input)
@@ -137,4 +138,6 @@ void crypto_secret_key_t::load_hook()
     hash.resize(32); // truncate the hash to 32-bytes
 
     _scalar = crypto_scalar_t(hash, true);
+
+    ed25519_secure_erase(hash.data(), hash.size());
 }

@@ -408,7 +408,9 @@ static inline int randombytes_js_randombytes_nodejs(void *buf, size_t n)
 int random_bytes(size_t n, void *buf)
 {
 #if defined(__EMSCRIPTEN__)
-    return randombytes_js_randombytes_nodejs(buf, n);
+    // Emscripten replaces std::random_device with WebCrypto API calls,
+    // so the fallback function is effectively a CSPRNG in this context.
+    return randombytes_fallback(static_cast<uint8_t *>(buf), n);
 #elif defined(__linux__)
 #if defined(SYS_getrandom)
     /* Use getrandom system call */
@@ -424,6 +426,6 @@ int random_bytes(size_t n, void *buf)
     /* Use windows API */
     return randombytes_win32_randombytes(buf, n);
 #else
-    return randombytes_fallback(static_cast<uint8_t *>(buf), n);
+#error "No cryptographically secure RNG available for this platform"
 #endif
 }

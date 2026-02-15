@@ -28,6 +28,7 @@
 #define CRYPTO_MNEMONICS_H
 
 #include <encoding/languages/language.h>
+#include <optional>
 #include <types/crypto_entropy_t.h>
 
 namespace Crypto::Mnemonics
@@ -82,13 +83,14 @@ namespace Crypto::Mnemonics
     std::vector<Language::Language> languages();
 
     /**
-     * Finds the index of the given word in the word list or returns -1 if not found
+     * Finds the index of the given word in the word list or returns std::nullopt if not found
      *
      * @param word
      * @param language
      * @return
      */
-    size_t word_index(const std::string &word, const Language::Language &language = Language::Language::ENGLISH);
+    std::optional<size_t>
+        word_index(const std::string &word, const Language::Language &language = Language::Language::ENGLISH);
 
     /**
      * Returns the full word list

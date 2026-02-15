@@ -160,17 +160,23 @@ void crypto_seed_t::generate_root_key(const std::string &hmac_key)
     temp.assign(hash.begin() + 32, hash.end());
 
     _chain_code.deserialize(temp);
+
+    ed25519_secure_erase(temp.data(), temp.size());
 }
 
 void crypto_seed_t::calculate_bip39(const crypto_entropy_t &entropy, const std::string &passphrase)
 {
-    const auto mnemonic = entropy.to_mnemonic_phrase();
+    auto mnemonic = entropy.to_mnemonic_phrase();
 
-    const auto bip39 = calculate_bip39_raw(mnemonic.data(), mnemonic.size(), "mnemonic" + passphrase);
+    auto bip39 = calculate_bip39_raw(mnemonic.data(), mnemonic.size(), "mnemonic" + passphrase);
 
     bytes.resize(bip39.size());
 
     std::copy(bip39.begin(), bip39.end(), bytes.data());
+
+    ed25519_secure_erase(bip39.data(), bip39.size());
+
+    ed25519_secure_erase(&mnemonic[0], mnemonic.size());
 }
 
 crypto_hash_t crypto_seed_t::chain_code() const

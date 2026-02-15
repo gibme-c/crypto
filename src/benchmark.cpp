@@ -181,7 +181,7 @@ int main(int argc, char **argv)
             [&public_keys, &secret_ephemeral, &signature]()
             {
                 const auto [succes, sigs] = Crypto::RingSignature::Borromean::generate_ring_signature(
-                    SHA3_HASH, secret_ephemeral, public_keys);
+                    SHA3_HASH, secret_ephemeral, public_keys, RING_SIZE / 2);
                 signature = sigs;
             },
             "Borromean::sign",
@@ -209,8 +209,8 @@ int main(int argc, char **argv)
         benchmark(
             [&public_keys, &secret_ephemeral, &signature]()
             {
-                const auto [success, sig] =
-                    Crypto::RingSignature::CLSAG::generate_ring_signature(SHA3_HASH, secret_ephemeral, public_keys);
+                const auto [success, sig] = Crypto::RingSignature::CLSAG::generate_ring_signature(
+                    SHA3_HASH, secret_ephemeral, public_keys, RING_SIZE / 2);
                 signature = sig;
             },
             "CLSAG::sign",
@@ -261,6 +261,7 @@ int main(int argc, char **argv)
                     SHA3_HASH,
                     secret_ephemeral,
                     public_keys,
+                    RING_SIZE / 2,
                     input_blinding,
                     public_commitments,
                     ps_blindings[0],
@@ -317,6 +318,7 @@ int main(int argc, char **argv)
                     SHA3_HASH,
                     secret_ephemeral,
                     public_keys,
+                    RING_SIZE / 2,
                     input_blinding,
                     public_commitments,
                     ps_blindings[0],

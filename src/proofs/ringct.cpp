@@ -83,6 +83,11 @@ namespace Crypto::RingCT
             const std::vector<uint64_t> &input_amounts,
             const std::vector<crypto_blinding_factor_t> &output_blinding_factors)
     {
+        if (input_amounts.empty() || input_amounts.size() != output_blinding_factors.size())
+        {
+            throw std::invalid_argument("input_amounts and output_blinding_factors must be non-empty and equal size");
+        }
+
         for (const auto &output_blinding_factor : output_blinding_factors)
         {
             SCALAR_NZ_OR_THROW(output_blinding_factor);

@@ -57,7 +57,7 @@ namespace Crypto::Address
 
                 return {success, prefix, public_spend, public_view};
             }
-            catch (...)
+            catch (const std::exception &)
             {
                 return {false, 0, {}, {}};
             }
@@ -117,7 +117,7 @@ namespace Crypto::Address
 
                 return {success, prefix, public_spend, public_view};
             }
-            catch (...)
+            catch (const std::exception &)
             {
                 return {false, 0, {}, {}};
             }

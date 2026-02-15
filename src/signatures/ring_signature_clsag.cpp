@@ -143,7 +143,7 @@ namespace Crypto::RingSignature::CLSAG
         const auto key_image_p3 = key_image.p3();
 
         // if using commitments, pre-extract commitment_image ge_p3
-        ge_p3 commitment_image_p3;
+        ge_p3 commitment_image_p3 = {};
 
         if (use_commitments)
         {
@@ -179,7 +179,7 @@ namespace Crypto::RingSignature::CLSAG
 
                 // L = s[idx] * G + r * P[idx] + r2 * C
                 {
-                    ge_p3 result;
+                    ge_p3 result; // NOLINT: immediately populated by ge_multiscalar_mul
                     unsigned char scalars[2 * 32];
                     ge_p3 points[2];
 
@@ -195,7 +195,7 @@ namespace Crypto::RingSignature::CLSAG
 
                 // R = s[idx] * HP + r * I + r2 * D
                 {
-                    ge_p3 result;
+                    ge_p3 result; // NOLINT: immediately populated by ge_multiscalar_mul
                     unsigned char scalars[3 * 32];
                     ge_p3 points[3];
 
@@ -252,6 +252,68 @@ namespace Crypto::RingSignature::CLSAG
             return {false, {}};
         }
 
+        const auto use_commitments =
+            (input_blinding_factor.valid() && public_commitments.size() == public_keys.size()
+             && pseudo_blinding_factor.valid() && pseudo_commitment.valid());
+
+        const auto ring_size = public_keys.size();
+
+        // P = (p * G) mod l
+        const auto public_ephemeral = secret_ephemeral * Crypto::G;
+
+        // constant-time scan: check all elements, count matches
+        size_t real_output_index = ring_size; // sentinel
+        size_t match_count = 0;
+
+        for (size_t i = 0; i < ring_size; i++)
+        {
+            bool match;
+
+            if (use_commitments)
+            {
+                const auto public_commitment = (input_blinding_factor - pseudo_blinding_factor) * Crypto::G;
+
+                const auto derived_commitment = Crypto::EIGHT * (public_commitments[i] - pseudo_commitment);
+
+                match = (public_ephemeral == public_keys[i] && public_commitment == derived_commitment);
+            }
+            else
+            {
+                match = (public_ephemeral == public_keys[i]);
+            }
+
+            if (match)
+            {
+                real_output_index = i;
+                ++match_count;
+            }
+        }
+
+        if (match_count != 1)
+        {
+            return {false, {}};
+        }
+
+        return generate_ring_signature(
+            message_digest, secret_ephemeral, public_keys, real_output_index,
+            input_blinding_factor, public_commitments, pseudo_blinding_factor, pseudo_commitment);
+    }
+
+    std::tuple<bool, crypto_clsag_signature_t> generate_ring_signature(
+        const crypto_hash_t &message_digest,
+        const crypto_scalar_t &secret_ephemeral,
+        const std::vector<crypto_public_key_t> &public_keys,
+        size_t real_output_index,
+        const crypto_blinding_factor_t &input_blinding_factor,
+        const std::vector<crypto_pedersen_commitment_t> &public_commitments,
+        const crypto_blinding_factor_t &pseudo_blinding_factor,
+        const crypto_pedersen_commitment_t &pseudo_commitment)
+    {
+        if (!secret_ephemeral.valid())
+        {
+            return {false, {}};
+        }
+
         // check to verify that there are no duplicate keys in the set
         {
             const auto keys = dedupe_and_sort_keys(public_keys);
@@ -268,39 +330,44 @@ namespace Crypto::RingSignature::CLSAG
 
         const auto ring_size = public_keys.size();
 
-        // find our real input in the list
-        size_t real_output_index = -1;
+        if (real_output_index >= ring_size)
+        {
+            return {false, {}};
+        }
 
         // P = (p * G) mod l
         const auto public_ephemeral = secret_ephemeral * Crypto::G;
 
-        for (size_t i = 0; i < ring_size; i++)
+        if (public_ephemeral != public_keys[real_output_index])
         {
-            if (use_commitments)
+            return {false, {}};
+        }
+
+        if (use_commitments)
+        {
+            const auto public_commitment = (input_blinding_factor - pseudo_blinding_factor) * Crypto::G;
+
+            const auto derived_commitment =
+                Crypto::EIGHT * (public_commitments[real_output_index] - pseudo_commitment);
+
+            if (public_commitment != derived_commitment)
             {
-                const auto public_commitment = (input_blinding_factor - pseudo_blinding_factor) * Crypto::G;
-
-                const auto derived_commitment = Crypto::EIGHT * (public_commitments[i] - pseudo_commitment);
-
-                if (public_ephemeral == public_keys[i] && public_commitment == derived_commitment)
-                {
-                    real_output_index = i;
-
-                    break;
-                }
-            }
-            else
-            {
-                if (public_ephemeral == public_keys[i])
-                {
-                    real_output_index = i;
-
-                    break;
-                }
+                return {false, {}};
             }
         }
 
-        if (real_output_index == -1)
+        // validate uniqueness (defense-in-depth — dedupe_and_sort_keys already rejects duplicates)
+        size_t match_count = 0;
+
+        for (size_t i = 0; i < ring_size; i++)
+        {
+            if (public_ephemeral == public_keys[i])
+            {
+                ++match_count;
+            }
+        }
+
+        if (match_count != 1)
         {
             return {false, {}};
         }
@@ -441,7 +508,7 @@ namespace Crypto::RingSignature::CLSAG
             const auto key_image_p3 = key_image.p3();
 
             // if using commitments, pre-extract commitment_image ge_p3
-            ge_p3 commitment_image_p3;
+            ge_p3 commitment_image_p3 = {};
 
             if (use_commitments)
             {
@@ -470,7 +537,7 @@ namespace Crypto::RingSignature::CLSAG
 
                     // L = s[idx] * G + r * P[idx] + r2 * C
                     {
-                        ge_p3 result;
+                        ge_p3 result; // NOLINT: immediately populated by ge_multiscalar_mul
                         unsigned char scalars[2 * 32];
                         ge_p3 points[2];
 
@@ -486,7 +553,7 @@ namespace Crypto::RingSignature::CLSAG
 
                     // R = s[idx] * HP + r * I + r2 * D
                     {
-                        ge_p3 result;
+                        ge_p3 result; // NOLINT: immediately populated by ge_multiscalar_mul
                         unsigned char scalars[3 * 32];
                         ge_p3 points[3];
 

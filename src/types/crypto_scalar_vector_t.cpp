@@ -183,7 +183,7 @@ crypto_point_t crypto_scalar_vector_t::inner_product(const crypto_point_vector_t
         points[i] = other[i].p3();
     }
 
-    ge_p3 result;
+    ge_p3 result; // NOLINT: immediately populated by ge_multiscalar_mul
     ge_multiscalar_mul_vartime(&result, scalars.data(), points.data(), n);
 
     return crypto_point_t(result);
@@ -266,6 +266,11 @@ crypto_scalar_vector_t crypto_scalar_vector_t::slice(size_t start, size_t end) c
     if (end < start)
     {
         throw std::range_error("ending offset must be greater than or equal to starting offset");
+    }
+
+    if (start > container.size() || end > container.size())
+    {
+        throw std::range_error("slice bounds exceed vector size");
     }
 
     return crypto_scalar_vector_t(std::vector<crypto_scalar_t>(container.begin() + start, container.begin() + end));

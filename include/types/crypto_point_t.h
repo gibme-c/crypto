@@ -193,8 +193,8 @@ struct crypto_point_t final : SerializablePod<32>
   private:
     void load_hook() override;
 
-    ge_p3 point3;
-    ge_cached cached_point;
+    ge_p3 point3 = {};
+    ge_cached cached_point = {};
 };
 
 namespace Crypto

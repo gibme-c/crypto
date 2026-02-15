@@ -176,7 +176,7 @@ namespace Crypto::RangeProofs::Bulletproofs
                 msm_points[2 * n] = U_p3;
 
                 {
-                    ge_p3 result;
+                    ge_p3 result; // NOLINT: immediately populated by ge_multiscalar_mul
                     ge_multiscalar_mul_vartime(&result, msm_scalars.data(), msm_points.data(), total);
                     L.append(crypto_point_t(result));
                 }
@@ -201,7 +201,7 @@ namespace Crypto::RangeProofs::Bulletproofs
                 msm_points[2 * n] = U_p3;
 
                 {
-                    ge_p3 result;
+                    ge_p3 result; // NOLINT: immediately populated by ge_multiscalar_mul
                     ge_multiscalar_mul_vartime(&result, msm_scalars.data(), msm_points.data(), total);
                     R.append(crypto_point_t(result));
                 }
@@ -359,7 +359,7 @@ namespace Crypto::RangeProofs::Bulletproofs
             }
             const auto base_s = alpha * inv8;
 
-            ge_p3 result;
+            ge_p3 result; // NOLINT: immediately populated by ge_multiscalar_mul
             ge_multiscalar_mul_base_vartime(&result, scalars.data(), as_points.data(), total_AS, base_s.data());
             A = crypto_point_t(result);
         }
@@ -389,7 +389,7 @@ namespace Crypto::RangeProofs::Bulletproofs
             }
             const auto base_s = rho * inv8;
 
-            ge_p3 result;
+            ge_p3 result; // NOLINT: immediately populated by ge_multiscalar_mul
             ge_multiscalar_mul_base_vartime(&result, scalars.data(), as_points.data(), total_AS, base_s.data());
             S = crypto_point_t(result);
         }

@@ -69,7 +69,7 @@ static inline crypto_point_t commitment_tensor(const triptych_crypto_scalar_vect
     std::memcpy(&scalars[idx * 32], r.data(), 32);
     points[idx] = Crypto::H.p3();
 
-    ge_p3 result;
+    ge_p3 result; // NOLINT: immediately populated by ge_multiscalar_mul
     ge_multiscalar_mul_vartime(&result, scalars.data(), points.data(), count);
 
     return crypto_point_t(result);
@@ -297,12 +297,12 @@ namespace Crypto::RingSignature::Triptych
         ry_points[m + 1] = key_image.p3();
 
         // compute RX = base_scalar*G + sum(scalars[i]*points[i])
-        ge_p3 rx_result;
+        ge_p3 rx_result; // NOLINT: immediately populated by ge_multiscalar_mul
         ge_multiscalar_mul_base_vartime(
             &rx_result, rx_scalars.data(), rx_points.data(), N + m, neg_z.data());
 
         // compute RY
-        ge_p3 ry_result;
+        ge_p3 ry_result; // NOLINT: immediately populated by ge_multiscalar_mul
         ge_multiscalar_mul_vartime(&ry_result, ry_scalars.data(), ry_points.data(), ry_total);
 
         return crypto_point_t(rx_result).empty() && crypto_point_t(ry_result).empty();
@@ -330,6 +330,53 @@ namespace Crypto::RingSignature::Triptych
         const crypto_hash_t &message_digest,
         const crypto_scalar_t &secret_ephemeral,
         const std::vector<crypto_public_key_t> &public_keys,
+        const crypto_blinding_factor_t &input_blinding_factor,
+        const std::vector<crypto_pedersen_commitment_t> &input_commitments,
+        const crypto_blinding_factor_t &pseudo_blinding_factor,
+        const crypto_pedersen_commitment_t &pseudo_commitment)
+    {
+        if (!secret_ephemeral.valid() || !input_blinding_factor.valid() || !pseudo_blinding_factor.valid())
+        {
+            return {false, {}};
+        }
+
+        const auto ring_size = public_keys.size();
+
+        // P = (p * G) mod l
+        const auto public_ephemeral = secret_ephemeral * Crypto::G;
+
+        const auto public_commitment = (input_blinding_factor - pseudo_blinding_factor) * Crypto::G;
+
+        // constant-time scan: check all elements, count matches
+        size_t real_output_index = ring_size; // sentinel
+        size_t match_count = 0;
+
+        for (size_t i = 0; i < ring_size; i++)
+        {
+            const auto derived_commitment = Crypto::EIGHT * (input_commitments[i] - pseudo_commitment);
+
+            if (public_ephemeral == public_keys[i] && public_commitment == derived_commitment)
+            {
+                real_output_index = i;
+                ++match_count;
+            }
+        }
+
+        if (match_count != 1)
+        {
+            return {false, {}};
+        }
+
+        return generate_ring_signature(
+            message_digest, secret_ephemeral, public_keys, real_output_index,
+            input_blinding_factor, input_commitments, pseudo_blinding_factor, pseudo_commitment);
+    }
+
+    std::tuple<bool, crypto_triptych_signature_t> generate_ring_signature(
+        const crypto_hash_t &message_digest,
+        const crypto_scalar_t &secret_ephemeral,
+        const std::vector<crypto_public_key_t> &public_keys,
+        size_t real_output_index,
         const crypto_blinding_factor_t &input_blinding_factor,
         const std::vector<crypto_pedersen_commitment_t> &input_commitments,
         const crypto_blinding_factor_t &pseudo_blinding_factor,
@@ -365,35 +412,41 @@ namespace Crypto::RingSignature::Triptych
             return {false, {}};
         }
 
-        // find our real input in the list;
-        size_t real_output_index = -1;
+        if (real_output_index >= ring_size)
+        {
+            return {false, {}};
+        }
 
         // P = (p * G) mod l
         const auto public_ephemeral = secret_ephemeral * Crypto::G;
 
+        if (public_ephemeral != public_keys[real_output_index])
+        {
+            return {false, {}};
+        }
+
         const auto public_commitment = (input_blinding_factor - pseudo_blinding_factor) * Crypto::G;
 
-        /**
-         * Look for a public_ephemeral in the key set that we have the
-         * secret ephemeral for
-         */
+        const auto derived_commitment =
+            Crypto::EIGHT * (input_commitments[real_output_index] - pseudo_commitment);
+
+        if (public_commitment != derived_commitment)
+        {
+            return {false, {}};
+        }
+
+        // validate uniqueness (defense-in-depth — dedupe_and_sort_keys already rejects duplicates)
+        size_t match_count = 0;
+
         for (size_t i = 0; i < ring_size; i++)
         {
-            const auto derived_commitment = Crypto::EIGHT * (input_commitments[i] - pseudo_commitment);
-
-            if (public_ephemeral == public_keys[i] && public_commitment == derived_commitment)
+            if (public_ephemeral == public_keys[i])
             {
-                real_output_index = i;
-
-                break;
+                ++match_count;
             }
         }
 
-        /**
-         * if we could not find the related public key(s) in the list or the proper
-         * commitments provided, then fail as we cannot generate a valid signature
-         */
-        if (real_output_index == -1)
+        if (match_count != 1)
         {
             return {false, {}};
         }
@@ -640,7 +693,7 @@ namespace Crypto::RingSignature::Triptych
                     p_sum += p[i][j];
                 }
 
-                ge_p3 result;
+                ge_p3 result; // NOLINT: immediately populated by ge_multiscalar_mul
                 ge_multiscalar_mul_base_vartime(&result, scalars.data(), combined_points.data(), N, rho[j].data());
 
                 X[j] = crypto_point_t(result);
@@ -664,7 +717,7 @@ namespace Crypto::RingSignature::Triptych
                 std::memcpy(&scalars[32], rho[j].data(), 32);
                 points[1] = key_image_p3;
 
-                ge_p3 result;
+                ge_p3 result; // NOLINT: immediately populated by ge_multiscalar_mul
                 ge_multiscalar_mul_vartime(&result, scalars, points, 2);
 
                 Y[j] = crypto_point_t(result);

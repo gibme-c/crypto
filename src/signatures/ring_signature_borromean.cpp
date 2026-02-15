@@ -103,6 +103,43 @@ namespace Crypto::RingSignature::Borromean
             return {false, {}};
         }
 
+        const auto ring_size = public_keys.size();
+
+        // P = (p * G) mod l
+        const auto public_ephemeral = secret_ephemeral * G;
+
+        // constant-time scan: check all elements, count matches
+        size_t real_output_index = ring_size; // sentinel
+        size_t match_count = 0;
+
+        for (size_t i = 0; i < ring_size; i++)
+        {
+            if (public_ephemeral == public_keys[i])
+            {
+                real_output_index = i;
+                ++match_count;
+            }
+        }
+
+        if (match_count != 1)
+        {
+            return {false, {}};
+        }
+
+        return generate_ring_signature(message_digest, secret_ephemeral, public_keys, real_output_index);
+    }
+
+    std::tuple<bool, crypto_borromean_signature_t> generate_ring_signature(
+        const crypto_hash_t &message_digest,
+        const crypto_scalar_t &secret_ephemeral,
+        const std::vector<crypto_public_key_t> &public_keys,
+        size_t real_output_index)
+    {
+        if (!secret_ephemeral.valid())
+        {
+            return {false, {}};
+        }
+
         // check to verify that there are no duplicate keys in the set
         {
             const auto keys = dedupe_and_sort_keys(public_keys);
@@ -115,24 +152,31 @@ namespace Crypto::RingSignature::Borromean
 
         const auto ring_size = public_keys.size();
 
-        // find our real output in the list
-        size_t real_output_index = -1;
+        if (real_output_index >= ring_size)
+        {
+            return {false, {}};
+        }
 
         // P = (p * G) mod l
         const auto public_ephemeral = secret_ephemeral * G;
+
+        if (public_ephemeral != public_keys[real_output_index])
+        {
+            return {false, {}};
+        }
+
+        // validate uniqueness (defense-in-depth — dedupe_and_sort_keys already rejects duplicates)
+        size_t match_count = 0;
 
         for (size_t i = 0; i < ring_size; i++)
         {
             if (public_ephemeral == public_keys[i])
             {
-                real_output_index = i;
-
-                break;
+                ++match_count;
             }
         }
 
-        // if we could not find the public ephemeral in the list, fail
-        if (real_output_index == -1)
+        if (match_count != 1)
         {
             return {false, {}};
         }

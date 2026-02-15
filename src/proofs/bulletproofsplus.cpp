@@ -237,7 +237,7 @@ namespace Crypto::RangeProofs::BulletproofsPlus
                 const auto base_dL = dL * inv8;
 
                 {
-                    ge_p3 result;
+                    ge_p3 result; // NOLINT: immediately populated by ge_multiscalar_mul
                     ge_multiscalar_mul_base_vartime(&result, msm_scalars.data(), msm_points.data(), total, base_dL.data());
                     L.append(crypto_point_t(result));
                 }
@@ -263,7 +263,7 @@ namespace Crypto::RangeProofs::BulletproofsPlus
                 const auto base_dR = dR * inv8;
 
                 {
-                    ge_p3 result;
+                    ge_p3 result; // NOLINT: immediately populated by ge_multiscalar_mul
                     ge_multiscalar_mul_base_vartime(&result, msm_scalars.data(), msm_points.data(), total, base_dR.data());
                     R.append(crypto_point_t(result));
                 }
@@ -339,7 +339,7 @@ namespace Crypto::RangeProofs::BulletproofsPlus
 
                 const auto base_d = d * inv8;
 
-                ge_p3 result;
+                ge_p3 result; // NOLINT: immediately populated by ge_multiscalar_mul
                 ge_multiscalar_mul_base_vartime(&result, a_scalars, a_points, 3, base_d.data());
                 A = crypto_point_t(result);
             }
@@ -355,7 +355,7 @@ namespace Crypto::RangeProofs::BulletproofsPlus
 
                 const auto base_eta = eta * inv8;
 
-                ge_p3 result;
+                ge_p3 result; // NOLINT: immediately populated by ge_multiscalar_mul
                 ge_multiscalar_mul_base_vartime(&result, b_scalars, b_points, 1, base_eta.data());
                 B = crypto_point_t(result);
             }
@@ -507,7 +507,7 @@ namespace Crypto::RangeProofs::BulletproofsPlus
             }
             const auto base_s = alpha * inv8;
 
-            ge_p3 result;
+            ge_p3 result; // NOLINT: immediately populated by ge_multiscalar_mul
             ge_multiscalar_mul_base_vartime(&result, scalars.data(), points.data(), total, base_s.data());
             A = crypto_point_t(result);
         }

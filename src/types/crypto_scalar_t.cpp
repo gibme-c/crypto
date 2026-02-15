@@ -399,9 +399,9 @@ void crypto_scalar_t::operator/=(const uint256_t &other)
 
 crypto_point_t crypto_scalar_t::operator*(const crypto_point_t &point) const
 {
-    ge_p3 temp_p3;
+    ge_p3 temp_p3 = {};
 
-    ge_p1p1 temp_p1p1;
+    ge_p1p1 temp_p1p1 = {};
 
     if (point == Crypto::G) // If we're multiplying by G, use the base method, it's faster
     {
@@ -427,9 +427,9 @@ crypto_point_t crypto_scalar_t::operator*(const crypto_point_t &point) const
 crypto_point_t
     crypto_scalar_t::dbl_mult(const crypto_point_t &A, const crypto_scalar_t &b, const crypto_point_t &B) const
 {
-    ge_p1p1 temp_p1p1;
+    ge_p1p1 temp_p1p1 = {};
 
-    ge_p3 temp_p3;
+    ge_p3 temp_p3 = {};
 
     if (B == Crypto::G)
     {

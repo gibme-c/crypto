@@ -52,6 +52,7 @@ namespace Crypto::RingSignature::CLSAG
 
     /**
      * Generates a CLSAG ring signature using the secrets provided
+     * Auto-detects the signer's index via constant-time scan
      * @param message_digest
      * @param secret_ephemeral
      * @param public_keys
@@ -65,6 +66,29 @@ namespace Crypto::RingSignature::CLSAG
         const crypto_hash_t &message_digest,
         const crypto_scalar_t &secret_ephemeral,
         const std::vector<crypto_public_key_t> &public_keys,
+        const crypto_blinding_factor_t &input_blinding_factor = Crypto::ZERO,
+        const std::vector<crypto_pedersen_commitment_t> &public_commitments = {},
+        const crypto_blinding_factor_t &pseudo_blinding_factor = Crypto::ZERO,
+        const crypto_pedersen_commitment_t &pseudo_commitment = Crypto::Z);
+
+    /**
+     * Generates a CLSAG ring signature using the secrets provided
+     * Caller specifies the signer's index (still validated)
+     * @param message_digest
+     * @param secret_ephemeral
+     * @param public_keys
+     * @param real_output_index
+     * @param input_blinding_factor
+     * @param public_commitments
+     * @param pseudo_blinding_factor
+     * @param pseudo_commitment
+     * @return
+     */
+    std::tuple<bool, crypto_clsag_signature_t> generate_ring_signature(
+        const crypto_hash_t &message_digest,
+        const crypto_scalar_t &secret_ephemeral,
+        const std::vector<crypto_public_key_t> &public_keys,
+        size_t real_output_index,
         const crypto_blinding_factor_t &input_blinding_factor = Crypto::ZERO,
         const std::vector<crypto_pedersen_commitment_t> &public_commitments = {},
         const crypto_blinding_factor_t &pseudo_blinding_factor = Crypto::ZERO,

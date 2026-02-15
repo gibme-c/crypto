@@ -28,11 +28,14 @@
 #include <encoding/mnemonics.h>
 #include <helpers/debug_helper.h>
 #include <map>
+#include <mutex>
 #include <serialization.h>
 #include <types/crypto_hash_t.h>
 
 static std::map<Crypto::Mnemonics::Language::Language, std::vector<std::string>> cached_trimmed_words =
     std::map<Crypto::Mnemonics::Language::Language, std::vector<std::string>>();
+
+static std::mutex cache_mutex;
 
 static inline std::string utf8_substr(const std::string &str, size_t length)
 {
@@ -118,12 +121,12 @@ namespace Crypto::Mnemonics
         {
             const auto index = word_index(word, language);
 
-            if (index == -1)
+            if (!index.has_value())
             {
                 throw std::invalid_argument("Invalid word in mnemonic");
             }
 
-            binary_string += std::bitset<11>(index).to_string();
+            binary_string += std::bitset<11>(*index).to_string();
         }
 
         const auto entropy_size = words.size() == 24 ? 32 : 16;
@@ -228,7 +231,7 @@ namespace Crypto::Mnemonics
         return result;
     }
 
-    size_t word_index(const std::string &word, const Language::Language &language)
+    std::optional<size_t> word_index(const std::string &word, const Language::Language &language)
     {
         const auto trimmed_word_list = word_list_trimmed(language);
 
@@ -240,12 +243,10 @@ namespace Crypto::Mnemonics
 
         if (it != trimmed_word_list.end())
         {
-            return it - trimmed_word_list.begin();
+            return static_cast<size_t>(it - trimmed_word_list.begin());
         }
-        else
-        {
-            return -1;
-        }
+
+        return std::nullopt;
     }
 
     std::vector<std::string> word_list(const Language::Language &language)
@@ -255,6 +256,8 @@ namespace Crypto::Mnemonics
 
     std::vector<std::string> word_list_trimmed(const Language::Language &language)
     {
+        std::lock_guard<std::mutex> lock(cache_mutex);
+
         // If the cache does not exist, we need to generate it
         if (cached_trimmed_words.find(language) == cached_trimmed_words.end())
         {

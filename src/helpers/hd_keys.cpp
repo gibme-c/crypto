@@ -27,6 +27,7 @@
 #include <cryptopp/hmac.h>
 #include <cryptopp/pwdbased.h>
 #include <cryptopp/sha.h>
+#include <ed25519/include/ed25519_secure_erase.h>
 #include <helpers/hd_keys.h>
 
 static std::vector<uint32_t> parse_bip32_path(const std::string &path)
@@ -102,6 +103,8 @@ static std::tuple<crypto_hash_t, crypto_hash_t>
     temp.assign(hash.begin() + 32, hash.begin() + 64);
 
     child_chain_code.deserialize(temp);
+
+    ed25519_secure_erase(temp.data(), temp.size());
 
     return {child_key, child_chain_code};
 }

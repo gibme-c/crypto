@@ -158,6 +158,11 @@ namespace Crypto::Merkle
 
     std::vector<crypto_hash_t> tree_branch(const std::vector<crypto_hash_t> &hashes)
     {
+        if (hashes.size() < 2)
+        {
+            throw std::invalid_argument("tree_branch requires at least 2 hashes");
+        }
+
         const auto count = hashes.size();
 
         size_t cnt = 1;
@@ -193,9 +198,12 @@ namespace Crypto::Merkle
 
             branches[depth] = temp_hashes[0];
 
-            for (size_t i = 1, j = 0; j < cnt - 1; i += 2, ++j)
+            if (cnt > 1)
             {
-                temp_hashes[j] = crypto_hash_t::sha3(slice(temp_hashes, i, 2));
+                for (size_t i = 1, j = 0; j < cnt - 1; i += 2, ++j)
+                {
+                    temp_hashes[j] = crypto_hash_t::sha3(slice(temp_hashes, i, 2));
+                }
             }
         }
 

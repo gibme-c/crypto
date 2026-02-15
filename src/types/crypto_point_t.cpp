@@ -106,12 +106,12 @@ crypto_point_t crypto_point_t::from_uint256(const uint256_t &number)
 
 crypto_point_t crypto_point_t::operator+(const crypto_point_t &other) const
 {
-    ge_p1p1 tmp2;
+    ge_p1p1 tmp2 = {};
 
     // AB = (a + b) mod l
     ge_add(&tmp2, &point3, &other.cached_point);
 
-    ge_p3 final;
+    ge_p3 final = {};
 
     ge_p1p1_to_p3(&final, &tmp2);
 
@@ -125,12 +125,12 @@ void crypto_point_t::operator+=(const crypto_point_t &other)
 
 crypto_point_t crypto_point_t::operator-(const crypto_point_t &other) const
 {
-    ge_p1p1 tmp2;
+    ge_p1p1 tmp2 = {};
 
     // AB = (a - b) mod l
     ge_sub(&tmp2, &point3, &other.cached_point);
 
-    ge_p3 final;
+    ge_p3 final = {};
 
     ge_p1p1_to_p3(&final, &tmp2);
 
@@ -156,7 +156,7 @@ ge_cached crypto_point_t::cached() const
 
 bool crypto_point_t::check() const
 {
-    ge_p3 tmp;
+    ge_p3 tmp = {};
 
     return ge_frombytes_vartime(&tmp, bytes) == 0;
 }
@@ -177,15 +177,15 @@ bool crypto_point_t::empty() const
 
 crypto_point_t crypto_point_t::mul8() const
 {
-    ge_p1p1 tmp;
+    ge_p1p1 tmp = {};
 
-    ge_p2 point2;
+    ge_p2 point2 = {};
 
     ge_p3_to_p2(&point2, &point3);
 
     ge_mul8(&tmp, &point2);
 
-    ge_p3 tmp2;
+    ge_p3 tmp2 = {};
 
     ge_p1p1_to_p3(&tmp2, &tmp);
 
@@ -194,7 +194,7 @@ crypto_point_t crypto_point_t::mul8() const
 
 crypto_point_t crypto_point_t::negate() const
 {
-    ge_p3 tmp;
+    ge_p3 tmp = {};
 
     fe_copy(tmp.X, point3.X);
 
@@ -222,13 +222,13 @@ crypto_point_t crypto_point_t::random()
 
     SerializablePod result;
 
-    auto hash_context = new CryptoPP::SHA3_256();
+    CryptoPP::SHA3_256 hash_context;
 
-    hash_context->Update(static_cast<CryptoPP::byte *>(bytes), CRYPTO_ENTROPY_BYTES);
+    hash_context.Update(static_cast<CryptoPP::byte *>(bytes), CRYPTO_ENTROPY_BYTES);
 
-    hash_context->TruncatedFinal(*result, result.size());
+    hash_context.TruncatedFinal(*result, result.size());
 
-    free(hash_context);
+    ed25519_secure_erase(bytes, sizeof(bytes));
 
     return crypto_point_t::reduce(result.data());
 }
@@ -247,11 +247,11 @@ std::vector<crypto_point_t> crypto_point_t::random(size_t count)
 
 crypto_point_t crypto_point_t::reduce(const unsigned char *bytes)
 {
-    ge_p2 point;
+    ge_p2 point = {};
 
-    ge_p1p1 point2;
+    ge_p1p1 point2 = {};
 
-    ge_p3 point3;
+    ge_p3 point3 = {};
 
     ge_fromfe_frombytes_vartime(&point, bytes);
 
