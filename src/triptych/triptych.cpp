@@ -42,8 +42,8 @@
 #include <helpers/math_helpers.h>
 #include <helpers/scalar_transcript_t.h>
 #include <serialization.h>
-#include <triptych/triptych.h>
 #include <stdexcept>
+#include <triptych/triptych.h>
 
 static inline point_t commitment_tensor_point(const point_t &point, size_t i, size_t j, size_t k = 0)
 {
@@ -193,7 +193,35 @@ namespace Crypto::RingSignature::Triptych
             return false;
         }
 
+        // Every ring member is consumed in the RX MSM via
+        // (public_keys[k] + mu * (EIGHT * (commitments[k] - pseudo_commitment))).p3().
+        // The commitment delta is cofactor-cleared but the ring member itself is
+        // not -- an 8-torsion component on public_keys[i] would survive into the MSM
+        // and weaken the prime-order soundness assumption from the Triptych paper.
+        // Reject torsioned ring members so the entire MSM lives in E[l]. Cofactor-
+        // clearing public_keys[i] is not viable: multiplying by 8 would change the
+        // discrete-log relation to 8a*G and break every signing path that proves
+        // knowledge of `a`.
+        for (const auto &ring_member : public_keys)
+        {
+            if (!ring_member.check_subgroup())
+            {
+                return false;
+            }
+        }
+
         if (!key_image.check_subgroup())
+        {
+            return false;
+        }
+
+        // pseudo_commitment is subtracted from every ring commitment in the RX gray-code
+        // loop and must be in the prime-order subgroup, otherwise a malicious signer can
+        // inject an 8-torsion element and forge a *distinct* linkability tag for the same
+        // input (bypassing downstream byte-level double-spend dedup) without the
+        // verification equations necessarily noticing. commitment_image gets the same
+        // protection inside check_construction() below — pseudo_commitment is the gap.
+        if (!signature.pseudo_commitment.check_subgroup())
         {
             return false;
         }
@@ -464,6 +492,19 @@ namespace Crypto::RingSignature::Triptych
         if (public_keys.size() != input_commitments.size())
         {
             return {false, {}};
+        }
+
+        // Pre-reject torsioned ring members at sign time so signing produces an
+        // immediate, attributable failure rather than a silent downstream verifier
+        // rejection. Mirrors the verifier check in check_ring_signature; verifier
+        // enforcement is the authoritative defense, this branch keeps the two
+        // paths symmetric.
+        for (const auto &ring_member : public_keys)
+        {
+            if (!ring_member.check_subgroup())
+            {
+                return {false, {}};
+            }
         }
 
         const auto N = public_keys.size();

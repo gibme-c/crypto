@@ -138,9 +138,31 @@ the RFC 8032 variant below.
 **Reference**: [RFC 8032][rfc8032] -- Edwards-Curve Digital Signature Algorithm (EdDSA)
 
 The standards-compliant Ed25519 variant. Accepts arbitrary-length messages
-(hashed internally with SHA-512 per the spec) and uses deterministic nonce
-derivation for replay safety. Produces signatures that any RFC 8032
-implementation can verify.
+(hashed internally with SHA-512 per the spec). Produces signatures that any
+RFC 8032 implementation can verify -- regression-tested against the §7.1
+Appendix A test vectors in `src/test.cpp::test_signatures()`.
+
+**Signing semantics: hedged synthetic-nonce.** Rather than RFC 8032 §5.1.6's
+pure-deterministic nonce `k = SHA-512(prefix || M) mod L`, this module uses a
+*hedged* synthetic nonce `k = H(SHA-512(M) || A || rand)`. Both forms produce
+mathematically valid Ed25519 signatures (the §5.1.7 verification equation
+`s·G == R + H(R||A||M)·A` holds for any α). Hedged signing is endorsed by
+FIPS 186-5 Appendix A and draft-irtf-cfrg-det-sigs-with-noise as a fault-
+injection-resistant *improvement* over pure-deterministic signing. The classic
+Ed25519 nonce-reuse key-extraction attack cannot fire here because `M_digest`
+is in the transcript -- different messages always yield different nonces even
+if the RNG is broken.
+
+Trade-off: signatures are NOT byte-reproducible across calls (each invocation
+produces a fresh `(R, s)` pair). They are still byte-compatible with every
+spec verifier on the wire; they just aren't bit-equal to a libsodium signature
+of the same input. If you need byte-reproducibility for offline test-vector
+matching, this is not the library for you.
+
+**Key API.** The secret key parameter is a pre-derived `scalar_t`, NOT a raw
+32-byte seed. The entire `Crypto::` namespace is scalar-domain by convention.
+Callers starting from a 32-byte seed must perform RFC 8032 §5.1.5 expansion
+(SHA-512 + clamping + public-key derivation) themselves.
 
 ### API
 
@@ -166,9 +188,10 @@ bool valid = Crypto::RFC8032::check_signature(
 | | Basic | RFC 8032 |
 |---|-------|---------|
 | Message input | 32-byte hash | Arbitrary length |
-| Secret key input | Pre-derived scalar | Raw 32-byte seed |
-| Nonce derivation | Library convention | SHA-512 per spec |
-| Interoperable | Library only | Any Ed25519 impl |
+| Secret key input | Pre-derived scalar | Pre-derived scalar |
+| Nonce derivation | Library convention | Hedged synthetic (FIPS 186-5 App. A) |
+| Verifier interop | Library only | Any spec-compliant Ed25519 verifier |
+| Byte-reproducible | No | No (hedged is intentionally non-reproducible) |
 
 ---
 

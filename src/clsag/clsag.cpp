@@ -33,13 +33,13 @@
  *        Pedersen commitment binding via mu_P/mu_C aggregation coefficients.
  */
 
+#include <clsag/clsag.h>
 #include <core/crypto_common.h>
 #include <core/crypto_constants.h>
 #include <cstring>
 #include <helpers/constant_time.h>
 #include <helpers/dedupe_and_sort_keys.h>
 #include <helpers/scalar_transcript_t.h>
-#include <clsag/clsag.h>
 #include <stdexcept>
 
 namespace Crypto::RingSignature::CLSAG
@@ -58,9 +58,26 @@ namespace Crypto::RingSignature::CLSAG
             return false;
         }
 
-        const auto use_commitments =
-            (signature.commitment_image.valid() && commitments.size() == public_keys.size()
-             && signature.pseudo_commitment.valid());
+        // Strict mode-mismatch reject. The signer's mode (plain ring vs.
+        // commitment-binding ring) is recovered from the signature's own fields; the caller's
+        // stated mode is recovered from the shape of the commitments vector. If they disagree,
+        // the caller is verifying the wrong predicate against this signature -- every such case
+        // is a hard reject, no silent downgrade in either direction.
+        const bool sig_is_commit_mode = (signature.commitment_image.valid() && signature.pseudo_commitment.valid());
+
+        const bool caller_is_commit_mode = !commitments.empty();
+
+        if (sig_is_commit_mode != caller_is_commit_mode)
+        {
+            return false;
+        }
+
+        if (sig_is_commit_mode && commitments.size() != public_keys.size())
+        {
+            return false;
+        }
+
+        const auto use_commitments = sig_is_commit_mode;
 
         // Reject rings with duplicate public keys
         {
@@ -85,6 +102,16 @@ namespace Crypto::RingSignature::CLSAG
             return false;
         }
 
+        // pseudo_commitment is subtracted from every ring commitment via mu_C * (C[i] - C').
+        // Without a subgroup check a malicious signer could inject 8-torsion to forge a
+        // *distinct* linkability tag for the same input, bypassing byte-level double-spend
+        // dedup. commitment_image gets the same protection inside check_construction()
+        // above — pseudo_commitment is the gap. valid() only checks decode/curve membership.
+        if (use_commitments && !signature.pseudo_commitment.check_subgroup())
+        {
+            return false;
+        }
+
         const auto &h0 = signature.challenge;
 
         std::vector<scalar_t> h(ring_size);
@@ -97,7 +124,13 @@ namespace Crypto::RingSignature::CLSAG
 
         // mu_P: aggregation weight for public key terms
         {
-            scalar_transcript_t transcript(CLSAG_DOMAIN_0, key_image);
+            // Mode tag is fused into the seed flush via the 3-arg
+            // constructor so it costs zero extra SHA3 invocations vs. a separate update().
+            // Binding the use_commitments mode here makes mu_P differ between plain and
+            // commit modes even before the (commitment_image, commitments, pseudo_commitment)
+            // field-inclusion divergence below; complements the runtime mismatch reject at
+            // the top of verify.
+            scalar_transcript_t transcript(CLSAG_DOMAIN_0, key_image, scalar_t(uint64_t(use_commitments ? 1 : 0)));
 
             transcript.update(public_keys);
 
@@ -121,7 +154,11 @@ namespace Crypto::RingSignature::CLSAG
         // mu_C: aggregation weight for commitment terms (different domain separator)
         if (use_commitments)
         {
-            scalar_transcript_t transcript(CLSAG_DOMAIN_2, key_image);
+            // Mode tag fused into seed flush. Always 1 here (mu_C only runs
+            // in commit mode), but kept for uniformity with the verifier's mu_C transcript
+            // and so a future reader does not have to track which transcripts "are or aren't
+            // mode-bound". Same fused-constructor pattern as mu_P above — zero extra SHA3.
+            scalar_transcript_t transcript(CLSAG_DOMAIN_2, key_image, scalar_t(uint64_t(1)));
 
             transcript.update(public_keys);
 
@@ -142,7 +179,10 @@ namespace Crypto::RingSignature::CLSAG
         // ---- Challenge chain: preload shared transcript state, then iterate the ring ----
         // The base transcript (domain, message, keys, commitments) is constant across rounds;
         // each round forks a copy and appends its own (L, R) before hashing.
-        scalar_transcript_t transcript(CLSAG_DOMAIN_1, message_digest);
+        // Mode tag fused into the seed flush. The per-round (L, R) terms
+        // already differ by mode, but binding the tag here makes the mode part of h0 itself,
+        // so the closing test h[0] == h0 carries the mode authentication directly.
+        scalar_transcript_t transcript(CLSAG_DOMAIN_1, message_digest, scalar_t(uint64_t(use_commitments ? 1 : 0)));
 
         transcript.update(public_keys);
 
@@ -268,9 +308,26 @@ namespace Crypto::RingSignature::CLSAG
             return {false, {}};
         }
 
-        const auto use_commitments =
-            (input_blinding_factor.valid() && public_commitments.size() == public_keys.size()
-             && pseudo_blinding_factor.valid() && pseudo_commitment.valid());
+        // Strict mode-mismatch reject on the sign side. Either the caller
+        // supplies all four commitment-mode arguments (input_blinding_factor,
+        // pseudo_blinding_factor, pseudo_commitment, and a public_commitments vector
+        // matching the ring size) or none of them. Partial supply is a caller error and
+        // is rejected here rather than silently dropping into plain mode; the
+        // verifier-side mismatch check handles the symmetric case.
+        const bool any_commit_field_supplied =
+            (input_blinding_factor.valid() || pseudo_blinding_factor.valid() || pseudo_commitment.valid()
+             || !public_commitments.empty());
+
+        const bool all_commit_fields_supplied =
+            (input_blinding_factor.valid() && pseudo_blinding_factor.valid() && pseudo_commitment.valid()
+             && public_commitments.size() == public_keys.size());
+
+        if (any_commit_field_supplied && !all_commit_fields_supplied)
+        {
+            return {false, {}};
+        }
+
+        const auto use_commitments = all_commit_fields_supplied;
 
         const auto ring_size = public_keys.size();
 
@@ -347,9 +404,23 @@ namespace Crypto::RingSignature::CLSAG
             }
         }
 
-        const auto use_commitments =
-            (input_blinding_factor.valid() && public_commitments.size() == public_keys.size()
-             && pseudo_blinding_factor.valid() && pseudo_commitment.valid());
+        // Same strict mode-mismatch reject as the auto-detect overload.
+        // Both sign entry points must enforce identical caller-arguments preconditions
+        // so that downstream signers cannot accidentally route around the check.
+        const bool any_commit_field_supplied =
+            (input_blinding_factor.valid() || pseudo_blinding_factor.valid() || pseudo_commitment.valid()
+             || !public_commitments.empty());
+
+        const bool all_commit_fields_supplied =
+            (input_blinding_factor.valid() && pseudo_blinding_factor.valid() && pseudo_commitment.valid()
+             && public_commitments.size() == public_keys.size());
+
+        if (any_commit_field_supplied && !all_commit_fields_supplied)
+        {
+            return {false, {}};
+        }
+
+        const auto use_commitments = all_commit_fields_supplied;
 
         const auto ring_size = public_keys.size();
 
@@ -444,7 +515,10 @@ namespace Crypto::RingSignature::CLSAG
 
         // mu_P: aggregation weight for public key terms
         {
-            scalar_transcript_t transcript(CLSAG_DOMAIN_0, key_image);
+            // Mode tag fused into the seed flush — must match the verifier's
+            // mu_P transcript exactly (same fused 3-arg constructor over there). Locks the
+            // mu_P value to the mode the signer chose without an extra SHA3 invocation.
+            scalar_transcript_t transcript(CLSAG_DOMAIN_0, key_image, scalar_t(uint64_t(use_commitments ? 1 : 0)));
 
             transcript.update(public_keys);
 
@@ -468,7 +542,10 @@ namespace Crypto::RingSignature::CLSAG
         // mu_C: aggregation weight for commitment terms
         if (use_commitments)
         {
-            scalar_transcript_t transcript(CLSAG_DOMAIN_2, key_image);
+            // Mode tag fused into seed flush — always 1 here because mu_C
+            // only runs in commit mode, but kept for uniformity with the verifier and so
+            // that no transcript in the CLSAG family is unbound.
+            scalar_transcript_t transcript(CLSAG_DOMAIN_2, key_image, scalar_t(uint64_t(1)));
 
             transcript.update(public_keys);
 
@@ -488,7 +565,11 @@ namespace Crypto::RingSignature::CLSAG
 
         // ---- Build challenge chain starting from the real signer ----
         // Preload shared transcript state; each round forks a copy and appends (L, R).
-        scalar_transcript_t transcript(CLSAG_DOMAIN_1, message_digest);
+        // Mode tag fused into the seed flush — must match the verifier's
+        // tag at the same position. h0 is a function of the mode, so any verifier that
+        // reconstructs the chain in the wrong mode will fail to close the ring even on a
+        // syntactically valid signature.
+        scalar_transcript_t transcript(CLSAG_DOMAIN_1, message_digest, scalar_t(uint64_t(use_commitments ? 1 : 0)));
 
         transcript.update(public_keys);
 

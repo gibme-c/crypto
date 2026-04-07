@@ -27,6 +27,10 @@
 #include <crypto.h>
 
 // Test vectors from https://github.com/satoshilabs/slips/blob/master/slip-0010.md
+//
+// Each SLIP-0010 vector is encapsulated in its own static void test_slip10_vectorN()
+// function so derived seed/key state lives only for the duration of one test, mirroring
+// the function-per-domain pattern used in ../ed25519 and ../ranshaw test suites.
 
 static int tests_run = 0;
 static int tests_passed = 0;
@@ -39,7 +43,6 @@ static bool check(const char *name, bool condition)
     if (condition)
     {
         ++tests_passed;
-        std::cout << "  PASS: " << name << std::endl;
         return true;
     }
 
@@ -53,16 +56,176 @@ static bool test(const hd_key_t &key, const std::string &public_key, const std::
     const auto [pk, sk] = key.keys();
 
     if (sk != secret_key_t(secret_key))
-    {
         return false;
-    }
 
     if (pk != public_key_t(public_key))
-    {
         return false;
-    }
 
     return true;
+}
+
+static void test_slip10_vector1_seed128()
+{
+    const auto raw_seed = Serialization::from_hex("000102030405060708090a0b0c0d0e0f");
+    const auto seed = seed_t(raw_seed);
+
+    check(
+        "v1 master key",
+        test(
+            seed.generate_child_key(),
+            "a4b2856bfec510abab89753fac1ac0e1112364e7d250545963f135f2a33188ed",
+            "2b4be7f19ee27bbf30c667b642d5f4aa69fd169872f8fc3059c08ebae2eb19e7"));
+
+    check(
+        "v1 m/0'",
+        test(
+            seed.generate_child_key(0),
+            "8c8a13df77a28f3445213a0f432fde644acaa215fc72dcdf300d5efaa85d350c",
+            "68e0fe46dfb67e368c75379acec591dad19df3cde26e63b93a8e704f1dade7a3"));
+
+    check(
+        "v1 m/0'/1'",
+        test(
+            seed.generate_child_key(0, 1),
+            "1932a5270f335bed617d5b935c80aedb1a35bd9fc1e31acafd5372c30f5c1187",
+            "b1d0bad404bf35da785a64ca1ac54b2617211d2777696fbffaf208f746ae84f2"));
+
+    check(
+        "v1 m/0'/1'/2'",
+        test(
+            seed.generate_child_key(0, 1, 2),
+            "ae98736566d30ed0e9d2f4486a64bc95740d89c7db33f52121f8ea8f76ff0fc1",
+            "92a5b23c0b8a99e37d07df3fb9966917f5d06e02ddbd909c7e184371463e9fc9"));
+
+    check(
+        "v1 m/0'/1'/2'/2'",
+        test(
+            seed.generate_child_key(0, 1, 2, 2),
+            "8abae2d66361c879b900d204ad2cc4984fa2aa344dd7ddc46007329ac76c429c",
+            "30d1dc7e5fc04c31219ab25a27ae00b50f6fd66622f6e9c913253d6511d1e662"));
+
+    check(
+        "v1 m/0'/1'/2'/2'/1000000000'",
+        test(
+            seed.generate_child_key(0, 1, 2, 2, 1000000000),
+            "3c24da049451555d51a7014a37337aa4e12d41e485abccfa46b47dfb2af54b7a",
+            "8f94d394a8e8fd6b1bc2f3f49f5c47e385281d5c17e65324b0f62483e37e8793"));
+
+    check(
+        "v1 string path m/0'/1'/2'/2'/1000000000'",
+        test(
+            seed.generate_child_key("m/0'/1'/2'/2'/1000000000'"),
+            "3c24da049451555d51a7014a37337aa4e12d41e485abccfa46b47dfb2af54b7a",
+            "8f94d394a8e8fd6b1bc2f3f49f5c47e385281d5c17e65324b0f62483e37e8793"));
+}
+
+static void test_slip10_vector2_seed512()
+{
+    const auto raw_seed =
+        Serialization::from_hex("fffcf9f6f3f0edeae7e4e1dedbd8d5d2cfccc9c6c3c0bdbab7b4b1aeaba8a5a29f9c999693908d8a87"
+                                "84817e7b7875726f6c696663605d5a5754514e4b484542");
+    const auto seed = seed_t(raw_seed);
+
+    check(
+        "v2 master key",
+        test(
+            seed.generate_child_key(),
+            "8fe9693f8fa62a4305a140b9764c5ee01e455963744fe18204b4fb948249308a",
+            "171cb88b1b3c1db25add599712e36245d75bc65a1a5c9e18d76f9f2b1eab4012"));
+
+    check(
+        "v2 m/0'",
+        test(
+            seed.generate_child_key(0),
+            "86fab68dcb57aa196c77c5f264f215a112c22a912c10d123b0d03c3c28ef1037",
+            "1559eb2bbec5790b0c65d8693e4d0875b1747f4970ae8b650486ed7470845635"));
+
+    check(
+        "v2 m/0'/2147483647'",
+        test(
+            seed.generate_child_key(0, 2147483647),
+            "5ba3b9ac6e90e83effcd25ac4e58a1365a9e35a3d3ae5eb07b9e4d90bcf7506d",
+            "ea4f5bfe8694d8bb74b7b59404632fd5968b774ed545e810de9c32a4fb4192f4"));
+
+    check(
+        "v2 m/0'/2147483647'/1'",
+        test(
+            seed.generate_child_key(0, 2147483647, 1),
+            "2e66aa57069c86cc18249aecf5cb5a9cebbfd6fadeab056254763874a9352b45",
+            "3757c7577170179c7868353ada796c839135b3d30554bbb74a4b1e4a5a58505c"));
+
+    check(
+        "v2 m/0'/2147483647'/1'/2147483646'",
+        test(
+            seed.generate_child_key(0, 2147483647, 1, 2147483646),
+            "e33c0f7d81d843c572275f287498e8d408654fdf0d1e065b84e2e6f157aab09b",
+            "5837736c89570de861ebc173b1086da4f505d4adb387c6a1b1342d5e4ac9ec72"));
+
+    check(
+        "v2 m/0'/2147483647'/1'/2147483646'/2'",
+        test(
+            seed.generate_child_key(0, 2147483647, 1, 2147483646, 2),
+            "47150c75db263559a70d5778bf36abbab30fb061ad69f69ece61a72b0cfa4fc0",
+            "551d333177df541ad876a60ea71f00447931c0a9da16f227c11ea080d7391b8d"));
+}
+
+// The SLIP-0010 path parser must reject non-hardened segments and
+// out-of-range raw indices. Only the string-path API is exposed -- the
+// typed integer API is hardened by construction via make_bip32_path.
+// These tests exercise the string path exclusively.
+static void test_slip10_hardened_only()
+{
+    const auto raw_seed = Serialization::from_hex("000102030405060708090a0b0c0d0e0f");
+    const auto seed = seed_t(raw_seed);
+
+    // Any exception type other than std::invalid_argument is intentionally
+    // not caught here -- it propagates out, std::terminate fires, and the
+    // test runner crashes loudly. That is a more debuggable signal than a
+    // silent "test failed" line.
+    auto expect_reject = [&seed](const char *name, const std::string &path)
+    {
+        try
+        {
+            (void)seed.generate_child_key(path);
+            check(name, false);
+        }
+        catch (const std::invalid_argument &)
+        {
+            check(name, true);
+        }
+    };
+
+    auto expect_accept = [&seed](const char *name, const std::string &path)
+    {
+        try
+        {
+            (void)seed.generate_child_key(path);
+            check(name, true);
+        }
+        catch (...)
+        {
+            check(name, false);
+        }
+    };
+
+    // ---- reject: missing apostrophes (silent divergence from spec libs) ----
+    expect_reject("slip10: m/44/0'/0'/0'/0' rejected (first unhardened)", "m/44/0'/0'/0'/0'");
+    expect_reject("slip10: m/44'/0/0'/0'/0' rejected (middle unhardened)", "m/44'/0/0'/0'/0'");
+    expect_reject("slip10: m/44'/0'/0'/0'/0 rejected (last unhardened)", "m/44'/0'/0'/0'/0");
+    expect_reject("slip10: m/0/1/2 rejected (all unhardened)", "m/0/1/2");
+
+    // ---- reject: raw value >= 2^31 (would wrap with old += 0x80000000) ----
+    expect_reject("slip10: m/2147483648' rejected (raw >= 2^31)", "m/2147483648'");
+
+    // ---- reject: malformed numerics ----
+    expect_reject("slip10: m/abc' rejected (non-numeric)", "m/abc'");
+    expect_reject("slip10: m/12abc' rejected (trailing junk)", "m/12abc'");
+    expect_reject("slip10: m/' rejected (bare apostrophe)", "m/'");
+
+    // ---- accept: spec-conformant paths ----
+    expect_accept("slip10: m/0' accepted", "m/0'");
+    expect_accept("slip10: m accepted (master, no derivation)", "m");
+    expect_accept("slip10: m/44'/0'/0'/0'/0' accepted (BIP-44)", "m/44'/0'/0'/0'/0'");
 }
 
 int main()
@@ -70,126 +233,9 @@ int main()
     std::cout << std::endl << "SLIP-10 HD Key Derivation Tests" << std::endl;
     std::cout << "================================" << std::endl;
 
-    // ======================================================================
-    // Vector 1: 128-bit seed
-    // ======================================================================
-
-    std::cout << std::endl << "=== Vector 1: 128-bit seed ===" << std::endl;
-
-    {
-        const auto raw_seed = Serialization::from_hex("000102030405060708090a0b0c0d0e0f");
-
-        const auto seed = seed_t(raw_seed);
-
-        check(
-            "v1 master key",
-            test(
-                seed.generate_child_key(),
-                "a4b2856bfec510abab89753fac1ac0e1112364e7d250545963f135f2a33188ed",
-                "2b4be7f19ee27bbf30c667b642d5f4aa69fd169872f8fc3059c08ebae2eb19e7"));
-
-        check(
-            "v1 m/0'",
-            test(
-                seed.generate_child_key(0),
-                "8c8a13df77a28f3445213a0f432fde644acaa215fc72dcdf300d5efaa85d350c",
-                "68e0fe46dfb67e368c75379acec591dad19df3cde26e63b93a8e704f1dade7a3"));
-
-        check(
-            "v1 m/0'/1'",
-            test(
-                seed.generate_child_key(0, 1),
-                "1932a5270f335bed617d5b935c80aedb1a35bd9fc1e31acafd5372c30f5c1187",
-                "b1d0bad404bf35da785a64ca1ac54b2617211d2777696fbffaf208f746ae84f2"));
-
-        check(
-            "v1 m/0'/1'/2'",
-            test(
-                seed.generate_child_key(0, 1, 2),
-                "ae98736566d30ed0e9d2f4486a64bc95740d89c7db33f52121f8ea8f76ff0fc1",
-                "92a5b23c0b8a99e37d07df3fb9966917f5d06e02ddbd909c7e184371463e9fc9"));
-
-        check(
-            "v1 m/0'/1'/2'/2'",
-            test(
-                seed.generate_child_key(0, 1, 2, 2),
-                "8abae2d66361c879b900d204ad2cc4984fa2aa344dd7ddc46007329ac76c429c",
-                "30d1dc7e5fc04c31219ab25a27ae00b50f6fd66622f6e9c913253d6511d1e662"));
-
-        check(
-            "v1 m/0'/1'/2'/2'/1000000000'",
-            test(
-                seed.generate_child_key(0, 1, 2, 2, 1000000000),
-                "3c24da049451555d51a7014a37337aa4e12d41e485abccfa46b47dfb2af54b7a",
-                "8f94d394a8e8fd6b1bc2f3f49f5c47e385281d5c17e65324b0f62483e37e8793"));
-
-        check(
-            "v1 string path m/0'/1'/2'/2'/1000000000'",
-            test(
-                seed.generate_child_key("m/0'/1'/2'/2'/1000000000'"),
-                "3c24da049451555d51a7014a37337aa4e12d41e485abccfa46b47dfb2af54b7a",
-                "8f94d394a8e8fd6b1bc2f3f49f5c47e385281d5c17e65324b0f62483e37e8793"));
-    }
-
-    // ======================================================================
-    // Vector 2: 512-bit seed
-    // ======================================================================
-
-    std::cout << std::endl << "=== Vector 2: 512-bit seed ===" << std::endl;
-
-    {
-        const auto raw_seed =
-            Serialization::from_hex("fffcf9f6f3f0edeae7e4e1dedbd8d5d2cfccc9c6c3c0bdbab7b4b1aeaba8a5a29f9c999693908d8a87"
-                                    "84817e7b7875726f6c696663605d5a5754514e4b484542");
-
-        const auto seed = seed_t(raw_seed);
-
-        check(
-            "v2 master key",
-            test(
-                seed.generate_child_key(),
-                "8fe9693f8fa62a4305a140b9764c5ee01e455963744fe18204b4fb948249308a",
-                "171cb88b1b3c1db25add599712e36245d75bc65a1a5c9e18d76f9f2b1eab4012"));
-
-        check(
-            "v2 m/0'",
-            test(
-                seed.generate_child_key(0),
-                "86fab68dcb57aa196c77c5f264f215a112c22a912c10d123b0d03c3c28ef1037",
-                "1559eb2bbec5790b0c65d8693e4d0875b1747f4970ae8b650486ed7470845635"));
-
-        check(
-            "v2 m/0'/2147483647'",
-            test(
-                seed.generate_child_key(0, 2147483647),
-                "5ba3b9ac6e90e83effcd25ac4e58a1365a9e35a3d3ae5eb07b9e4d90bcf7506d",
-                "ea4f5bfe8694d8bb74b7b59404632fd5968b774ed545e810de9c32a4fb4192f4"));
-
-        check(
-            "v2 m/0'/2147483647'/1'",
-            test(
-                seed.generate_child_key(0, 2147483647, 1),
-                "2e66aa57069c86cc18249aecf5cb5a9cebbfd6fadeab056254763874a9352b45",
-                "3757c7577170179c7868353ada796c839135b3d30554bbb74a4b1e4a5a58505c"));
-
-        check(
-            "v2 m/0'/2147483647'/1'/2147483646'",
-            test(
-                seed.generate_child_key(0, 2147483647, 1, 2147483646),
-                "e33c0f7d81d843c572275f287498e8d408654fdf0d1e065b84e2e6f157aab09b",
-                "5837736c89570de861ebc173b1086da4f505d4adb387c6a1b1342d5e4ac9ec72"));
-
-        check(
-            "v2 m/0'/2147483647'/1'/2147483646'/2'",
-            test(
-                seed.generate_child_key(0, 2147483647, 1, 2147483646, 2),
-                "47150c75db263559a70d5778bf36abbab30fb061ad69f69ece61a72b0cfa4fc0",
-                "551d333177df541ad876a60ea71f00447931c0a9da16f227c11ea080d7391b8d"));
-    }
-
-    // ======================================================================
-    // Summary
-    // ======================================================================
+    test_slip10_vector1_seed128();
+    test_slip10_vector2_seed512();
+    test_slip10_hardened_only();
 
     std::cout << std::endl << "================================" << std::endl;
     std::cout << "Total:  " << tests_run << std::endl;

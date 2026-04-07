@@ -66,40 +66,83 @@
  * Scalars also support multiplication with curve points (`scalar * point`) to perform
  * the fundamental scalar-point multiplication used everywhere in EC cryptography.
  *
- * Constructors accept an optional `reduce` flag -- when true, the input bytes are reduced
- * mod l on load. When false (default), the bytes are stored as-is and validity can be
- * checked with `valid()` or `check()`.
+ * Constructors copy raw bytes without canonicalization. Callers that need a canonical
+ * value call `.reduce()` afterwards for pure mod-l reduction. The ONLY public path that
+ * applies RFC 8032 §5.1.5 private-key clamping is `scalar_t::from_rfc8032_seed()`; it
+ * must never be applied to random values, hash outputs, or Fiat-Shamir challenges.
  */
 struct scalar_t final : SerializablePod<32>
 {
     /**
      * Constructors -- accept hex strings, byte vectors, integers, or bit vectors.
-     * Pass reduce=true to automatically reduce the input modulo l on construction.
+     * Raw bytes are copied without reduction. Call `.reduce()` for canonical form, or
+     * use `from_rfc8032_seed()` / `from_uniform_bytes()` when those semantics are needed.
      */
 
     scalar_t() = default;
 
-    scalar_t(std::initializer_list<unsigned char> input, bool reduce = false);
+    scalar_t(std::initializer_list<unsigned char> input);
 
-    explicit scalar_t(const std::vector<unsigned char> &input, bool reduce = false);
+    explicit scalar_t(const std::vector<unsigned char> &input);
 
-    explicit scalar_t(const std::string &s, bool reduce = false);
+    explicit scalar_t(const std::string &s);
 
     JSON_STRING_CONSTRUCTOR(scalar_t, fromJSON)
 
-    explicit scalar_t(const char value[65], bool reduce = false);
+    explicit scalar_t(const char value[65]);
 
-    explicit scalar_t(const uint64_t &number, bool reduce = false);
+    explicit scalar_t(const uint64_t &number);
 
-    explicit scalar_t(const std::vector<scalar_t> &bits, bool reduce = false);
+    explicit scalar_t(const std::vector<scalar_t> &bits);
 
     /**
-     * Constructs a scalar from a uint256_t.
+     * Constructs a scalar from a uint256_t, always reducing modulo l since uint256_t
+     * values in [l, 2^256) are possible.
      * @param number the 256-bit integer to interpret as scalar bytes
-     * @param reduce if true, reduce the value modulo l
-     * @return the resulting scalar
+     * @return the resulting scalar, canonical in [0, l)
      */
-    static scalar_t from_uint256(const uint256_t &number, bool reduce = false);
+    static scalar_t from_uint256(const uint256_t &number);
+
+    /**
+     * Constructs a scalar from a 32-byte buffer and reduces it mod l via pure
+     * sc_reduce (no clamping). This is the fast in-place reduction path used
+     * by the transcript hot path (hash_t::scalar()) to avoid intermediate vector
+     * allocations. Fixed-width reference parameter prevents accidental pointer
+     * slicing at the call site. Residual bias is ~2^-124 (statistically
+     * undetectable, not lattice-exploitable).
+     *
+     * @param bytes_in 32-byte input (typically a hash output or raw scalar bytes)
+     * @return the bytes reduced mod l
+     */
+    [[nodiscard]] static scalar_t from_bytes_reduced(const unsigned char (&bytes_in)[32]);
+
+    /**
+     * Constructs a scalar by applying RFC 8032 §5.1.5 private-key clamping
+     * (clear low 3 bits of byte 0, clear bit 255, set bit 254) followed by
+     * reduction mod l. THIS IS THE ONLY PUBLIC CLAMP ENTRY POINT in the library.
+     * Use exclusively for Ed25519 secret-key expansion per RFC 8032 §5.1.5.
+     * Applying clamping to random values, hash outputs, or Fiat-Shamir challenges
+     * produces lattice-attackable biased Schnorr/ECDSA nonces and must never be
+     * done outside of RFC 8032 private-key derivation.
+     *
+     * @param seed pointer to a 32-byte Ed25519 seed (lower half of SHA-512(private_key))
+     * @return the clamped-then-reduced signing scalar
+     */
+    [[nodiscard]] static scalar_t from_rfc8032_seed(const unsigned char *seed);
+
+    /**
+     * Constructs a scalar by unbiased wide reduction of a 64-byte buffer (typically
+     * SHA-512 output, HMAC-SHA-512 output, or 64 bytes of CSPRNG entropy). Uses the
+     * three-limb split (a + b*2^168 + c*2^336) from reduce_wide_hash() to eliminate
+     * the ~2^-124 statistical bias of naive 32-byte modular reduction. This is the
+     * uniform-sampling path; use it for random scalars, nonces, blindings, and any
+     * value whose distribution must be statistically indistinguishable from uniform
+     * on [0, l).
+     *
+     * @param buf 64-byte input (SHA-512 digest, HMAC output, or CSPRNG entropy)
+     * @return the unbiased reduced scalar
+     */
+    [[nodiscard]] static scalar_t from_uniform_bytes(const unsigned char (&buf)[64]);
 
     /**
      * Comparison and arithmetic operators. All arithmetic (+, -, *, /) is mod l.
@@ -220,7 +263,7 @@ struct scalar_t final : SerializablePod<32>
          */
         try
         {
-            scalar_t check_value(value, false);
+            scalar_t check_value(value);
 
             return check_value.check();
         }
@@ -307,8 +350,13 @@ struct scalar_t final : SerializablePod<32>
     [[nodiscard]] scalar_t pow_sum(size_t count) const;
 
     /**
-     * Generates a cryptographically random scalar uniformly distributed in [1, l).
-     * @return a random non-zero scalar
+     * Generates a cryptographically random scalar uniformly distributed on [0, l).
+     *
+     * Samples 64 bytes of CSPRNG entropy and applies the unbiased wide-reduction path
+     * (`reduce_wide_hash`) to produce a scalar whose distribution is statistically
+     * indistinguishable from uniform on [0, l).
+     *
+     * @return a cryptographically random scalar with unbiased distribution on [0, l)
      */
     [[nodiscard]] static scalar_t random();
 
@@ -320,10 +368,13 @@ struct scalar_t final : SerializablePod<32>
     [[nodiscard]] static std::vector<scalar_t> random(size_t count);
 
     /**
-     * Returns the scalar reduced to the canonical range [0, l). If the scalar is already
-     * canonical, this is a no-op. Useful after constructing from raw bytes that might
-     * exceed the group order.
-     * @return the reduced scalar
+     * Returns the scalar reduced to the canonical range [0, l) via pure modular
+     * reduction (sc_reduce). If the scalar is already canonical, this is a no-op.
+     * Useful after constructing from raw bytes that might exceed the group order.
+     * Performs ONLY modular reduction, not RFC 8032 clamping — the only path that
+     * applies clamping is `from_rfc8032_seed()`.
+     *
+     * @return the scalar reduced mod l (pure, unclamped)
      */
     [[nodiscard]] scalar_t reduce() const;
 

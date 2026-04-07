@@ -50,12 +50,23 @@ namespace Crypto::Mnemonics::Shamir
      * The master secret is encrypted with a Feistel cipher keyed by the passphrase before
      * splitting, so the same passphrase is required during combine().
      *
+     * @note The entropy length is inferred from the canonical entropy_t convention
+     *       (lower 16 bytes used + upper 16 zeroed means 128-bit; otherwise 256-bit)
+     *       via entropy_t::bits(). The optional entropy_bits parameter is an explicit
+     *       override: pass 128 or 256 to bypass the type convention verbatim for the
+     *       rare case where a caller holds genuinely 256-bit material whose upper half
+     *       happens to be zero, or where the entropy_t was constructed outside the
+     *       library convention. When passed, entropy_bits is honored exactly.
+     *
      * @param entropy the entropy to split (128 or 256 bits)
      * @param threshold minimum shares needed to reconstruct (2 <= T <= N)
      * @param total_shares total shares to generate (T <= N <= 16)
      * @param passphrase optional passphrase for encryption (default: empty)
      * @param iteration_exponent controls PBKDF2 iterations: 2500 << e (default: 0)
      * @param extendable if true, uses extendable checksum format (default: true)
+     * @param entropy_bits optional explicit entropy length override in bits: 0 (default)
+     *        defers to entropy_t::bits() per the library convention; 128 or 256 is honored
+     *        verbatim. Any other non-zero value is rejected with std::invalid_argument.
      * @return vector of N shares, each share being a vector of words
      */
     std::vector<std::vector<std::string>> split(
@@ -98,13 +109,32 @@ namespace Crypto::Mnemonics::Shamir
      * function for strict SLIP-39 spec compliance; the standard HD key path via
      * seed_t already handles seed derivation.
      *
+     * @note Entropy length is inferred via entropy_t::bits() by default, symmetric
+     *       with split(). The entropy_bits override parameter bypasses the
+     *       zero-upper-half convention; when passed, it is honored verbatim.
+     * @note HMAC NUANCE: for a degenerate entropy whose upper 16 bytes are all zero,
+     *       the 128-bit and 256-bit paths produce the SAME 64-byte seed. This is a
+     *       correct consequence of HMAC-SHA256 key zero-padding to the 64-byte block
+     *       size, not a bug. For a non-degenerate 256-bit entropy (upper half non-zero),
+     *       the override IS observable -- entropy_bits=128 truncates to the lower 16
+     *       bytes and produces a different seed. The SLIP-39 spec fixes the salt as
+     *       "shamir_extendable" / "shamir" (+passphrase) and we do NOT deviate from it
+     *       via length-based domain separation, to preserve interop with reference
+     *       implementations.
+     *
      * @param entropy the master entropy
      * @param passphrase optional passphrase
      * @param extendable if true, uses extendable salt format (default: true)
+     * @param entropy_bits optional explicit entropy length override in bits: 0 (default)
+     *        defers to entropy_t::bits(); 128 or 256 is honored verbatim; any other
+     *        non-zero value throws std::invalid_argument.
      * @return 64-byte derived seed
      */
-    std::vector<unsigned char>
-        derive_seed(const entropy_t &entropy, const std::string &passphrase = "", bool extendable = true);
+    std::vector<unsigned char> derive_seed(
+        const entropy_t &entropy,
+        const std::string &passphrase = "",
+        bool extendable = true,
+        size_t entropy_bits = 0);
 
     /**
      * Returns the 1024-word SLIP-39 English word list.

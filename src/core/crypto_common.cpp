@@ -229,6 +229,25 @@ namespace Crypto
         }
     } // namespace AES
 
+    namespace
+    {
+        // Every caller-supplied point reaching this module's derivation, key-image,
+        // or underive path must be on the curve *and* in the prime-order subgroup.
+        // A torsion-contaminated input propagates through `P - Ds*G` / `a*B` /
+        // `Hp(P)*x` and can corrupt downstream equality checks performed against
+        // subgroup-valid base keys.
+        void require_subgroup_point(const point_t &point, const char *name)
+        {
+            const bool valid_point = point.check();
+            const bool valid_subgroup = point.check_subgroup();
+
+            if (!(valid_point & valid_subgroup))
+            {
+                throw std::invalid_argument(std::string(name) + " is not a valid point in the subgroup");
+            }
+        }
+    } // namespace
+
     scalar_t derivation_to_scalar(const derivation_t &derivation, const uint64_t output_index)
     {
         auto writer = Serialization::serializer_t();
@@ -246,15 +265,7 @@ namespace Crypto
     {
         SCALAR_NZ_OR_THROW(derivation_scalar);
 
-        {
-            const bool valid_point = public_key.check();
-            const bool valid_subgroup = public_key.check_subgroup();
-
-            if (!(valid_point & valid_subgroup))
-            {
-                throw std::invalid_argument("public_key is not a valid point in the subgroup");
-            }
-        }
+        require_subgroup_point(public_key, "public_key");
 
         // P = [A + (Ds * G)] mod l
         return (derivation_scalar * Crypto::G) + public_key;
@@ -274,15 +285,7 @@ namespace Crypto
     {
         SCALAR_NZ_OR_THROW(secret_key);
 
-        {
-            const bool valid_point = public_key.check();
-            const bool valid_subgroup = public_key.check_subgroup();
-
-            if (!(valid_point & valid_subgroup))
-            {
-                throw std::invalid_argument("public_key is not a valid point in the subgroup");
-            }
-        }
+        require_subgroup_point(public_key, "public_key");
 
         // D = (a * B) mod l
         return (secret_key * public_key).mul8();
@@ -292,15 +295,7 @@ namespace Crypto
     {
         SCALAR_NZ_OR_THROW(secret_ephemeral);
 
-        {
-            const bool valid_point = public_ephemeral.check();
-            const bool valid_subgroup = public_ephemeral.check_subgroup();
-
-            if (!(valid_point & valid_subgroup))
-            {
-                throw std::invalid_argument("public_ephemeral is not a valid point in the subgroup");
-            }
-        }
+        require_subgroup_point(public_ephemeral, "public_ephemeral");
 
         // I = [Hp(P) * x] mod l
         return secret_ephemeral * hash_t::sha3(public_ephemeral).point();
@@ -343,6 +338,9 @@ namespace Crypto
     public_key_t
         underive_public_key(const derivation_t &derivation, uint64_t output_index, const public_key_t &public_ephemeral)
     {
+        require_subgroup_point(derivation, "derivation");
+        require_subgroup_point(public_ephemeral, "public_ephemeral");
+
         const auto scalar = derivation_to_scalar(derivation, output_index);
 
         // A = [P - (Ds * G)] mod l

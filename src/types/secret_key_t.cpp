@@ -60,6 +60,15 @@ secret_key_t::secret_key_t(const std::string &s)
     load_hook();
 }
 
+secret_key_t::~secret_key_t()
+{
+    // _prefix is a plain std::array and does not inherit a secure-erasing
+    // destructor. Scrub it explicitly so the RFC 8032 signing prefix (equivalent
+    // to the signing key for nonce-reuse purposes) does not outlive the
+    // secret_key_t in freed memory.
+    ed25519_secure_erase(_prefix.data(), _prefix.size());
+}
+
 secret_key_t::operator scalar_t() const
 {
     return scalar();
@@ -82,22 +91,43 @@ scalar_t secret_key_t::scalar() const
 
 point_t secret_key_t::point() const
 {
-    return _scalar.point();
+    return _public_key;
+}
+
+std::array<unsigned char, 32> secret_key_t::rfc8032_prefix() const
+{
+    return _prefix;
 }
 
 void secret_key_t::load_hook()
 {
-    // RFC-8032 key expansion: SHA-512(secret_key), then take the lower 32 bytes
-    // and apply clamping + reduction to produce the signing scalar.
-    // The upper 32 bytes (discarded here) are used as nonce prefix during signing.
+    // RFC 8032 §5.1.5 key expansion: SHA-512(secret_key) splits into a lower
+    // and upper half. The lower 32 bytes are pruned (clamped) and reduced to
+    // form the signing scalar. The upper 32 bytes are the "signing prefix"
+    // used as the secret PRF key for deterministic nonce generation by both
+    // RFC 8032 Ed25519 signing and RFC 9381 ECVRF proving.
+    //
+    // Both halves are materialized exactly once here and cached in member
+    // fields (`_scalar`, `_public_key`, `_prefix`) so that downstream callers
+    // (Crypto::VRF::RFC9381::prove in particular) do not need to re-run
+    // SHA-512 or the scalar-base multiplication on every operation. All three
+    // members have the same lifetime as the 32-byte seed.
+    //
+    // This is the ONE AND ONLY caller of scalar_t::from_rfc8032_seed() in the
+    // entire library. Clamping is correct for RFC 8032 private-key derivation
+    // but must never be applied elsewhere; grep for `from_rfc8032_seed` to
+    // enumerate every clamp site.
+    //
+    // The upper half of the expansion (cached in `_prefix`) is the only path
+    // by which the RFC 8032 signing prefix is materialized; its sole legitimate
+    // consumer is `Crypto::VRF::RFC9381::prove`.
     unsigned char hash[64];
 
     tinysha_sha512(bytes, sizeof(bytes), hash, 64);
 
-    std::vector<unsigned char> lower(hash, hash + 32);
-
-    _scalar = scalar_t(lower, true);
+    _scalar = scalar_t::from_rfc8032_seed(hash);
+    _public_key = _scalar.point();
+    std::copy(hash + 32, hash + 64, _prefix.begin());
 
     ed25519_secure_erase(hash, sizeof(hash));
-    ed25519_secure_erase(lower.data(), lower.size());
 }

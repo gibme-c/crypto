@@ -30,8 +30,8 @@
  * @brief Standard Base58 encoding/decoding with optional SHA-3 checksum (encode_check/decode_check).
  */
 
-#include <core/crypto_config.h>
 #include <base58/base58.h>
+#include <core/crypto_config.h>
 #include <helpers/constant_time.h>
 #include <stdexcept>
 #include <types/hash_t.h>
@@ -57,6 +57,13 @@ namespace Crypto::Base58
     std::tuple<bool, Serialization::deserializer_t> decode(const std::string &input)
     {
         if (input.empty())
+        {
+            return {false, {}};
+        }
+
+        // Cap before allocation -- decode is O(n^2). See
+        // CRYPTO_BASE58_MAX_INPUT_LENGTH for rationale.
+        if (input.size() > CRYPTO_BASE58_MAX_INPUT_LENGTH)
         {
             return {false, {}};
         }

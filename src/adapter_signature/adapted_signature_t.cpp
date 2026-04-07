@@ -25,18 +25,16 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 /**
- * @file borromean_signature_t.cpp
- * @brief Borromean ring signature serialization, deserialization, and construction validation.
+ * @file adapted_signature_t.cpp
+ * @brief Adapted (post-adapt) signature serialization and deserialization.
  */
 
-#include <borromean/borromean_signature_t.h>
+#include <adapter_signature/adapted_signature_t.h>
 #include <helpers/debug_helper.h>
 
-borromean_signature_t::borromean_signature_t(std::vector<signature_t> _signatures): signatures(std::move(_signatures))
-{
-}
+adapted_signature_t::adapted_signature_t(const point_t &_R_prime, const scalar_t &_s): R_prime(_R_prime), s(_s) {}
 
-borromean_signature_t::borromean_signature_t(const std::string &input)
+adapted_signature_t::adapted_signature_t(const std::string &input)
 {
     const auto string = Serialization::from_hex(input);
 
@@ -45,7 +43,7 @@ borromean_signature_t::borromean_signature_t(const std::string &input)
     deserialize(reader);
 }
 
-borromean_signature_t::borromean_signature_t(std::initializer_list<unsigned char> input)
+adapted_signature_t::adapted_signature_t(std::initializer_list<unsigned char> input)
 {
     std::vector<unsigned char> data(input);
 
@@ -54,64 +52,50 @@ borromean_signature_t::borromean_signature_t(std::initializer_list<unsigned char
     deserialize(reader);
 }
 
-borromean_signature_t::borromean_signature_t(const std::vector<unsigned char> &input)
+adapted_signature_t::adapted_signature_t(const std::vector<unsigned char> &input)
 {
     Serialization::deserializer_t reader(input);
 
     deserialize(reader);
 }
 
-borromean_signature_t::borromean_signature_t(Serialization::deserializer_t &reader)
+adapted_signature_t::adapted_signature_t(Serialization::deserializer_t &reader)
 {
     deserialize(reader);
 }
 
-bool borromean_signature_t::check_construction(size_t ring_size) const
-{
-    if (signatures.size() != ring_size)
-    {
-        return false;
-    }
-
-    for (const auto &signature : signatures)
-    {
-        if (!signature.LR.L.valid() || !signature.LR.R.valid())
-        {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-void borromean_signature_t::deserialize(Serialization::deserializer_t &reader)
-{
-    try
-    {
-        signatures = reader.podV<signature_t>();
-    }
-    SMART_CATCH(std::invalid_argument, "Could not deserialize borromean_signature_t");
-}
-
-void borromean_signature_t::deserialize(const std::vector<unsigned char> &data)
+void adapted_signature_t::deserialize(const std::vector<unsigned char> &data)
 {
     Serialization::deserializer_t reader(data);
 
     deserialize(reader);
 }
 
-void borromean_signature_t::fromJSON(const JSONValue &j)
+void adapted_signature_t::deserialize(Serialization::deserializer_t &reader)
 {
     try
     {
-        JSON_OBJECT_OR_THROW()
+        R_prime = reader.pod<point_t>();
 
-        LOAD_KEYV_FROM_JSON(signatures, signature_t);
+        s = reader.pod<scalar_t>();
     }
-    SMART_CATCH(std::invalid_argument, "Could not deserialize borromean_signature_t");
+    SMART_CATCH(std::invalid_argument, "Could not deserialize adapted_signature_t");
 }
 
-void borromean_signature_t::fromJSON(const JSONValue &val, const std::string &key)
+void adapted_signature_t::fromJSON(const JSONValue &j)
+{
+    try
+    {
+        JSON_OBJECT_OR_THROW();
+
+        LOAD_KEY_FROM_JSON(R_prime);
+
+        LOAD_KEY_FROM_JSON(s);
+    }
+    SMART_CATCH(std::invalid_argument, "Could not deserialize adapted_signature_t");
+}
+
+void adapted_signature_t::fromJSON(const JSONValue &val, const std::string &key)
 {
     if (!has_member(val, std::string(key)))
     {
@@ -123,19 +107,21 @@ void borromean_signature_t::fromJSON(const JSONValue &val, const std::string &ke
     fromJSON(j);
 }
 
-hash_t borromean_signature_t::hash() const
+hash_t adapted_signature_t::hash() const
 {
     const auto serialized = serialize();
 
     return hash_t::sha3(serialized);
 }
 
-void borromean_signature_t::serialize(Serialization::serializer_t &writer) const
+void adapted_signature_t::serialize(Serialization::serializer_t &writer) const
 {
-    writer.pod(signatures);
+    writer.pod(R_prime);
+
+    writer.pod(s);
 }
 
-std::vector<unsigned char> borromean_signature_t::serialize() const
+std::vector<unsigned char> adapted_signature_t::serialize() const
 {
     Serialization::serializer_t writer;
 
@@ -144,21 +130,23 @@ std::vector<unsigned char> borromean_signature_t::serialize() const
     return writer.vector();
 }
 
-size_t borromean_signature_t::size() const
+size_t adapted_signature_t::size() const
 {
     return serialize().size();
 }
 
-void borromean_signature_t::toJSON(rapidjson::Writer<rapidjson::StringBuffer> &writer) const
+void adapted_signature_t::toJSON(rapidjson::Writer<rapidjson::StringBuffer> &writer) const
 {
     writer.StartObject();
     {
-        KEYV_TO_JSON(signatures);
+        KEY_TO_JSON(R_prime);
+
+        KEY_TO_JSON(s);
     }
     writer.EndObject();
 }
 
-std::string borromean_signature_t::to_string() const
+std::string adapted_signature_t::to_string() const
 {
     const auto bytes = serialize();
 

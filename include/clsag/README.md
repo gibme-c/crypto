@@ -20,6 +20,7 @@ transactions.
 | [Use Cases](#use-cases) | Privacy-preserving transactions |
 | [Ring Signature Comparison](#ring-signature-comparison) | Side-by-side comparison of all ring sig schemes |
 | [Transaction Signing](#transaction-signing-with-ring-signatures) | Full Alice/Bob walkthrough with CLSAG + BP++ |
+| [Mode Binding](#mode-binding) | How plain vs. commitment-binding mode is authenticated |
 | [Domain Constants](#domain-constants) | Domain separator indices |
 | [References](#references) | Papers and specifications |
 
@@ -486,6 +487,16 @@ What the verifier sees:              What stays hidden:
   [Y] Each input is authorized
       (ring signature is valid)
 ```
+
+---
+
+## Mode Binding
+
+CLSAG runs in one of two modes per signature: **plain ring** (no commitment binding) or **commitment-binding ring** (with `commitment_image`, `pseudo_commitment`, and a parallel `commitments` vector). Both directions of mode mismatch are rejected explicitly by two complementary mechanisms:
+
+**Strict mode-mismatch reject** at the top of every `check_ring_signature` and `generate_ring_signature` entry point. The signer's mode is recovered from the signature's own fields (`commitment_image.valid() && pseudo_commitment.valid()`); the caller's stated mode is recovered from the shape of the `commitments` vector (`!commitments.empty()` for verify; partial-vs-full supply of the four commitment-mode arguments for sign). Disagreement in either direction is a hard `false` return. Mismatched ring/commitments sizes are also rejected explicitly.
+
+**Transcript binding** of an explicit `uint8_t` mode tag (`0x00` plain, `0x01` commit) into all three CLSAG transcripts: `mu_P` (`CLSAG_DOMAIN_0`), `mu_C` (`CLSAG_DOMAIN_2`), and the challenge chain (`CLSAG_DOMAIN_1`). The tag is absorbed immediately after the domain separator, in both sign and verify, so `h0` itself becomes a function of the mode. Even if a future refactor removed the runtime mismatch check, the challenge chain would not close on a mismatched mode and the ring signature would fail to verify.
 
 ---
 

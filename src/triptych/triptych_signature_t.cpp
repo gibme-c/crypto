@@ -95,7 +95,13 @@ triptych_signature_t::triptych_signature_t(Serialization::deserializer_t &reader
 
 bool triptych_signature_t::check_construction(size_t m, size_t n) const
 {
-    if (!A.valid() || !B.valid() || !C.valid() || !D.valid())
+    // The four commitment-tensor points feed the MSM identity check at the bottom
+    // of check_ring_signature; an 8-torsion component here can in principle be
+    // steered to cancel in the encoded identity while the prime-order ring closure
+    // fails. Hard-reject torsion to keep the soundness proof's prime-order
+    // assumption intact. check_subgroup() implies curve membership, so it subsumes
+    // .valid().
+    if (!A.check_subgroup() || !B.check_subgroup() || !C.check_subgroup() || !D.check_subgroup())
     {
         return false;
     }
@@ -105,17 +111,21 @@ bool triptych_signature_t::check_construction(size_t m, size_t n) const
         return false;
     }
 
+    // X[j] enters the RX MSM as -x^j * X[j]; torsion on these polynomial proof
+    // points has the same identity-cancellation threat as A/B/C/D above.
+    // Subgroup-check, not just curve-check.
     for (const auto &point : X)
     {
-        if (!point.valid())
+        if (!point.check_subgroup())
         {
             return false;
         }
     }
 
+    // Y[j] enters the RY MSM as -x^j * Y[j] -- same rationale as X above.
     for (const auto &point : Y)
     {
-        if (!point.valid())
+        if (!point.check_subgroup())
         {
             return false;
         }

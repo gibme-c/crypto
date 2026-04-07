@@ -89,6 +89,23 @@ std::tuple<bool, uint64_t, public_key_t, public_key_t>
 Both `Base58` and `CNBase58` sub-namespaces expose the same API. Use
 `CNBase58` when deterministic address length matters (most address systems).
 
+### Decoder strictness
+
+After successfully unwrapping the checksum, the decoder reads the network
+prefix (varint) and the spend key (32 bytes), then inspects the remaining
+unread tail. The only legal layouts are:
+
+- **0 bytes** of tail → single-key address; the returned `key2` is a
+  default-constructed (zero) `public_key_t`.
+- **`public_key_t::size()` (32) bytes** of tail → dual-key address; `key2`
+  is the decoded view key.
+
+Any other tail length (1, 16, 31, 33, 48, 64, ...) is treated as a
+malformed address and the decoder fails closed, returning
+`{false, 0, {}, {}}`. This avoids ambiguous tails being silently coerced
+into a single-key-with-zero-view-key shape, which would mask encoding
+errors from callers downstream.
+
 ---
 
 ## Scenario: Creating and Sharing a Wallet Address

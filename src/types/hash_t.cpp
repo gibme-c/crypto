@@ -253,8 +253,17 @@ point_t hash_t::point() const
 
 scalar_t hash_t::scalar() const
 {
-    // Convert hash to scalar with clamping + reduction mod l
-    return scalar_t(this->serialize(), true);
+    // Pure mod-l reduction of the 32-byte hash output -- NO CLAMPING. Every
+    // scalar_transcript_t::update() call ends with `state = hash_t::sha3(...).scalar()`,
+    // so this is the transcript hot path and must never apply sc_clamp. The residual
+    // ~2^-124 bias from 32-byte mod-l reduction is statistically undetectable and not
+    // lattice-exploitable. Callers needing fully-unbiased hash-to-scalar should use
+    // scalar_t::from_uniform_bytes() with a 64-byte hash instead.
+    //
+    // from_bytes_reduced is a single-memcpy + sc_reduce fast path that avoids the
+    // intermediate std::vector allocation and double copy that would result from
+    // going through serialize() + scalar_t(vector) + .reduce().
+    return scalar_t::from_bytes_reduced(bytes);
 }
 
 std::vector<unsigned char> hash_t::to_bits(bool reversed) const

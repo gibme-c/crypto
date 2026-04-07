@@ -96,7 +96,8 @@ std::vector<std::vector<std::string>> split(
     size_t total_shares,       // N (total shares generated)
     const std::string &passphrase = "",
     uint8_t iteration_exponent = 0,
-    bool extendable = true);
+    bool extendable = true,
+    size_t entropy_bits = 0);  // 0 = defer to entropy_t::bits(); 128/256 to override
 
 // Combine T+ shares to recover entropy
 entropy_t combine(
@@ -105,7 +106,49 @@ entropy_t combine(
 
 // Validate a single share's checksum
 bool validate_share(const std::vector<std::string> &words);
+
+// Derive a 64-byte seed via PBKDF2-HMAC-SHA256
+std::vector<unsigned char> derive_seed(
+    const entropy_t &entropy,
+    const std::string &passphrase = "",
+    bool extendable = true,
+    size_t entropy_bits = 0);  // 0 = defer to entropy_t::bits(); 128/256 to override
 ```
+
+### Entropy length
+
+SLIP-39 operates on either 128-bit or 256-bit master secrets. The library
+determines which by deferring to `entropy_t::bits()`, which is the canonical
+accessor for the `entropy_t` storage convention: a 32-byte POD where 128-bit
+entropy lives in the lower 16 bytes with the upper 16 zeroed. Both `split()`
+and `derive_seed()` accept an optional `entropy_bits` override:
+
+- `entropy_bits = 0` (default) -- length is inferred via `entropy.bits()` per
+  the library convention. This is what you want in nearly all cases.
+- `entropy_bits = 128` or `256` -- explicit override; honored verbatim without
+  cross-checking the entropy_t. Use this only when you hold a 32-byte value
+  constructed outside the library convention (e.g., a genuinely 256-bit secret
+  whose upper half is zero by chance, or entropy built from an external
+  source) and you know the full 32 bytes are meaningful.
+- Any other non-zero value throws `std::invalid_argument`.
+
+Both `split()` and `derive_seed()` defer to `entropy_t::bits()` for length
+inference and expose the symmetric `entropy_bits` override. The single source
+of truth for the 16-vs-32-byte convention lives at
+`src/types/entropy_t.cpp::is_128_bit()`.
+
+**HMAC nuance for derive_seed()**: when a caller passes a degenerate entropy
+whose upper 16 bytes are all zero, the `entropy_bits=128` and `entropy_bits=256`
+paths produce the **same** 64-byte seed. This is a correct cryptographic
+consequence of HMAC-SHA256 zero-padding PBKDF2 keys to its 64-byte block size
+-- feeding HMAC the 16 bytes `[x]` is equivalent to feeding it the 32 bytes
+`[x, 0...]`. The override is still observable for **non-degenerate** 256-bit
+entropies: on a genuinely random 256-bit secret, `entropy_bits=128` truncates
+to the lower 16 bytes and produces a different seed than the default path.
+We deliberately do **not** domain-separate via the salt (e.g., by appending
+the length), because the SLIP-39 spec fixes the salt as `"shamir_extendable"`
+or `"shamir"` (+passphrase), and any deviation would break interop with
+reference implementations.
 
 ---
 

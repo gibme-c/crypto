@@ -933,10 +933,13 @@ int main(int argc, char **argv)
             100);
     }
 
-    // VRF RFC 9381
+    // VRF RFC 9381: prove() takes secret_key_t (not scalar_t) because RFC 9381
+    // §5.4.2.2 nonce derivation requires the raw seed.
     {
-        const auto rfc_vrf_sk = scalar_t::random();
-        const auto rfc_vrf_pub = rfc_vrf_sk * Crypto::G;
+        std::vector<unsigned char> rfc_vrf_seed_bytes(32);
+        randompp::random_bytes(rfc_vrf_seed_bytes.size(), rfc_vrf_seed_bytes.data());
+        const secret_key_t rfc_vrf_sk(rfc_vrf_seed_bytes);
+        const auto rfc_vrf_pub = rfc_vrf_sk.point();
         const std::vector<unsigned char> rfc_vrf_alpha = {0x48, 0x65, 0x6c, 0x6c, 0x6f};
 
         benchmark(

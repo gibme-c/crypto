@@ -65,6 +65,19 @@ auto [proof, commitments] = Crypto::RangeProofs::BulletproofsPP::prove(
 bool valid = Crypto::RangeProofs::BulletproofsPP::verify(proof, commitments);
 ```
 
+### Range parameter (`N`)
+
+`prove` and `verify` accept an optional `N` (default 64) specifying the bit-length of
+the range. `N` is silently rounded up to the nearest power of two with a minimum of 4
+— allowed normalized values are `{4, 8, 16, 32, 64}`. This matches the
+[`Bulletproofs`](../bulletproofs/README.md) (v1) silent-rounding convention so callers
+can use the same idiom across all three Bulletproof variants. The same normalized `N`
+must be used at both `prove` and `verify` time; the batch `verify` overload uses one
+`N` for the entire batch.
+
+`N` is bound into the Fiat-Shamir transcript on both sides, so a proof produced under
+one normalized `N` will not validate under any other.
+
 ---
 
 ## Proof Sizes

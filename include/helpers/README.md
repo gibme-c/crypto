@@ -271,6 +271,33 @@ FUNCTION derive_addresses():
     // the same keys. Different paths = different keys. Same path = same key.
 ```
 
+### Hardened-Only Enforcement (SLIP-0010)
+
+SLIP-0010 §"Master key generation" mandates that Ed25519 supports
+**only** hardened child derivation. The typed integer API
+(`seed_t::generate_child_key(size_t purpose, ...)`) is hardened-only
+by construction -- every overload routes through `make_bip32_path`,
+which always emits `'` on each segment.
+
+The string-path API (`generate_child_key(const std::string &path)`)
+performs strict parse-time validation and rejects:
+
+- Any segment lacking the trailing `'` (e.g., `m/44/0/0`)
+- Any raw numeric index >= 2^31 (e.g., `m/2147483648'`)
+- Non-numeric or trailing-junk segments (e.g., `m/abc'`, `m/12x'`)
+- Bare apostrophe segments (e.g., `m/'`)
+
+Rejection is via `std::invalid_argument` at `parse_bip32_path` time --
+the HMAC chain is never invoked on an invalid path.
+
+**Why this matters**: silently accepting `m/44/0/0` and producing the
+HMAC for `m/44'/0'/0'` would generate keys that diverge from every
+spec-conformant SLIP-0010 library (libsodium-based wallets, Trezor,
+Ledger, python-bip-utils, etc.) -- and neither key set would match the
+other. The user would only discover this when restoring a wallet on a
+different tool months later. Strict rejection turns a quiet footgun
+into a loud, immediately-debuggable error.
+
 ---
 
 ## Constant-Time Compare
@@ -384,6 +411,10 @@ scalar_t load_partial_scalar(const unsigned char input[64], size_t start, size_t
 
 - **RFC 8032 signatures** -- computing the challenge
   `e = SHA-512(R || public_key || message)` as a scalar
+- **Random scalar sampling** -- `scalar_t::from_uniform_bytes()` and
+  `scalar_t::random()` are both thin wrappers over `reduce_wide_hash` that
+  feed it either 64 bytes of SHA-512 output or 64 bytes of CSPRNG entropy.
+  This is the unbiased path every random scalar in the library takes.
 - Any protocol requiring unbiased reduction of SHA-512 output to an Ed25519
   scalar
 

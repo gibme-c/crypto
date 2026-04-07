@@ -32,13 +32,13 @@
 // Inspired by the work of Sarang Noether at
 // https://github.com/SarangNoether/skunkworks/tree/pybullet
 
+#include <bulletproofs/bulletproofs.h>
 #include <core/crypto_common.h>
 #include <core/crypto_constants.h>
 #include <ge_double_scalarmult_negate_vartime_batch_ss_p3.h>
 #include <ge_multiscalar_mul_vartime.h>
 #include <helpers/scalar_transcript_t.h>
 #include <mutex>
-#include <bulletproofs/bulletproofs.h>
 #include <ringct/ringct.h>
 #undef max
 
@@ -338,6 +338,12 @@ namespace Crypto::RangeProofs::Bulletproofs
 
         scalar_transcript_t tr(BULLETPROOFS_DOMAIN_0);
 
+        // Bind N into the Fiat-Shamir transcript so a proof produced under one
+        // (silently-normalized) N cannot be replayed against a verifier told a
+        // different N out-of-band. BP math is already structurally N-dependent,
+        // so this is hygiene / availability -- NOT a soundness gap.
+        tr.update(scalar_t(N));
+
         tr.update(V.container);
 
         // Precompute ge_p3 points array for A and S MSMs (shared, built once)
@@ -592,6 +598,10 @@ namespace Crypto::RangeProofs::Bulletproofs
             const auto weight_y = scalar_t::random(), weight_z = scalar_t::random();
 
             scalar_transcript_t tr(BULLETPROOFS_DOMAIN_0);
+
+            // Bind N (already pow2_round-normalized at the top of verify) into
+            // the transcript before any commitment, mirroring the prover.
+            tr.update(scalar_t(N));
 
             tr.update(commitments[ii]);
 

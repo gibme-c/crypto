@@ -29,8 +29,8 @@
  * @brief Adapter pre-signature serialization and deserialization.
  */
 
-#include <helpers/debug_helper.h>
 #include <adapter_signature/adapter_signature_t.h>
+#include <helpers/debug_helper.h>
 
 adapter_signature_t::adapter_signature_t(
     const point_t &_adapted_nonce,

@@ -31,9 +31,9 @@
 
 #include <core/crypto_common.h>
 #include <core/crypto_constants.h>
+#include <ed25519/rfc8032.h>
 #include <helpers/scalar_transcript_t.h>
 #include <helpers/wide_reduction.h>
-#include <ed25519/rfc8032.h>
 #include <tinysha.h>
 
 namespace Crypto::RFC8032
@@ -97,6 +97,21 @@ namespace Crypto::RFC8032
         const auto public_key = secret_key * G;
 
         const auto message_digest = hash_t::sha512(message, message_length);
+
+        // Hedged synthetic-nonce signing: α is derived as a transcript hash over
+        // (M_digest, A, rand) rather than RFC 8032 §5.1.6's pure-deterministic
+        // (prefix || M). This is the hedged synthetic-nonce pattern endorsed by
+        // FIPS 186-5 Appendix A and draft-irtf-cfrg-det-sigs-with-noise. The
+        // verification equation s·G == R + H(R||A||M)·A holds for any α, so every
+        // spec-compliant Ed25519 verifier accepts the resulting signature. Binding
+        // M_digest into the transcript means two different messages always produce
+        // different α even under RNG failure; the `rand` stir-in additionally
+        // defends against fault-injection attacks. Signatures are therefore not
+        // byte-reproducible across calls -- callers needing byte-identical output
+        // from a (seed, message) pair must use a different library.
+        //
+        // The `try_again` retry below handles the cryptographically negligible
+        // case where the transcript challenge reduces to zero.
 
     try_again:
         // Derive a nonce scalar by hashing the message digest, public key, and fresh randomness

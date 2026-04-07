@@ -32,20 +32,54 @@
 // Based on ePrint 2022/510 (Bulletproofs++)
 // Reference: distributed-lab/bp-pp Rust implementation
 
+#include <bulletproofspp/bulletproofspp.h>
 #include <core/crypto_common.h>
 #include <core/crypto_constants.h>
 #include <ge_double_scalarmult_negate_vartime_batch_ss_p3.h>
 #include <ge_multiscalar_mul_vartime.h>
+#include <helpers/math_helpers.h>
 #include <helpers/scalar_transcript_t.h>
 #include <mutex>
-#include <bulletproofspp/bulletproofspp.h>
 #include <ringct/ringct.h>
 
 // ============================================================================
-// Per-value constants for reciprocal range proof (base-16, 16 hex digits)
+// Per-value constants for reciprocal range proof (base-16)
 // ============================================================================
-static constexpr size_t DIM_ND = 16; // number of hex digits per value
-static constexpr size_t DIM_NP = 16; // base (hex)
+// DIM_NP is the digit base (hex). INVARIANT regardless of N because the
+// reciprocal argument's per-digit constraint is over the alphabet {0..15}.
+//
+// NV_PER_VALUE is the per-value witness stride: DIM_NP multiplicity slots
+// (one for each possible hex digit value 0..15) + 1 zero pad slot. ALSO
+// INVARIANT — the multiplicity table holds 16 entries per value regardless
+// of how many digit positions a value uses, because any of the dim_nd digit
+// positions can take any of the 16 hex values.
+//
+// What DOES vary with N is `dim_nd = N / 4`, the number of digit POSITIONS
+// per value. This bounds the digit-position loops, the constraint-vector
+// stride for c_nL/c_nR, and the g_vec capacity.
+static constexpr size_t DIM_NP = 16; // hex alphabet (digit values)
+static constexpr size_t NV_PER_VALUE = 17; // DIM_NP + 1 zero pad slot
+
+// Smallest power-of-2 G satisfying both WNLA capacity constraints:
+//   - G >= ND_TOTAL          (one g_vec slot per digit POSITION)
+//   - 2*G >= 9 + NV_TOTAL    (h_vec holds 9 blindings + 17 witness slots per value)
+// where ND_TOTAL = M_pad * dim_nd and NV_TOTAL = M_pad * NV_PER_VALUE.
+// H_VEC_FULL = 2*G_VEC_FULL is required by WNLA folding.
+//
+// Note: because NV_PER_VALUE is invariant at 17, the H constraint dominates for
+// every dim_nd value at small M_pad, so smaller N does not yield smaller proofs.
+// Binding N into the proof structure and transcript is about correctness, not
+// size optimization.
+static size_t bpp_pow2_dims(size_t M_pad, size_t dim_nd)
+{
+    // Callers always pass M_pad >= 1 and dim_nd >= 1, so nd_total >= 1.
+    const size_t nd_total = M_pad * dim_nd;
+    const size_t h_min = 9 + M_pad * NV_PER_VALUE;
+    size_t g = Crypto::pow2_round(nd_total);
+    while (2 * g < h_min)
+        g <<= 1;
+    return g;
+}
 
 // ============================================================================
 // Generator caching (grows on demand for M > 1)
@@ -164,7 +198,18 @@ namespace Crypto::RangeProofs::BulletproofsPP
             throw std::range_error("N must be between 1 and 64");
         }
 
-        // Validate amounts fit in N bits
+        // Silent power-of-2 normalization (matches BP v1 at bulletproofs.cpp:309).
+        // BP++ additionally requires N >= 4 because base-16 digit decomposition needs
+        // dim_nd = N/4 >= 1. So allowed normalized values are {4, 8, 16, 32, 64}.
+        N = Crypto::pow2_round(N);
+        if (N < 4)
+            N = 4;
+
+        // Per-value digit count (base-16). dim_nd in {1, 2, 4, 8, 16}.
+        const size_t dim_nd = N / 4;
+
+        // Validate amounts fit in N bits (honest-prover guard; verifier enforces
+        // structurally via dim_nd, transcript-bound N, and num_rounds match).
         for (const auto &amount : amounts)
         {
             if (N < 64 && amount >= (1ULL << N))
@@ -199,11 +244,11 @@ namespace Crypto::RangeProofs::BulletproofsPP
         }
 
         // Runtime dimensions
-        const size_t ND_TOTAL = M_pad * DIM_ND; // total digits
-        const size_t NM_TOTAL = ND_TOTAL; // multiplier gates
-        const size_t NV_TOTAL = M_pad * 17; // witness slots (16 multiplicities + 1 zero per value)
-        const size_t G_VEC_FULL = ND_TOTAL;
-        const size_t H_VEC_FULL = 2 * ND_TOTAL; // next_pow2(9 + NV_TOTAL) = 2*M_pad*16
+        const size_t ND_TOTAL = M_pad * dim_nd; // digit POSITIONS across all values
+        const size_t NM_TOTAL = ND_TOTAL; // multiplier gates (one per digit position)
+        const size_t NV_TOTAL = M_pad * NV_PER_VALUE; // 16 multiplicity slots + 1 zero pad per value
+        const size_t G_VEC_FULL = bpp_pow2_dims(M_pad, dim_nd);
+        const size_t H_VEC_FULL = 2 * G_VEC_FULL; // WNLA folding invariant
 
         const auto [g_vec, h_vec] = generate_exponents(G_VEC_FULL, H_VEC_FULL);
 
@@ -221,8 +266,13 @@ namespace Crypto::RangeProofs::BulletproofsPP
             V_all[j] = scalar_t(amounts_pad[j]) * Crypto::G + blindings_pad[j] * h_vec[0];
 
     try_again:
-        // ---- Transcript: bind all commitments, get challenge e ----
+        // ---- Transcript: bind N, then all commitments, get challenge e ----
         scalar_transcript_t tr(BULLETPROOFS_PP_DOMAIN_0);
+        // Bind N into the transcript so a proof produced under one normalized N
+        // cannot validate under any other N. scalar_transcript_t::update<T>
+        // requires T to have .serialize(); we wrap in scalar_t (which has a
+        // uint64_t ctor and a .serialize() method).
+        tr.update(scalar_t(N));
         for (size_t j = 0; j < M_pad; ++j)
             tr.update(V_all[j]);
 
@@ -235,19 +285,21 @@ namespace Crypto::RangeProofs::BulletproofsPP
         for (size_t j = 0; j < M_pad; ++j)
         {
             auto val = amounts_pad[j];
-            for (size_t i = 0; i < DIM_ND; ++i)
+            for (size_t i = 0; i < dim_nd; ++i)
             {
-                digits[j * DIM_ND + i] = scalar_t(val & 0xFu);
+                digits[j * dim_nd + i] = scalar_t(val & 0xFu);
                 val >>= 4;
             }
         }
 
         // ---- Multiplicities per value: count of each digit value ----
+        // Multiplicity table is always M_pad * DIM_NP (= M_pad * 16) wide because the
+        // alphabet is hex regardless of dim_nd; only `dim_nd` digits are summed per value.
         std::vector<scalar_t> multiplicities(M_pad * DIM_NP, Crypto::ZERO);
         for (size_t j = 0; j < M_pad; ++j)
         {
             auto val = amounts_pad[j];
-            for (size_t i = 0; i < DIM_ND; ++i)
+            for (size_t i = 0; i < dim_nd; ++i)
             {
                 const auto digit = val & 0xFu;
                 multiplicities[j * DIM_NP + digit] = multiplicities[j * DIM_NP + digit] + Crypto::ONE;
@@ -270,7 +322,10 @@ namespace Crypto::RangeProofs::BulletproofsPP
                 reciprocals[i] = inv[i];
         }
 
-        // ---- Pole commitment R = r_blind * h[0] + sum_j <reciprocals_j, h[9+j*17:9+j*17+16]> ----
+        // ---- Pole commitment R = r_blind*h[0] + sum_j <reciprocals_j, h[9 + j*17 ..]>
+        // The h[] slots used here overlap with the multiplicity slots in C_l (also at
+        // h[9 + j*17 ..]); the additive structure is what couples reciprocals to
+        // multiplicities in the verification equation.
         const auto r_blind = scalar_t::random();
         if (!r_blind.valid())
             goto try_again;
@@ -284,11 +339,11 @@ namespace Crypto::RangeProofs::BulletproofsPP
             r_points[0] = h_p3[0];
             for (size_t j = 0; j < M_pad; ++j)
             {
-                for (size_t i = 0; i < DIM_ND; ++i)
+                for (size_t i = 0; i < dim_nd; ++i)
                 {
-                    const size_t si = 1 + j * DIM_ND + i;
-                    r_scalars[si] = reciprocals[j * DIM_ND + i] * inv8;
-                    r_points[si] = h_p3[9 + j * 17 + i];
+                    const size_t si = 1 + j * dim_nd + i;
+                    r_scalars[si] = reciprocals[j * dim_nd + i] * inv8;
+                    r_points[si] = h_p3[9 + j * NV_PER_VALUE + i];
                 }
             }
             R = msm(r_scalars, r_points, total);
@@ -298,9 +353,14 @@ namespace Crypto::RangeProofs::BulletproofsPP
         const auto &nl = digits;
         const auto &nr = reciprocals;
         std::vector<scalar_t> ll_(NV_TOTAL, Crypto::ZERO);
+        // Witness stride per value is invariant at 17 (NV_PER_VALUE). Each value
+        // contributes 16 multiplicity slots (one per hex digit value 0..15) plus
+        // one zero pad. For dim_nd<16, multiplicities for digit-values that
+        // never appear are simply zero — the loop still scans all DIM_NP slots
+        // because the alphabet is invariant.
         for (size_t j = 0; j < M_pad; ++j)
             for (size_t i = 0; i < DIM_NP; ++i)
-                ll_[j * 17 + i] = multiplicities[j * DIM_NP + i];
+                ll_[j * NV_PER_VALUE + i] = multiplicities[j * DIM_NP + i];
 
         // ---- Random blindings (always 9 elements, independent of M) ----
         // ro[9]: [r,r,r,r,0,r,r,r,0]
@@ -419,8 +479,8 @@ namespace Crypto::RangeProofs::BulletproofsPP
         const auto mu = rho * rho;
 
         // ---- Compute lambda powers for M_pad values ----
-        // Need lambda^0 through lambda^(M_pad*17) for per-value coefficients
-        const size_t lambda_len = M_pad * 17 + 1;
+        // Need lambda^0 through lambda^(M_pad*NV_PER_VALUE) for per-value coefficients.
+        const size_t lambda_len = M_pad * NV_PER_VALUE + 1;
         std::vector<scalar_t> lambda_vec(lambda_len);
         {
             auto lp = Crypto::ONE;
@@ -431,15 +491,16 @@ namespace Crypto::RangeProofs::BulletproofsPP
             }
         }
 
-        // Per-value linear combination coefficients: lcc[idx] = lambda^(17*idx)
-        // Per-value lambda sums: lambda_sum_vec[idx] = sum_{k=1}^{16} lambda^(idx*17+k)
+        // Per-value linear combination coefficients: lcc[idx] = lambda^(NV_PER_VALUE*idx).
+        // Per-value lambda sums: lambda_sum_vec[idx] = sum_{k=1}^{DIM_NP} lambda^(idx*NV_PER_VALUE+k)
+        // — sums lambda powers across all 16 multiplicity slots of value idx (the c_l0 mass).
         std::vector<scalar_t> lcc(M_pad), lambda_sum_vec(M_pad);
         for (size_t idx = 0; idx < M_pad; ++idx)
         {
-            lcc[idx] = lambda_vec[17 * idx];
+            lcc[idx] = lambda_vec[NV_PER_VALUE * idx];
             auto ls_acc = Crypto::ZERO;
-            for (size_t k = 1; k <= DIM_ND; ++k)
-                ls_acc += lambda_vec[idx * 17 + k];
+            for (size_t k = 1; k <= DIM_NP; ++k)
+                ls_acc += lambda_vec[idx * NV_PER_VALUE + k];
             lambda_sum_vec[idx] = ls_acc;
         }
 
@@ -460,35 +521,43 @@ namespace Crypto::RangeProofs::BulletproofsPP
         }
 
         // ---- Compute constraint vectors for M_pad values ----
-        // c_nL[idx*16+d] = -lcc[idx] * 16^d * mu^-(idx*16+d+1)
+        // c_nL[idx*dim_nd+d] = -lcc[idx] * DIM_NP^d * mu^-(idx*dim_nd+d+1)
+        // The DIM_NP^d weight encodes the base-16 positional value of digit d.
+        // Loop bound dim_nd (not DIM_NP) is what enforces the [0, 2^N) range:
+        // value = sum_{d<dim_nd} digit_d * 16^d  bounds value at 16^dim_nd = 2^N.
         std::vector<scalar_t> c_nL(NM_TOTAL);
         {
             const auto base = scalar_t(DIM_NP);
             for (size_t idx = 0; idx < M_pad; ++idx)
             {
                 auto base_pow = Crypto::ONE;
-                for (size_t d = 0; d < DIM_ND; ++d)
+                for (size_t d = 0; d < dim_nd; ++d)
                 {
-                    const size_t gi = idx * DIM_ND + d;
+                    const size_t gi = idx * dim_nd + d;
                     c_nL[gi] = (lcc[idx] * base_pow).negate() * mu_inv_pow[gi];
                     base_pow *= base;
                 }
             }
         }
 
-        // c_nR[idx*16+d] = (lambda_sum_idx - lambda^(idx*17+d+1)) * mu^-(idx*16+d+1) + e
+        // c_nR[idx*dim_nd+d] = (lambda_sum_idx - lambda^(idx*NV_PER_VALUE+d+1)) * mu^-(idx*dim_nd+d+1) + e
+        // This couples digit position d to multiplicity slot d (the slot whose lambda
+        // power is being subtracted from lambda_sum). For dim_nd<16, only the first
+        // dim_nd multiplicity slots are coupled to digit positions; the rest are
+        // constrained to zero indirectly via the c_l0/c_lL multiplicity argument
+        // because no digit position can produce them.
         std::vector<scalar_t> c_nR(NM_TOTAL);
         for (size_t idx = 0; idx < M_pad; ++idx)
         {
-            for (size_t d = 0; d < DIM_ND; ++d)
+            for (size_t d = 0; d < dim_nd; ++d)
             {
-                const size_t gi = idx * DIM_ND + d;
-                c_nR[gi] = (lambda_sum_vec[idx] - lambda_vec[idx * 17 + d + 1]) * mu_inv_pow[gi] + e;
+                const size_t gi = idx * dim_nd + d;
+                c_nR[gi] = (lambda_sum_vec[idx] - lambda_vec[idx * NV_PER_VALUE + d + 1]) * mu_inv_pow[gi] + e;
             }
         }
 
-        // c_lL[idx*17+j] = -lambda_sum_idx / (e+j) for j<16, 0 for j=16
-        // Batch invert (e+j) for j=0..15 (shared across all values)
+        // c_lL[idx*NV_PER_VALUE+j] = -lambda_sum_idx / (e+j) for j in [0, DIM_NP), 0 for j=DIM_NP.
+        // Batch invert (e+j) for j=0..DIM_NP-1 (shared across all values).
         std::vector<scalar_t> c_lL(NV_TOTAL, Crypto::ZERO);
         {
             std::vector<scalar_t> e_plus(DIM_NP);
@@ -499,15 +568,17 @@ namespace Crypto::RangeProofs::BulletproofsPP
             {
                 const auto neg_ls = lambda_sum_vec[idx].negate();
                 for (size_t j = 0; j < DIM_NP; ++j)
-                    c_lL[idx * 17 + j] = neg_ls * inv[j];
+                    c_lL[idx * NV_PER_VALUE + j] = neg_ls * inv[j];
             }
         }
 
-        // c_l0[idx*17+j] = lambda^(idx*17+j+1) for j=0..15, 0 for j=16
+        // c_l0[idx*NV_PER_VALUE+j] = lambda^(idx*NV_PER_VALUE+j+1) for j in [0, DIM_NP), 0 for j=DIM_NP.
+        // c_l0 weights are over the multiplicity SLOTS (j ranges over the alphabet,
+        // not digit positions), so the loop bound is DIM_NP regardless of dim_nd.
         std::vector<scalar_t> c_l0(NV_TOTAL, Crypto::ZERO);
         for (size_t idx = 0; idx < M_pad; ++idx)
-            for (size_t j = 0; j < DIM_ND; ++j)
-                c_l0[idx * 17 + j] = lambda_vec[idx * 17 + j + 1];
+            for (size_t j = 0; j < DIM_NP; ++j)
+                c_l0[idx * NV_PER_VALUE + j] = lambda_vec[idx * NV_PER_VALUE + j + 1];
 
         // ---- Random shift polynomial blindings ----
         auto ls = scalar_t::random(NV_TOTAL);
@@ -515,13 +586,16 @@ namespace Crypto::RangeProofs::BulletproofsPP
 
         // ---- Compute v_1, rv (value contributions) ----
         const auto two = scalar_t(2);
-        // v_1[idx*17+d] = 2*reciprocals[idx*16+d] for d<16, 0 for d=16
+        // v_1[idx*NV_PER_VALUE + d] = 2*reciprocals[idx*dim_nd + d] for d in [0, dim_nd),
+        // 0 elsewhere. Loop bound is dim_nd because reciprocals exist only for digit
+        // positions, not for all 16 multiplicity slots. Slots [dim_nd, NV_PER_VALUE)
+        // remain zero (set by the vector's zero-init).
         // Note: lcc[j] weighting is NOT in v_1 because R is committed before lambda is known.
         // The lcc factor enters through c_l0 (which has lcc implicitly via lambda powers).
         std::vector<scalar_t> v_1(NV_TOTAL, Crypto::ZERO);
         for (size_t idx = 0; idx < M_pad; ++idx)
-            for (size_t d = 0; d < DIM_ND; ++d)
-                v_1[idx * 17 + d] = two * reciprocals[idx * DIM_ND + d];
+            for (size_t d = 0; d < dim_nd; ++d)
+                v_1[idx * NV_PER_VALUE + d] = two * reciprocals[idx * dim_nd + d];
 
         // rv[0] = 2 * (r_blind + sum_j(lcc[j] * blinding_j))
         std::vector<scalar_t> rv(9, Crypto::ZERO);
@@ -700,7 +774,11 @@ namespace Crypto::RangeProofs::BulletproofsPP
         }
 
         // ---- Assemble WNLA n vector (g_vec dimension = G_VEC_FULL) ----
-        std::vector<scalar_t> n_vec(G_VEC_FULL);
+        // Explicit zero-init: for dim_nd < 16, NM_TOTAL < G_VEC_FULL and the slack
+        // slots [NM_TOTAL, G_VEC_FULL) MUST be zero so they fold to zero in WNLA.
+        // scalar_t default ctor is `= default` (uninitialized), so we cannot rely
+        // on the bare std::vector ctor here.
+        std::vector<scalar_t> n_vec(G_VEC_FULL, Crypto::ZERO);
         for (size_t i = 0; i < NM_TOTAL; ++i)
         {
             n_vec[i] = c_nR[i] * tau - c_nL[i] * tau2 + tau_inv * ns[i] + tau * nl[i] - tau2 * nr[i];
@@ -898,20 +976,45 @@ namespace Crypto::RangeProofs::BulletproofsPP
             throw std::range_error("N must be between 1 and 64");
         }
 
+        // Silent power-of-2 normalization (matches BP v1; matches prove() above).
+        // Both prove and verify must apply identical normalization so the transcript-
+        // bound N agrees on both sides.
+        N = Crypto::pow2_round(N);
+        if (N < 4)
+            N = 4;
+
+        const size_t dim_nd = N / 4;
+
         if (proofs.size() != commitments.size())
         {
             return false;
         }
 
-        // Determine max generator sizes across all proofs
+        // Per-proof structural validation: each proof's WNLA round count must match
+        // the (M_pad, dim_nd) tuple derived from its commitment vector and the
+        // caller's normalized N. Mismatched proofs are rejected before any math runs.
         size_t max_G = 0, max_H = 0;
-        for (const auto &proof : proofs)
+        for (size_t ii = 0; ii < proofs.size(); ++ii)
         {
+            const auto &proof = proofs[ii];
             if (!proof.check_construction())
                 return false;
             const auto nr = proof.X.size();
             const size_t g_full = size_t(1) << nr;
             const size_t h_full = size_t(1) << (nr + 1);
+
+            // Reject zero-commitment proofs early.
+            const auto M_local = commitments[ii].size();
+            if (M_local == 0)
+                return false;
+
+            const size_t M_pad_local = Crypto::pow2_round(M_local);
+            const size_t expected_G = bpp_pow2_dims(M_pad_local, dim_nd);
+            if (g_full != expected_G)
+                return false;
+            if (proof.W.size() != nr)
+                return false;
+
             if (g_full > max_G)
                 max_G = g_full;
             if (h_full > max_H)
@@ -937,17 +1040,17 @@ namespace Crypto::RangeProofs::BulletproofsPP
             const auto &proof = proofs[ii];
             const auto num_rounds = proof.X.size();
 
-            // Infer dimensions from proof structure
+            // Dimensions are derived from the (commitments, normalized N) tuple,
+            // NOT from proof.X.size() — the structural validation loop above already
+            // confirmed proof.X.size() agrees with the expected layout.
             const size_t G_VEC_FULL = size_t(1) << num_rounds;
             const size_t H_VEC_FULL = size_t(1) << (num_rounds + 1);
-            const size_t M_pad = G_VEC_FULL / DIM_ND;
-            const size_t ND_TOTAL = M_pad * DIM_ND;
-            const size_t NM_TOTAL = ND_TOTAL;
-            const size_t NV_TOTAL = M_pad * 17;
 
             const auto M = commitments[ii].size();
-            if (M == 0 || M > M_pad)
-                return false;
+            const size_t M_pad = Crypto::pow2_round(M);
+            const size_t ND_TOTAL = M_pad * dim_nd;
+            const size_t NM_TOTAL = ND_TOTAL;
+            const size_t NV_TOTAL = M_pad * NV_PER_VALUE;
 
             // Pad commitments to M_pad with identity point
             std::vector<point_t> V_all(M_pad, Crypto::Z);
@@ -959,6 +1062,8 @@ namespace Crypto::RangeProofs::BulletproofsPP
 
             // ---- Reconstruct transcript ----
             scalar_transcript_t tr(BULLETPROOFS_PP_DOMAIN_0);
+            // Bind N before any commitment, matching prove().
+            tr.update(scalar_t(N));
             for (size_t j = 0; j < M_pad; ++j)
                 tr.update(V_all[j]);
 
@@ -988,7 +1093,7 @@ namespace Crypto::RangeProofs::BulletproofsPP
             const auto mu = rho * rho;
 
             // ---- Lambda powers for M_pad values ----
-            const size_t lambda_len = M_pad * 17 + 1;
+            const size_t lambda_len = M_pad * NV_PER_VALUE + 1;
             std::vector<scalar_t> lambda_vec(lambda_len);
             {
                 auto lp = Crypto::ONE;
@@ -1002,10 +1107,10 @@ namespace Crypto::RangeProofs::BulletproofsPP
             std::vector<scalar_t> lcc(M_pad), lambda_sum_vec(M_pad);
             for (size_t idx = 0; idx < M_pad; ++idx)
             {
-                lcc[idx] = lambda_vec[17 * idx];
+                lcc[idx] = lambda_vec[NV_PER_VALUE * idx];
                 auto ls_acc = Crypto::ZERO;
-                for (size_t k = 1; k <= DIM_ND; ++k)
-                    ls_acc += lambda_vec[idx * 17 + k];
+                for (size_t k = 1; k <= DIM_NP; ++k)
+                    ls_acc += lambda_vec[idx * NV_PER_VALUE + k];
                 lambda_sum_vec[idx] = ls_acc;
             }
 
@@ -1018,11 +1123,11 @@ namespace Crypto::RangeProofs::BulletproofsPP
                     mu_vec[i] = mp;
                 }
             }
-            // c_l0[idx*17+j] = lambda^(idx*17+j+1) for j=0..15, 0 for j=16
+            // c_l0[idx*NV_PER_VALUE+j] = lambda^(idx*NV_PER_VALUE+j+1) for j in [0, DIM_NP).
             std::vector<scalar_t> c_l0(NV_TOTAL, Crypto::ZERO);
             for (size_t idx = 0; idx < M_pad; ++idx)
-                for (size_t j = 0; j < DIM_ND; ++j)
-                    c_l0[idx * 17 + j] = lambda_vec[idx * 17 + j + 1];
+                for (size_t j = 0; j < DIM_NP; ++j)
+                    c_l0[idx * NV_PER_VALUE + j] = lambda_vec[idx * NV_PER_VALUE + j + 1];
 
             // ---- C_s transcript, get tau ----
             tr.update(proof.C_s);
@@ -1057,32 +1162,35 @@ namespace Crypto::RangeProofs::BulletproofsPP
                 {
                     const auto neg_ls = lambda_sum_vec[idx].negate();
                     for (size_t j = 0; j < DIM_NP; ++j)
-                        c_lL[idx * 17 + j] = neg_ls * inv_batch[2 + j];
+                        c_lL[idx * NV_PER_VALUE + j] = neg_ls * inv_batch[2 + j];
                 }
             }
             const auto tau2 = tau * tau;
             const auto tau3 = tau2 * tau;
 
             // ---- Constraint vectors ----
+            // Stride is dim_nd (digit positions per value), bounding the value to [0, 2^N).
+            // This is the math-level enforcement of N — even if a malicious prover sent a
+            // 64-bit-shaped proof, the verifier reconstructs only dim_nd constraints.
             std::vector<scalar_t> c_nL(NM_TOTAL), c_nR(NM_TOTAL);
             {
                 const auto base = scalar_t(DIM_NP);
                 for (size_t idx = 0; idx < M_pad; ++idx)
                 {
                     auto base_pow = Crypto::ONE;
-                    for (size_t d = 0; d < DIM_ND; ++d)
+                    for (size_t d = 0; d < dim_nd; ++d)
                     {
-                        const size_t gi = idx * DIM_ND + d;
+                        const size_t gi = idx * dim_nd + d;
                         c_nL[gi] = (lcc[idx] * base_pow).negate() * mu_inv_pow[gi];
                         base_pow *= base;
                     }
                 }
             }
             for (size_t idx = 0; idx < M_pad; ++idx)
-                for (size_t d = 0; d < DIM_ND; ++d)
+                for (size_t d = 0; d < dim_nd; ++d)
                 {
-                    const size_t gi = idx * DIM_ND + d;
-                    c_nR[gi] = (lambda_sum_vec[idx] - lambda_vec[idx * 17 + d + 1]) * mu_inv_pow[gi] + e;
+                    const size_t gi = idx * dim_nd + d;
+                    c_nR[gi] = (lambda_sum_vec[idx] - lambda_vec[idx * NV_PER_VALUE + d + 1]) * mu_inv_pow[gi] + e;
                 }
 
             // ---- pn_tau, ps_tau ----

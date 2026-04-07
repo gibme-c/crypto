@@ -26,212 +26,274 @@
 
 /**
  * @file merkle.cpp
- * @brief Merkle tree construction, branch extraction, and root verification using SHA-3.
+ * @brief RFC 6962 Merkle tree with 0x00/0x01 leaf/internal domain separation.
+ *
+ * See include/merkle/merkle.h for the full contract. This implementation is a direct
+ * transcription of the RFC 6962 §2.1 recursive definition on top of SHA3-256 via the
+ * hash_t::sha3 template overload.
  */
 
+#include <array>
+#include <cstdint>
+#include <cstring>
+#include <helpers/math_helpers.h>
 #include <merkle/merkle.h>
+#include <stdexcept>
 
-static inline std::vector<hash_t> slice(const std::vector<hash_t> &values, size_t start, size_t count)
+namespace
 {
-    std::vector<hash_t> results;
+    // hash_t is a SerializablePod<32>; the underlying byte array is exactly 32 bytes.
+    // We rely on this constant in the tag+payload buffers below.
+    constexpr size_t kHashBytes = 32;
 
-    results.reserve(count);
-
-    for (size_t i = start; i < start + count; i++)
+    // RFC 6962 §2.1 leaf tag. Every leaf hash that enters the tree is first re-hashed
+    // with a 0x00 prefix byte. Without the tag, a 64-byte value equal to the
+    // concatenation of two legitimate internal children could be presented as a
+    // "leaf" and forge a shorter inclusion path to the same root (classic
+    // second-preimage attack on an untagged Merkle tree). With the 0x00/0x01 tag
+    // bytes the leaf and internal pre-images live in disjoint domains, so no leaf
+    // hash can collide with any internal-node hash regardless of input choice.
+    //
+    // SECURITY: this function MUST be called on every leaf entering the tree, including
+    // the single-leaf case in root_hash() and the leaf argument to root_hash_from_branch().
+    // Forgetting to tag even one boundary re-opens the second-preimage vector at that
+    // boundary.
+    inline hash_t hash_leaf(const hash_t &leaf)
     {
-        results.push_back(values[i]);
+        std::array<uint8_t, 1 + kHashBytes> buf {};
+
+        buf[0] = 0x00;
+
+        std::memcpy(buf.data() + 1, leaf.data(), kHashBytes);
+
+        return hash_t::sha3(buf);
     }
 
-    return results;
-}
+    // RFC 6962 §2.1 internal-node tag. Two 32-byte children are concatenated behind a
+    // 0x01 prefix byte. Combined with hash_leaf()'s 0x00 prefix this gives each
+    // internal node a unique 65-byte pre-image that cannot collide with any 33-byte
+    // leaf pre-image -- the structural guarantee behind RFC 6962 second-preimage
+    // resistance.
+    inline hash_t hash_node(const hash_t &left, const hash_t &right)
+    {
+        std::array<uint8_t, 1 + 2 * kHashBytes> buf {};
+
+        buf[0] = 0x01;
+
+        std::memcpy(buf.data() + 1, left.data(), kHashBytes);
+        std::memcpy(buf.data() + 1 + kHashBytes, right.data(), kHashBytes);
+
+        return hash_t::sha3(buf);
+    }
+
+    // Largest power of 2 strictly less than n. Only valid for n >= 2. This is the split
+    // point used by the RFC 6962 recursive definition: for n leaves, the left subtree
+    // covers the first k leaves and the right subtree covers the remaining (n - k),
+    // where k is the largest power of 2 with k < n. The left subtree is therefore
+    // always a perfect power-of-2 tree, while the right subtree absorbs the remainder
+    // (which itself may be further unbalanced at the next recursion level).
+    inline size_t largest_pow2_lt(size_t n)
+    {
+        size_t k = 1;
+
+        while ((k << 1) < n)
+        {
+            k <<= 1;
+        }
+
+        return k;
+    }
+
+    // RFC 6962 Merkle Tree Hash over the range [start, start + n) of @p leaves.
+    // The empty case returns the all-zero sentinel; callers that need a distinguishable
+    // "no commitment" marker should check against hash_t{} explicitly.
+    //
+    // SECURITY: the n == 1 branch routes through hash_leaf() rather than returning the
+    // raw input. If it returned the leaf verbatim, any 32-byte value X would trivially
+    // be "the root of a 1-leaf tree containing X" -- letting an attacker claim any hash
+    // as a legitimate merkle commitment. The 0x00 leaf tag closes that boundary vector.
+    hash_t mth(const std::vector<hash_t> &leaves, size_t start, size_t n)
+    {
+        if (n == 0)
+        {
+            return hash_t();
+        }
+
+        if (n == 1)
+        {
+            return hash_leaf(leaves[start]);
+        }
+
+        const size_t k = largest_pow2_lt(n);
+
+        return hash_node(mth(leaves, start, k), mth(leaves, start + k, n - k));
+    }
+
+    // Recursive inclusion-proof builder. Walks the same RFC 6962 split that mth() uses,
+    // but instead of folding to a single root it emits the sibling along the path and
+    // records left/right at each level.
+    //
+    // @p out is appended to in bottom-up order -- after the recursive call but before
+    // the sibling push_back -- so out[0] ends up as the deepest sibling (paired with
+    // the leaf itself at level 0) and out.back() is the topmost sibling (paired with
+    // the near-root node). The path bitmask is built with the same orientation: bit
+    // (out.size() - 1) before the push_back is the direction at the level we're about
+    // to add.
+    void tree_branch_recurse(
+        const std::vector<hash_t> &leaves,
+        size_t start,
+        size_t n,
+        size_t leaf_index,
+        std::vector<hash_t> &out,
+        size_t &path)
+    {
+        if (n <= 1)
+        {
+            // A subtree with 0 or 1 leaves has no siblings to contribute.
+            return;
+        }
+
+        const size_t k = largest_pow2_lt(n);
+
+        if (leaf_index < k)
+        {
+            // Leaf sits in the LEFT subtree at this level. Recurse there first so the
+            // deeper siblings land at lower out[] indices, then append the RIGHT
+            // subtree's root as the sibling at this level. path bit stays 0.
+            tree_branch_recurse(leaves, start, k, leaf_index, out, path);
+
+            out.push_back(mth(leaves, start + k, n - k));
+        }
+        else
+        {
+            // Leaf sits in the RIGHT subtree. Recurse with the index rebased into the
+            // right subtree, then append the LEFT subtree's root as the sibling. Set
+            // the path bit for the level we're about to add -- this is out.size()
+            // *before* push_back, which is also the current bit index.
+            tree_branch_recurse(leaves, start + k, n - k, leaf_index - k, out, path);
+
+            // Guard against shift past the bit width of size_t. The tree_branch() entry
+            // point already rejects oversized inputs, but we re-check here so that any
+            // future caller of this internal helper cannot trigger UB silently.
+            if (out.size() >= sizeof(size_t) * 8)
+            {
+                throw std::invalid_argument("tree_branch: tree depth exceeds path bitmask width");
+            }
+
+            path |= (static_cast<size_t>(1) << out.size());
+
+            out.push_back(mth(leaves, start, k));
+        }
+    }
+
+    // Per-leaf depth walker, mirrors tree_branch_recurse() but only counts levels.
+    size_t tree_depth_recurse(size_t n, size_t leaf_index)
+    {
+        if (n <= 1)
+        {
+            return 0;
+        }
+
+        const size_t k = largest_pow2_lt(n);
+
+        if (leaf_index < k)
+        {
+            return 1 + tree_depth_recurse(k, leaf_index);
+        }
+
+        return 1 + tree_depth_recurse(n - k, leaf_index - k);
+    }
+} // anonymous namespace
 
 
 namespace Crypto::Merkle
 {
     hash_t root_hash(const std::vector<hash_t> &hashes)
     {
-        hash_t root_hash;
-
-        const auto count = hashes.size();
-
-        if (count == 0)
-        {
-            root_hash = hash_t();
-        }
-        else if (count == 1)
-        {
-            root_hash = hashes[0];
-        }
-        else if (count == 2)
-        {
-            root_hash = hash_t::sha3(hashes);
-        }
-        else
-        {
-            // Round down to the largest power of 2 <= count
-            auto cnt = count - 1;
-
-            for (size_t i = 1; i < 8 * sizeof(size_t); i <<= 1)
-            {
-                cnt |= cnt >> i;
-            }
-
-            cnt &= ~(cnt >> 1);
-
-            // Hash excess leaves pairwise into the bottom layer, then fold upward
-            const auto rounds = (2 * cnt) - count;
-
-            std::vector<hash_t> temp_hashes = slice(hashes, 0, cnt);
-
-            for (size_t i = rounds, j = rounds; j < cnt; i += 2, ++j)
-            {
-                temp_hashes[j] = hash_t::sha3(slice(hashes, i, 2));
-            }
-
-            // Iteratively combine pairs until 2 remain
-            while (cnt > 2)
-            {
-                cnt >>= 1;
-
-                for (size_t i = 0, j = 0; j < cnt; i += 2, ++j)
-                {
-                    temp_hashes[j] = hash_t::sha3(slice(temp_hashes, i, 2));
-                }
-            }
-
-            root_hash = hash_t::sha3(slice(temp_hashes, 0, 2));
-        }
-
-        return root_hash;
+        return mth(hashes, 0, hashes.size());
     }
 
-    hash_t root_hash_from_branch(
-        const std::vector<hash_t> &branches,
-        size_t tree_depth,
-        const hash_t &leaf,
-        const size_t &path)
+    hash_t root_hash_from_branch(const std::vector<hash_t> &siblings, const hash_t &leaf, size_t path)
     {
-        hash_t root_hash;
+        // Always tag the leaf, even at depth 0. A depth-0 branch (empty siblings) must
+        // return hash_leaf(leaf) so that root_hash_from_branch({}, leaf) matches
+        // root_hash({leaf}) -- this symmetry allows 1-leaf trees to be proven via the
+        // same API as multi-leaf trees.
+        hash_t current = hash_leaf(leaf);
 
-        if (tree_depth == 0)
+        for (size_t i = 0; i < siblings.size(); ++i)
         {
-            root_hash = leaf;
-        }
-        else
-        {
-            std::vector<hash_t> buf;
+            const bool leaf_is_right = ((path >> i) & 1u) != 0u;
 
-            buf.resize(2);
-
-            bool from_leaf = true;
-
-            hash_t *leaf_path, *branch_path;
-
-            while (tree_depth > 0)
+            if (leaf_is_right)
             {
-                --tree_depth;
-
-                if ((path >> tree_depth) & 1)
-                {
-                    leaf_path = &buf[1];
-
-                    branch_path = &buf[0];
-                }
-                else
-                {
-                    leaf_path = &buf[0];
-
-                    branch_path = &buf[1];
-                }
-
-                if (from_leaf)
-                {
-                    *leaf_path = leaf;
-
-                    from_leaf = false;
-                }
-                else
-                {
-                    *leaf_path = hash_t::sha3(buf);
-                }
-
-                *branch_path = branches[tree_depth];
+                // Accumulator is on the RIGHT at this level, sibling on the LEFT.
+                current = hash_node(siblings[i], current);
             }
-
-            root_hash = hash_t::sha3(buf);
+            else
+            {
+                // Accumulator is on the LEFT at this level, sibling on the RIGHT.
+                current = hash_node(current, siblings[i]);
+            }
         }
 
-        return root_hash;
+        return current;
     }
 
-    std::vector<hash_t> tree_branch(const std::vector<hash_t> &hashes)
+    merkle_branch_t tree_branch(const std::vector<hash_t> &hashes, size_t leaf_index)
     {
-        if (hashes.size() < 2)
+        if (hashes.empty())
         {
-            throw std::invalid_argument("tree_branch requires at least 2 hashes");
+            throw std::invalid_argument("tree_branch: hashes must not be empty");
         }
 
-        const auto count = hashes.size();
-
-        size_t cnt = 1;
-
-        auto depth = tree_depth(count);
-
-        std::vector<hash_t> branches(depth);
-
-        for (size_t i = sizeof(size_t) << 2; i > 0; i >>= 1)
+        if (leaf_index >= hashes.size())
         {
-            if (cnt << i <= count)
-            {
-                cnt <<= i;
-            }
+            throw std::invalid_argument("tree_branch: leaf_index out of range");
         }
 
-        const auto rounds = (2 * cnt) - count;
-
-        std::vector<hash_t> temp_hashes;
-
-        temp_hashes.resize(cnt - 1);
-
-        for (size_t i = rounds, j = rounds - 1; j < cnt - 1; i += 2, ++j)
+        // Reject inputs whose max depth would overflow the path bitmask. ceil(log2(N))
+        // must fit in (sizeof(size_t) * 8) bits; at one bit per level this caps the
+        // tree at 2^64 leaves on 64-bit platforms, far beyond any practical limit.
+        if (tree_depth(hashes.size()) > sizeof(size_t) * 8)
         {
-            temp_hashes[j] = hash_t::sha3(slice(hashes, i, 2));
+            throw std::invalid_argument("tree_branch: tree depth exceeds path bitmask width");
         }
 
-        while (depth > 0)
-        {
-            cnt >>= 1;
+        merkle_branch_t branch;
 
-            --depth;
+        branch.path = 0;
 
-            branches[depth] = temp_hashes[0];
+        tree_branch_recurse(hashes, 0, hashes.size(), leaf_index, branch.siblings, branch.path);
 
-            if (cnt > 1)
-            {
-                for (size_t i = 1, j = 0; j < cnt - 1; i += 2, ++j)
-                {
-                    temp_hashes[j] = hash_t::sha3(slice(temp_hashes, i, 2));
-                }
-            }
-        }
-
-        return branches;
+        return branch;
     }
 
     size_t tree_depth(size_t count)
     {
-        size_t depth = 0;
-
-        for (size_t i = sizeof(size_t) << 2; i > 0; i >>= 1)
+        // ceil(log2(count)) via the library's pow2 helpers. pow2_round() returns the
+        // smallest power of two >= count, and calculate_base2_exponent() returns the
+        // exponent. Together they yield ceil(log2(count)) with no hand-rolled log
+        // loops. Matches the pattern used in triptych.cpp and bulletproofspp.cpp.
+        if (count <= 1)
         {
-            if (count >> i > 0)
-            {
-                count >>= i;
-
-                depth += i;
-            }
+            return 0;
         }
 
-        return depth;
+        const auto [ok, exponent] = Crypto::calculate_base2_exponent(Crypto::pow2_round(count));
+
+        (void)ok; // pow2_round always returns a power of two, so the success flag is trivially true.
+
+        return exponent;
+    }
+
+    size_t tree_depth(size_t count, size_t leaf_index)
+    {
+        if (leaf_index >= count)
+        {
+            throw std::invalid_argument("tree_depth: leaf_index out of range");
+        }
+
+        return tree_depth_recurse(count, leaf_index);
     }
 } // namespace Crypto::Merkle

@@ -152,8 +152,34 @@ struct entropy_t final : SerializablePod<32>
      */
     [[nodiscard]] std::string to_string() const override;
 
-  private:
+    /**
+     * @brief Returns true if this entropy holds 128 bits of randomness.
+     *
+     * entropy_t is a fixed 32-byte POD. By library convention, 128-bit entropy is stored in
+     * the lower 16 bytes with the upper 16 bytes zeroed (see random(128) in entropy_t.cpp).
+     * This accessor is the SINGLE canonical place that distinguishes 128-bit from 256-bit
+     * entropy; any code that needs to know the length (mnemonic encoding, SLIP-39 split,
+     * seed derivation, etc.) MUST route through here rather than re-implementing the
+     * zero-upper-half check inline.
+     *
+     * Callers constructing an entropy_t from externally sourced 32-byte material
+     * whose upper half is zero by chance or by construction -- but whose full 32
+     * bytes are meaningful -- should not rely on this accessor for SLIP-39 inputs;
+     * instead pass an explicit entropy_bits override to Shamir::split / Shamir::derive_seed.
+     *
+     * @return true if 128-bit (upper 16 bytes all zero), false if 256-bit
+     */
     [[nodiscard]] bool is_128_bit() const;
+
+    /**
+     * @brief Returns the bit-size of this entropy under the library convention.
+     *
+     * Convenience wrapper over is_128_bit() that returns 128 or 256 directly. Use this
+     * whenever you need the numeric length rather than a boolean test.
+     *
+     * @return 128 if is_128_bit() is true, 256 otherwise
+     */
+    [[nodiscard]] size_t bits() const;
 };
 
 #endif

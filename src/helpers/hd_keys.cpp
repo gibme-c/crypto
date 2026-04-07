@@ -34,6 +34,11 @@
 #include <sstream>
 #include <tinysha.h>
 
+// SLIP-0010 / BIP-32: bit 31 marks an index as "hardened". Ed25519 supports
+// only hardened derivation, so this bit is unconditionally set on every
+// parsed segment.
+static constexpr uint32_t BIP32_HARDENED_BIT = 0x80000000U;
+
 static std::vector<uint32_t> parse_bip32_path(const std::string &path)
 {
     if (path.empty() || path[0] != 'm')
@@ -56,21 +61,50 @@ static std::vector<uint32_t> parse_bip32_path(const std::string &path)
                 throw std::invalid_argument("Invalid BIP-32 path: empty segment");
             }
 
-            bool hardened = segment.back() == '\'';
-
-            if (hardened)
+            // SLIP-0010 Ed25519 is hardened-only. Silently accepting `m/44/0/0`
+            // would diverge from every spec-conformant wallet library and only
+            // surface on cross-tool restore. See include/helpers/README.md.
+            if (segment.back() != '\'')
             {
-                segment.pop_back();
+                throw std::invalid_argument(
+                    "SLIP-0010 Ed25519 requires hardened derivation; segment '" + segment
+                    + "' is missing the trailing apostrophe");
             }
 
-            auto index = std::stoul(segment);
+            segment.pop_back();
 
-            if (hardened)
+            if (segment.empty())
             {
-                index += 0x80000000; // Add hardened bit
+                throw std::invalid_argument("Invalid BIP-32 path: bare apostrophe segment");
             }
 
-            indices.push_back(index);
+            size_t parsed_pos = 0;
+
+            unsigned long raw_index = 0;
+
+            try
+            {
+                raw_index = std::stoul(segment, &parsed_pos, 10);
+            }
+            catch (const std::exception &)
+            {
+                throw std::invalid_argument("Invalid BIP-32 path: segment '" + segment + "' is not a decimal index");
+            }
+
+            if (parsed_pos != segment.size())
+            {
+                throw std::invalid_argument("Invalid BIP-32 path: segment '" + segment + "' has trailing characters");
+            }
+
+            // The numeric portion must fit in [0, 2^31) because the apostrophe
+            // sets bit 31 below.
+            if (raw_index >= BIP32_HARDENED_BIT)
+            {
+                throw std::invalid_argument(
+                    "Invalid BIP-32 path: hardened segment '" + segment + "' exceeds maximum index 2^31 - 1");
+            }
+
+            indices.push_back(static_cast<uint32_t>(raw_index) | BIP32_HARDENED_BIT);
         }
     }
 

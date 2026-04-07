@@ -111,14 +111,17 @@ auto pre_sig = Crypto::AdapterSignature::pre_sign(digest, alice_secret, Y);
 bool correct = Crypto::AdapterSignature::check_pre_signature(
     digest, alice_public, Y, pre_sig);
 
-// Step 2: Bob adapts with witness y to get a valid Ed25519 signature
-auto sig = Crypto::AdapterSignature::adapt(pre_sig, y);
+// Step 2: Bob adapts with witness y to produce a Schnorr (R', s) signature
+//         under the adapter Fiat-Shamir domain. NOTE: this is NOT a standard
+//         Ed25519 signature — it uses a distinct domain tag and must be
+//         verified with check_adapted_signature, not Crypto::Signature::check_signature.
+auto adapted = Crypto::AdapterSignature::adapt(pre_sig, y);
 
-// The adapted signature is a standard Ed25519 signature
-bool valid = Crypto::Signature::check_signature(digest, alice_public, sig);
+// Verify the adapted signature under the adapter domain
+bool valid = Crypto::AdapterSignature::check_adapted_signature(digest, alice_public, adapted);
 
 // Step 3: Alice extracts the witness from the difference
-auto y_extracted = Crypto::AdapterSignature::extract(pre_sig, sig, Y);
+auto y_extracted = Crypto::AdapterSignature::extract(pre_sig, adapted, Y);
 // y_extracted == y
 ```
 
@@ -155,12 +158,17 @@ FUNCTION atomic_swap():
     // signature that sends me Alice's coin."
 
     // --- Step 2: Bob claims on Chain A (reveals y) ------------------
-    // Bob adds his witness y to Alice's pre-signature to make it
-    // a valid Ed25519 signature, then broadcasts on Chain A.
+    // Bob adds his witness y to Alice's pre-signature to produce a
+    // Schnorr (R', s) signature under the adapter Fiat-Shamir domain,
+    // then broadcasts it on Chain A. Note: the adapted signature is
+    // NOT a standard Ed25519 signature -- it uses a distinct domain tag
+    // and is verified by AdapterSignature::check_adapted_signature. Chain A
+    // must support the adapter-domain verification rule (e.g. as a script
+    // or protocol-native opcode) for this to settle on-chain.
 
     sig_a = AdapterSignature::adapt(pre_sig, y)
-    // sig_a is now a valid signature -- Bob submits it to Chain A
-    // and receives Alice's coin.
+    // sig_a is the (R', s) adapted signature -- Bob submits it and
+    // receives Alice's coin.
 
     // But by doing this, Bob published sig_a on the public ledger!
 

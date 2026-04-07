@@ -32,8 +32,8 @@
  * @brief CLSAG signature serialization, deserialization, and construction validation.
  */
 
-#include <helpers/debug_helper.h>
 #include <clsag/clsag_signature_t.h>
+#include <helpers/debug_helper.h>
 
 clsag_signature_t::clsag_signature_t(
     std::vector<scalar_t> _scalars,

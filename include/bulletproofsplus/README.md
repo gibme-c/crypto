@@ -20,6 +20,7 @@ The API mirrors the original [Bulletproofs](../bulletproofs/README.md) interface
 |---------|-------------|
 | [How It Works (ELI5)](#how-it-works-eli5) | Weighted inner product argument |
 | [API](#api) | Prove, verify, and batch-verify |
+| [Range Parameter](#range-parameter) | Silent rounding and Fiat-Shamir binding of N |
 | [Proof Sizes](#proof-sizes) | Size by aggregation count |
 | [Domain Constants](#domain-constants) | Domain separator indices |
 | [References](#references) | Papers and specifications |
@@ -47,6 +48,15 @@ auto [proof, commitments] = Crypto::RangeProofs::BulletproofsPlus::prove(
 
 bool valid = Crypto::RangeProofs::BulletproofsPlus::verify(proof, commitments);
 ```
+
+---
+
+## Range Parameter
+
+Identical contract to original Bulletproofs — see
+[the BP "Range Parameter" section](../bulletproofs/README.md#range-parameter)
+for the silent `pow2_round` rule, the Fiat-Shamir binding of `N`, and why this
+is hygiene / availability rather than a soundness concern.
 
 ---
 

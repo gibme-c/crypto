@@ -33,8 +33,12 @@
  * Implements the reciprocal-argument range proof scheme from ePrint 2022/510. This is
  * the smallest of the three Bulletproof variants, using a base-16 digit decomposition
  * and Weighted Norm Linear Argument (WNLA) as the inner proof system. Supports
- * aggregated multi-value proofs (M >= 1), with N=64 bits by default. The API follows
- * the same prove/verify/batch-verify pattern as the other Bulletproof variants.
+ * aggregated multi-value proofs (M >= 1) and configurable range bit-length N in [1, 64],
+ * silently rounded up to the nearest power of two with a minimum of 4 (matching the
+ * Bulletproofs v1 normalization convention). The API follows the same prove/verify/
+ * batch-verify pattern as the other Bulletproof variants. N is bound into the
+ * Fiat-Shamir transcript and threads through the constraint vectors, so a proof
+ * produced under one normalized N never validates under any other N.
  */
 
 #ifndef CRYPTO_RANGEPROOFS_BULLETPROOFS_PP_H
@@ -48,12 +52,16 @@ namespace Crypto::RangeProofs::BulletproofsPP
      * Generates a Bulletproofs++ range proof for one or more amounts.
      *
      * Produces both the proof and the corresponding Pedersen commitments. Each amount
-     * is proven to be in [0, 2^N). Supports aggregated multi-value proofs (M >= 1).
+     * is proven to be in [0, 2^N) where N is silently normalized to the next power of
+     * two (with a minimum of 4). Supports aggregated multi-value proofs (M >= 1).
      *
      * @param amounts the plaintext values to create range proofs for
      * @param blinding_factors the blinding factors for each Pedersen commitment
-     * @param N the bit-length of the range (values proven in [0, 2^N)), defaults to 64
+     * @param N the bit-length of the range, in [1, 64], silently rounded up to a
+     *          power of two (and to 4 if smaller). Defaults to 64.
      * @return a tuple of {proof, commitments} where commitments[i] commits to amounts[i]
+     * @throws std::range_error if N == 0 or N > 64, or if any amount does not fit in
+     *         the normalized range
      */
     std::tuple<bulletproof_pp_t, std::vector<pedersen_commitment_t>> prove(
         const std::vector<uint64_t> &amounts,
@@ -64,11 +72,14 @@ namespace Crypto::RangeProofs::BulletproofsPP
      * Batch-verifies multiple Bulletproofs++ range proofs simultaneously.
      *
      * Combines verification equations across proofs for more efficient multi-exponentiation.
+     * The same N parameter is used for the entire batch — all proofs must have been
+     * produced under the same normalized N, otherwise verification fails.
      *
      * @param proofs the range proofs to verify
      * @param commitments the Pedersen commitments for each proof (one vector per proof)
-     * @param N the bit-length of the range, defaults to 64
+     * @param N the bit-length of the range, normalized identically to prove(). Defaults to 64.
      * @return true if all proofs are valid, false if any proof fails
+     * @throws std::range_error if N == 0 or N > 64
      */
     bool verify(
         const std::vector<bulletproof_pp_t> &proofs,
@@ -80,8 +91,9 @@ namespace Crypto::RangeProofs::BulletproofsPP
      *
      * @param proof the range proof to verify
      * @param commitments the Pedersen commitments the proof was generated for
-     * @param N the bit-length of the range, defaults to 64
+     * @param N the bit-length of the range, normalized identically to prove(). Defaults to 64.
      * @return true if the proof is valid, false otherwise
+     * @throws std::range_error if N == 0 or N > 64
      */
     bool verify(const bulletproof_pp_t &proof, const std::vector<pedersen_commitment_t> &commitments, size_t N = 64);
 } // namespace Crypto::RangeProofs::BulletproofsPP

@@ -18,6 +18,7 @@ the commitment -- producing two response scalars per ring member instead of one.
 | [API](#api) | Ring signature generation and verification |
 | [Signature Structure](#signature-structure) | Layout of the mlsag_signature_t |
 | [CLSAG vs MLSAG](#clsag-vs-mlsag) | Size and feature comparison |
+| [Mode Binding](#mode-binding) | How plain vs. commitment-binding mode is authenticated |
 | [Domain Constants](#domain-constants) | Domain separator indices |
 | [References](#references) | Papers and specifications |
 
@@ -101,6 +102,16 @@ struct mlsag_signature_t {
 | Status | Current | Legacy (superseded by CLSAG) |
 
 **Prefer [CLSAG](../clsag/README.md)** for new designs -- it's half the size with identical security.
+
+---
+
+## Mode Binding
+
+MLSAG runs in one of two modes per signature: **plain ring** (no commitment binding, `commitment_scalars` empty) or **commitment-binding ring** (with `commitment_image`, `pseudo_commitment`, and parallel `key_scalars` / `commitment_scalars` columns). Both directions of mode mismatch are rejected explicitly by two complementary mechanisms — identical in shape to the CLSAG design:
+
+**Strict mode-mismatch reject** at the top of every `check_ring_signature` and `generate_ring_signature` entry point. The signer's mode is recovered from the signature's own fields (`commitment_image.valid() && pseudo_commitment.valid() && !commitment_scalars.empty()`); the caller's stated mode is recovered from the shape of the `commitments` vector (or, on the sign side, from whether all four commitment-mode arguments are validly populated). Disagreement in either direction is a hard `false` return.
+
+**Transcript binding** of an explicit `uint8_t` mode tag (`0x00` plain, `0x01` commit) into the MLSAG challenge-chain transcript (`MLSAG_DOMAIN_0`). The tag is absorbed immediately after the domain separator, in both sign and verify, so `h0` itself becomes a function of the mode and the closing test `h[0] == h0` carries the mode authentication directly.
 
 ---
 

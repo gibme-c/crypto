@@ -26,27 +26,30 @@
 
 /**
  * @file scalar_t.cpp
- * @brief Ed25519 scalar arithmetic mod l with RFC-8032 clamping.
+ * @brief Ed25519 scalar arithmetic mod l.
+ *
+ * Constructors copy raw bytes without reduction or clamping. Pure mod-l reduction
+ * is reachable via `.reduce()` or the internal `do_reduce()` helper. RFC 8032
+ * §5.1.5 private-key clamping is reachable ONLY via `scalar_t::from_rfc8032_seed()`
+ * -- the single public clamp entry point in this library.
  */
 
 #include <core/crypto_config.h>
 #include <ed25519/include/ed25519_secure_erase.h>
+#include <ed25519/include/sc_clamp.h>
+#include <ed25519/include/sc_reduce.h>
 #include <helpers/constant_time.h>
+#include <helpers/wide_reduction.h>
 #include <randompp.hpp>
 #include <tinysha.h>
 #include <types/scalar_t.h>
 
-scalar_t::scalar_t(std::initializer_list<unsigned char> input, bool reduce)
+scalar_t::scalar_t(std::initializer_list<unsigned char> input)
 {
     std::copy(input.begin(), input.end(), std::begin(bytes));
-
-    if (reduce)
-    {
-        do_reduce();
-    }
 }
 
-scalar_t::scalar_t(const std::vector<unsigned char> &input, bool reduce)
+scalar_t::scalar_t(const std::vector<unsigned char> &input)
 {
     /**
      * We allow loading a full scalar (256-bits), a uint64_t (64-bits), or a uint32_t (32-bits)
@@ -57,69 +60,82 @@ scalar_t::scalar_t(const std::vector<unsigned char> &input, bool reduce)
     }
 
     std::copy(input.begin(), input.end(), std::begin(bytes));
-
-    if (reduce)
-    {
-        do_reduce();
-    }
 }
 
-scalar_t::scalar_t(const std::string &s, bool reduce)
+scalar_t::scalar_t(const std::string &s)
 {
     from_string(s);
-
-    if (reduce)
-    {
-        do_reduce();
-    }
 }
 
-scalar_t::scalar_t(const uint64_t &number, bool reduce)
+scalar_t::scalar_t(const uint64_t &number)
 {
     std::memcpy(bytes, &number, sizeof(number));
-
-    if (reduce)
-    {
-        do_reduce();
-    }
 }
 
-scalar_t::scalar_t(const char *value, bool reduce)
+scalar_t::scalar_t(const char *value)
 {
     const auto str = std::string(value);
 
     from_string(str);
-
-    if (reduce)
-    {
-        do_reduce();
-    }
 }
 
-scalar_t::scalar_t(const std::vector<scalar_t> &bits, bool reduce)
+scalar_t::scalar_t(const std::vector<scalar_t> &bits)
 {
     from_bits(bits);
-
-    if (reduce)
-    {
-        do_reduce();
-    }
 }
 
-scalar_t scalar_t::from_uint256(const uint256_t &number, bool reduce)
+scalar_t scalar_t::from_uint256(const uint256_t &number)
 {
-    unsigned char bytes[32];
+    // uint256_t values in [l, 2^256) are possible, so always reduce. Pure mod-l
+    // reduction (no clamping).
+    scalar_t result;
 
-    std::memcpy(bytes, &number, sizeof(number));
+    std::memcpy(result.bytes, &number, sizeof(number));
 
-    auto result = scalar_t(std::vector<unsigned char>(std::begin(bytes), std::end(bytes)));
-
-    if (reduce)
-    {
-        return result.reduce();
-    }
+    result.do_reduce();
 
     return result;
+}
+
+scalar_t scalar_t::from_bytes_reduced(const unsigned char (&bytes_in)[32])
+{
+    // Pure mod-l reduction, no clamping. Single-copy fast path used by
+    // hash_t::scalar() on the Fiat-Shamir transcript hot path.
+    scalar_t result;
+
+    std::memcpy(result.bytes, bytes_in, 32);
+
+    result.do_reduce();
+
+    return result;
+}
+
+scalar_t scalar_t::from_rfc8032_seed(const unsigned char *seed)
+{
+    // This is the ONE legitimate sc_clamp call site in the library. RFC 8032
+    // §5.1.5 specifies that the lower 32 bytes of SHA-512(private_key) must be
+    // clamped (clear low 3 bits, clear bit 255, set bit 254) before being used as
+    // the signing scalar. The clamp introduces structural bias, which is why this
+    // factory is the ONLY public path that exposes clamping -- it must never be
+    // called from a Fiat-Shamir challenge, random-scalar, or hash-to-scalar code
+    // path (doing so produces lattice-attackable biased nonces).
+    scalar_t result;
+
+    std::memcpy(result.bytes, seed, 32);
+
+    sc_clamp(result.bytes);
+
+    sc_reduce(result.bytes, 32);
+
+    return result;
+}
+
+scalar_t scalar_t::from_uniform_bytes(const unsigned char (&buf)[64])
+{
+    // Unbiased wide reduction via the three-limb split from Crypto::reduce_wide_hash.
+    // Use for random scalars, nonces, blindings, and any value that must be
+    // statistically uniform on [0, l). No clamping.
+    return Crypto::reduce_wide_hash(buf);
 }
 
 bool scalar_t::operator==(const scalar_t &other) const
@@ -621,17 +637,25 @@ scalar_t scalar_t::pow_sum(size_t count) const
 
 scalar_t scalar_t::random()
 {
-    unsigned char bytes[CRYPTO_ENTROPY_BYTES] = {0};
+    // Unbiased random scalar: 64 bytes of CSPRNG entropy feed the three-limb
+    // wide reduction via scalar_t::from_uniform_bytes(), producing output that
+    // is statistically indistinguishable from uniform on [0, l). No clamping.
+    //
+    // Zero-init is mandatory: randompp::random_bytes() returns -1 on CSPRNG
+    // failure and does not guarantee the buffer is fully written. The return
+    // code is discarded here, so the failure-mode output must be a deterministic
+    // known constant rather than uninitialized stack memory (which could contain
+    // residue from a prior secret key, signing nonce, or blinding factor in the
+    // caller's stack frame).
+    unsigned char buf[64] = {0};
 
-    randompp::random_bytes(CRYPTO_ENTROPY_BYTES, bytes);
+    randompp::random_bytes(sizeof(buf), buf);
 
-    SerializablePod result;
+    const scalar_t result = scalar_t::from_uniform_bytes(buf);
 
-    tinysha_sha3_256(bytes, CRYPTO_ENTROPY_BYTES, *result, result.size());
+    ed25519_secure_erase(buf, sizeof(buf));
 
-    ed25519_secure_erase(bytes, sizeof(bytes));
-
-    return scalar_t(result.serialize(), true);
+    return result;
 }
 
 std::vector<scalar_t> scalar_t::random(size_t count)
@@ -648,7 +672,12 @@ std::vector<scalar_t> scalar_t::random(size_t count)
 
 scalar_t scalar_t::reduce() const
 {
-    return scalar_t(std::vector<unsigned char>(std::begin(bytes), std::end(bytes)), true);
+    // Pure mod-l reduction via do_reduce() (which is sc_reduce, not sc_clamp).
+    scalar_t result = *this;
+
+    result.do_reduce();
+
+    return result;
 }
 
 scalar_t scalar_t::squared() const
@@ -748,10 +777,13 @@ bool scalar_t::valid(bool allow_zero) const
 
 void scalar_t::do_reduce()
 {
-    // RFC-8032 clamping (clear low 3 bits, set bit 254, clear bit 255)
-    // followed by reduction mod l to ensure the result is a valid scalar
-    sc_clamp(bytes);
-
+    // Pure mod-l reduction only. Never add sc_clamp() here: clamping is valid
+    // only for RFC 8032 §5.1.5 private-key expansion and is exposed exclusively
+    // via scalar_t::from_rfc8032_seed(). Applying it inside this helper would
+    // force every value flowing through .reduce() / hash_t::scalar() /
+    // scalar_transcript_t::challenge() into a biased mod-8 residue class set,
+    // directly enabling lattice-based key recovery against every Schnorr/ECDSA
+    // variant in the library.
     sc_reduce(bytes, 32);
 }
 

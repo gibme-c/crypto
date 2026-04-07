@@ -34,13 +34,13 @@
 
 #include <algorithm>
 #include <cstring>
-#include <slip39/slip39.h>
-#include <slip39/slip39_english.h>
 #include <helpers/constant_time.h>
 #include <map>
 #include <mutex>
 #include <numeric>
 #include <randompp.hpp>
+#include <slip39/slip39.h>
+#include <slip39/slip39_english.h>
 #include <stdexcept>
 #include <tinysha.h>
 
@@ -234,21 +234,9 @@ static std::vector<std::pair<uint8_t, std::vector<uint8_t>>>
     // Generate T-2 random share values at indices 0..T-3, then the polynomial is
     // defined by these T-2 random shares + secret at 255 + digest at 254 = T points total.
 
-    // But for threshold=1, we just copy the secret directly.
-    if (threshold == 1)
-    {
-        std::vector<std::pair<uint8_t, std::vector<uint8_t>>> shares;
-
-        for (size_t i = 0; i < total_shares; ++i)
-        {
-            shares.emplace_back(static_cast<uint8_t>(i), secret);
-        }
-
-        return shares;
-    }
-
-    // For threshold >= 2:
-    // Build T base shares: secret at 255, digest at 254, and T-2 random shares
+    // T<2 is rejected at the public boundary in Crypto::Mnemonics::Shamir::split();
+    // this helper is never reached with threshold==1. Build T base shares: secret
+    // at 255, digest at 254, T-2 random.
     std::vector<uint8_t> base_x;
     std::vector<std::vector<uint8_t>> base_y;
 
@@ -309,10 +297,9 @@ static std::vector<uint8_t> shamir_combine(
 
     const size_t secret_len = share_values[0].size();
 
-    if (threshold == 1)
-    {
-        return share_values[0];
-    }
+    // T<2 is rejected at the public boundary in Crypto::Mnemonics::Shamir::combine();
+    // this helper is never reached with threshold==1, so the T>=2 digest-verifying
+    // path below is the only reachable code path.
 
     // Recover secret at index SECRET_INDEX (255)
     std::vector<uint8_t> secret(secret_len);
@@ -776,6 +763,26 @@ static slip39_share_t decode_share(const std::vector<std::string> &mnemonic)
 // Public API
 // ============================================================================
 
+// Single source of truth for the entropy_bits override semantics shared by
+// split() and derive_seed(). entropy_bits == 0 defers to the entropy_t::bits()
+// canonical convention (32-byte POD with 128-bit stored in the lower 16 bytes +
+// upper 16 zeroed). An explicit 128 or 256 is honored verbatim; any other non-zero
+// value throws.
+static size_t resolve_secret_len_bytes(const entropy_t &entropy, size_t entropy_bits)
+{
+    if (entropy_bits != 0)
+    {
+        if (entropy_bits != 128 && entropy_bits != 256)
+        {
+            throw std::invalid_argument("entropy_bits must be 128 or 256");
+        }
+
+        return entropy_bits / 8;
+    }
+
+    return entropy.bits() / 8;
+}
+
 namespace Crypto::Mnemonics::Shamir
 {
     std::vector<std::vector<std::string>> split(
@@ -789,9 +796,11 @@ namespace Crypto::Mnemonics::Shamir
     {
         gf256_init_tables();
 
-        if (threshold < 1 || threshold > total_shares)
+        // Reject T<2: a digest at T=1 is meaningless (the share IS the secret),
+        // so a 1-of-1 share would have no integrity binding to its secret.
+        if (threshold < 2 || threshold > total_shares)
         {
-            throw std::invalid_argument("Threshold must satisfy 1 <= T <= N");
+            throw std::invalid_argument("Threshold must satisfy 2 <= T <= N");
         }
 
         if (total_shares > MAX_SHARE_COUNT)
@@ -799,27 +808,14 @@ namespace Crypto::Mnemonics::Shamir
             throw std::invalid_argument("Total shares must be <= 16");
         }
 
-        // Determine entropy size
+        // Determine entropy size via resolve_secret_len_bytes() -- the single-source-
+        // of-truth helper that both split() and derive_seed() share. Default
+        // (entropy_bits == 0) defers to entropy_t::bits(); an explicit 128/256 is
+        // honored verbatim as the caller's escape hatch for the rare case where they
+        // hold genuinely 256-bit material whose upper half is zero by chance or by
+        // construction.
         const auto entropy_bytes = entropy.serialize();
-        size_t secret_len;
-
-        if (entropy_bits != 0)
-        {
-            if (entropy_bits != 128 && entropy_bits != 256)
-            {
-                throw std::invalid_argument("entropy_bits must be 128 or 256");
-            }
-
-            secret_len = entropy_bits / 8;
-        }
-        else
-        {
-            // Heuristic: detect 128-bit by checking if upper 16 bytes are all zeros
-            const bool is_128 =
-                entropy.empty()
-                || std::all_of(entropy_bytes.begin() + 16, entropy_bytes.end(), [](uint8_t b) { return b == 0; });
-            secret_len = is_128 ? 16 : 32;
-        }
+        const size_t secret_len = resolve_secret_len_bytes(entropy, entropy_bits);
 
         if (secret_len < MIN_STRENGTH_BITS / 8)
         {
@@ -888,6 +884,14 @@ namespace Crypto::Mnemonics::Shamir
 
         // Verify all shares have same parameters
         const auto &first = decoded_shares[0];
+        const size_t threshold = first.member_threshold + 1; // decode from stored value
+
+        // Reject T<2 before the per-share consistency loop runs so hostile input
+        // (a mnemonic whose member_threshold byte is zero) fails fast.
+        if (threshold < 2)
+        {
+            throw std::invalid_argument("SLIP-39 shares encode T < 2, which is not supported");
+        }
 
         for (size_t i = 1; i < decoded_shares.size(); ++i)
         {
@@ -918,8 +922,6 @@ namespace Crypto::Mnemonics::Shamir
                 throw std::invalid_argument("Shares have different member thresholds");
             }
         }
-
-        const size_t threshold = first.member_threshold + 1; // decode from stored value
 
         if (decoded_shares.size() < threshold)
         {
@@ -978,12 +980,25 @@ namespace Crypto::Mnemonics::Shamir
         }
     }
 
-    std::vector<unsigned char> derive_seed(const entropy_t &entropy, const std::string &passphrase, bool extendable)
+    std::vector<unsigned char>
+        derive_seed(const entropy_t &entropy, const std::string &passphrase, bool extendable, size_t entropy_bits)
     {
+        // Entropy length is resolved via the shared resolve_secret_len_bytes() helper
+        // (symmetric with split() above).
+        //
+        // HMAC NUANCE: for a DEGENERATE entropy whose upper 16 bytes are all zero, the
+        // 128-bit and 256-bit paths produce an IDENTICAL seed. This is a correct
+        // consequence of HMAC-SHA256 key processing -- PBKDF2 keys shorter than the
+        // 64-byte SHA-256 block size are right-padded with zeros, so feeding HMAC 16
+        // bytes [x] produces the same PRF output as feeding it 32 bytes [x, 0...]. The
+        // two inputs are cryptographically equivalent. Do NOT attempt to domain-separate
+        // by appending the length to the salt: the SLIP-39 spec fixes the salt as
+        // "shamir_extendable" or "shamir" (+passphrase) and any deviation breaks interop
+        // with reference implementations. The override remains observable for NON-
+        // degenerate entropies (upper half non-zero), where passing entropy_bits=128 on
+        // a genuinely 256-bit secret forces truncation to the lower 16 bytes.
         const auto entropy_bytes = entropy.serialize();
-        const bool is_128 =
-            std::all_of(entropy_bytes.begin() + 16, entropy_bytes.end(), [](uint8_t b) { return b == 0; });
-        const size_t secret_len = is_128 ? 16 : 32;
+        const size_t secret_len = resolve_secret_len_bytes(entropy, entropy_bits);
 
         const std::string salt_prefix = extendable ? "shamir_extendable" : "shamir";
         const std::string salt = salt_prefix + passphrase;

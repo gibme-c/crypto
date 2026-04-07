@@ -40,6 +40,7 @@
 #ifndef CRYPTO_VRF_H
 #define CRYPTO_VRF_H
 
+#include <types/secret_key_t.h>
 #include <vrf/vrf_proof_t.h>
 
 namespace Crypto::VRF
@@ -68,16 +69,26 @@ namespace Crypto::VRF
 namespace Crypto::VRF::RFC9381
 {
     /**
-     * Generates an RFC 9381 VRF proof (ECVRF-EDWARDS25519-SHA512-ELL2).
+     * Generates an RFC 9381 VRF proof (ECVRF-EDWARDS25519-SHA512-ELL2, suite 0x04).
      *
-     * Uses SHA-512 for hash-to-curve, deterministic nonce (HMAC-SHA512),
-     * and 16-byte truncated challenge per the RFC specification.
+     * Implements the spec-compliant construction:
+     *  - hash-to-curve: SHA-512 + Elligator2 + cofactor clearing (§5.4.1.2)
+     *  - deterministic nonce: `k = SHA-512(SHA-512(seed)[32..64] || h_string) mod q`
+     *    per §5.4.2.2 ECVRF_nonce_generation_RFC8032 -- this requires the raw 32-byte
+     *    SK seed (the upper half of SHA-512(seed) is the secret PRF key), which is
+     *    why this function takes `secret_key_t` rather than `scalar_t`
+     *  - 16-byte truncated challenge over (Y, H, Gamma, U, V) per §5.4.3
+     *  - response: `s = k + c*x mod q` per §5.1 step 7
      *
-     * @param secret_key the prover's secret scalar
+     * Validated against RFC 9381 Appendix B.4 KAT vectors (Examples 19-21).
+     *
+     * @param secret_key the prover's RFC 8032 secret key (32-byte seed)
      * @param alpha the VRF input (arbitrary byte string)
-     * @return (proof, beta) where beta is the VRF output hash
+     * @return (proof, beta) where beta is the 32-byte truncation of the 64-byte
+     *         VRF output hash defined in §5.2 (`SHA-512(suite || 0x03 || cofactor*Gamma || 0x00)`)
      */
-    std::tuple<vrf_rfc9381_proof_t, hash_t> prove(const scalar_t &secret_key, const std::vector<unsigned char> &alpha);
+    std::tuple<vrf_rfc9381_proof_t, hash_t>
+        prove(const secret_key_t &secret_key, const std::vector<unsigned char> &alpha);
 
     /**
      * Verifies an RFC 9381 VRF proof and returns the output if valid.

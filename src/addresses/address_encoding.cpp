@@ -36,6 +36,50 @@
 
 namespace Crypto::Address
 {
+    namespace
+    {
+        // Shared payload parser for both Base58 and CNBase58 decoders. The two namespaces
+        // differ only in their checksum/encoding scheme; once decode_check has handed back a
+        // verified deserializer, the {prefix, spend, optional view} layout is identical, and
+        // so is the strict tail-length policy below. Keeping this in one place makes the
+        // security-critical strict-tail check a single source of truth — any future tweak
+        // lands here, not in two near-duplicates.
+        std::tuple<bool, uint64_t, public_key_t, public_key_t>
+            parse_address_payload(Serialization::deserializer_t &decoded)
+        {
+            try
+            {
+                const auto prefix = decoded.varint<uint64_t>();
+
+                const auto public_spend = decoded.pod<public_key_t>();
+
+                public_key_t public_view;
+
+                const auto tail = decoded.unread_bytes();
+
+                if (tail == public_view.size())
+                {
+                    public_view = decoded.pod<public_key_t>();
+                }
+                else if (tail != 0)
+                {
+                    // The only legal tail layouts after {prefix, public_spend} are exactly
+                    // 0 bytes (single-key) or exactly public_key_t::size() bytes (dual-key).
+                    // Anything else is ambiguous; fail closed rather than coercing the
+                    // remainder into a zero view key. See include/addresses/README.md
+                    // "Decoder strictness".
+                    return {false, 0, {}, {}};
+                }
+
+                return {true, prefix, public_spend, public_view};
+            }
+            catch (const std::exception &)
+            {
+                return {false, 0, {}, {}};
+            }
+        }
+    } // namespace
+
     namespace Base58
     {
         std::tuple<bool, uint64_t, public_key_t, public_key_t> decode(const std::string &address)
@@ -47,25 +91,7 @@ namespace Crypto::Address
                 return {success, 0, {}, {}};
             }
 
-            try
-            {
-                const auto prefix = decoded.varint<uint64_t>();
-
-                const auto public_spend = decoded.pod<public_key_t>();
-
-                public_key_t public_view;
-
-                if (decoded.unread_bytes() == public_view.size())
-                {
-                    public_view = decoded.pod<public_key_t>();
-                }
-
-                return {success, prefix, public_spend, public_view};
-            }
-            catch (const std::exception &)
-            {
-                return {false, 0, {}, {}};
-            }
+            return parse_address_payload(decoded);
         }
 
         std::string encode(const uint64_t &prefix, const public_key_t &public_key)
@@ -104,25 +130,7 @@ namespace Crypto::Address
                 return {success, 0, {}, {}};
             }
 
-            try
-            {
-                const auto prefix = decoded.varint<uint64_t>();
-
-                const auto public_spend = decoded.pod<public_key_t>();
-
-                public_key_t public_view;
-
-                if (decoded.unread_bytes() == public_view.size())
-                {
-                    public_view = decoded.pod<public_key_t>();
-                }
-
-                return {success, prefix, public_spend, public_view};
-            }
-            catch (const std::exception &)
-            {
-                return {false, 0, {}, {}};
-            }
+            return parse_address_payload(decoded);
         }
 
         std::string encode(const uint64_t &prefix, const public_key_t &public_key)

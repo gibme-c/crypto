@@ -30,8 +30,8 @@
  */
 
 #include <bitset>
-#include <mnemonics/mnemonics.h>
 #include <map>
+#include <mnemonics/mnemonics.h>
 #include <mutex>
 #include <serialization.h>
 #include <types/hash_t.h>

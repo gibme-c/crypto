@@ -31,8 +31,8 @@
 
 #include <core/crypto_common.h>
 #include <core/crypto_constants.h>
-#include <helpers/scalar_transcript_t.h>
 #include <ed25519/signature.h>
+#include <helpers/scalar_transcript_t.h>
 
 namespace Crypto::Signature
 {

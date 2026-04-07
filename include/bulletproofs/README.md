@@ -20,6 +20,7 @@ growth -- proving M values costs only `O(log(M*N))` group elements instead of
 |---------|-------------|
 | [How It Works (ELI5)](#how-it-works-eli5) | Range proofs as extra seals on envelopes |
 | [API](#api) | Prove, verify, and batch-verify |
+| [Range Parameter](#range-parameter) | Silent rounding and Fiat-Shamir binding of N |
 | [Proof Sizes](#proof-sizes) | Size by aggregation count |
 | [Domain Constants](#domain-constants) | Domain separator indices |
 | [References](#references) | Papers and specifications |
@@ -76,6 +77,28 @@ bool all_valid = Crypto::RangeProofs::Bulletproofs::verify(
     {proof1, proof2, proof3},
     {commitments1, commitments2, commitments3});
 ```
+
+---
+
+## Range Parameter
+
+Both `prove(...)` and `verify(...)` accept an optional `N` parameter (the range
+bit-length). It must lie in `[1, 64]`; values outside that range throw
+`std::range_error`. Inside that range the value is **silently rounded up to the
+nearest power of two** via `Crypto::pow2_round(N)` (with a minimum of 4), so
+`N=24` and `N=29` both normalize to `32`. This matches the v1 reference and is
+intentional — callers can pass any sensible bit-length without first having to
+align it to a power of two.
+
+The normalized `N` is bound into the Fiat-Shamir transcript immediately after
+the domain separator on both prove and verify paths. A proof produced under one
+normalized `N` cannot be replayed against a verifier that was told a different
+normalized `N` out-of-band: the challenge derivation diverges and verification
+returns `false`. This is hygiene / availability — the underlying math is
+already structurally `N`-dependent (bit decomposition, MN-length inner product,
+log2(MN) folding rounds), so there is no soundness gap. The transcript binding
+turns what would otherwise be a mid-MSM shape mismatch into a clean
+challenge-mismatch rejection.
 
 ---
 

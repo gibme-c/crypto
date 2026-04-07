@@ -30,8 +30,8 @@
  * @brief CryptoNote block-based Base58: encodes in fixed 8-byte blocks for constant-length output.
  */
 
-#include <core/crypto_config.h>
 #include <base58/cn_base58.h>
+#include <core/crypto_config.h>
 #include <helpers/constant_time.h>
 #include <stdexcept>
 #include <types/hash_t.h>
@@ -308,6 +308,13 @@ namespace Crypto::CNBase58
     std::tuple<bool, Serialization::deserializer_t> decode(const std::string &input)
     {
         if (input.empty())
+        {
+            return {false, {}};
+        }
+
+        // Cap before allocation -- decode is O(n) but unbounded. See
+        // CRYPTO_BASE58_MAX_INPUT_LENGTH for rationale.
+        if (input.size() > CRYPTO_BASE58_MAX_INPUT_LENGTH)
         {
             return {false, {}};
         }

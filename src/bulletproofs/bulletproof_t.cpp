@@ -32,8 +32,8 @@
  * @brief Bulletproof range proof serialization, deserialization, and construction validation.
  */
 
-#include <helpers/debug_helper.h>
 #include <bulletproofs/bulletproof_t.h>
+#include <helpers/debug_helper.h>
 
 bulletproof_t::bulletproof_t(
     const point_t &_A,

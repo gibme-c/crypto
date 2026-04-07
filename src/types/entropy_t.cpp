@@ -189,8 +189,17 @@ std::string entropy_t::to_string() const
 }
 
 
-// 128-bit entropy is stored in the lower 16 bytes with the upper 16 bytes zeroed
+// 128-bit entropy is stored in the lower 16 bytes with the upper 16 bytes zeroed.
+// This is the canonical length accessor for entropy_t and the only place in the
+// library that performs the zero-upper-half check. Every consumer (SLIP-39,
+// derive_seed, etc.) defers here via bits(). If the convention ever changes,
+// change it HERE and nowhere else.
 bool entropy_t::is_128_bit() const
 {
     return std::all_of(std::end(bytes) - 16, std::end(bytes), [](unsigned char byte) { return byte == 0; });
+}
+
+size_t entropy_t::bits() const
+{
+    return is_128_bit() ? 128 : 256;
 }

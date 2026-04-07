@@ -31,8 +31,8 @@
  * @brief Bulletproof++ range proof serialization, deserialization, and construction validation.
  */
 
-#include <helpers/debug_helper.h>
 #include <bulletproofspp/bulletproof_pp_t.h>
+#include <helpers/debug_helper.h>
 
 bulletproof_pp_t::bulletproof_pp_t(
     const point_t &_C_l,
@@ -98,14 +98,21 @@ bool bulletproof_pp_t::check_construction() const
         return false;
     }
 
-    if (!C_l.valid() || !C_r.valid() || !C_o.valid() || !C_s.valid() || !R.valid())
+    // Every prover-supplied point must live in the prime-order subgroup. BP++'s
+    // soundness proof is stated in E[l]; the verifier operates on these points
+    // without cofactor-clearing them as group elements before the final MSM.
+    // (The apparent "*8" in the verifier's MSM coefficients is scalar-field
+    // multiplication mod L, not a point-level cofactor-clearing operation.)
+    // check_subgroup() subsumes the curve-membership check provided by .valid().
+    if (!C_l.check_subgroup() || !C_r.check_subgroup() || !C_o.check_subgroup() || !C_s.check_subgroup()
+        || !R.check_subgroup())
     {
         return false;
     }
 
     for (const auto &point : X)
     {
-        if (!point.valid())
+        if (!point.check_subgroup())
         {
             return false;
         }
@@ -113,7 +120,7 @@ bool bulletproof_pp_t::check_construction() const
 
     for (const auto &point : W)
     {
-        if (!point.valid())
+        if (!point.check_subgroup())
         {
             return false;
         }

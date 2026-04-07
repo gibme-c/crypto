@@ -54,9 +54,30 @@ namespace Crypto::RingSignature::MLSAG
             return false;
         }
 
-        const auto use_commitments =
-            (signature.commitment_image.valid() && commitments.size() == public_keys.size()
-             && signature.pseudo_commitment.valid() && !signature.commitment_scalars.empty());
+        // Strict mode-mismatch reject. The signer's mode is recovered from
+        // the signature's own fields (commitment_image, pseudo_commitment, and the presence
+        // of per-row commitment_scalars); the caller's stated mode is recovered from the
+        // shape of the commitments vector. Disagreement in either direction is a hard reject
+        // — no silent downgrade to plain ring mode when commitments are unexpectedly empty,
+        // and no silent ignore of caller-supplied commitments against a plain-mode signature.
+        // Both directions are caller errors and the verifier surfaces them.
+        const bool sig_is_commit_mode =
+            (signature.commitment_image.valid() && signature.pseudo_commitment.valid()
+             && !signature.commitment_scalars.empty());
+
+        const bool caller_is_commit_mode = !commitments.empty();
+
+        if (sig_is_commit_mode != caller_is_commit_mode)
+        {
+            return false;
+        }
+
+        if (sig_is_commit_mode && commitments.size() != public_keys.size())
+        {
+            return false;
+        }
+
+        const auto use_commitments = sig_is_commit_mode;
 
         // Reject rings with duplicate public keys
         {
@@ -86,12 +107,27 @@ namespace Crypto::RingSignature::MLSAG
             return false;
         }
 
+        // pseudo_commitment is subtracted from the commitment column of every ring row.
+        // valid() (implicit in use_commitments above) only verifies decode/curve membership;
+        // it does NOT enforce prime-order subgroup. Reject 8-torsion injection here so the
+        // commitment-side L/R reconstruction cannot be tampered with — same threat model as
+        // commitment_image (forged-distinct linkability tag → double-spend dedup bypass).
+        if (use_commitments && !signature.pseudo_commitment.check_subgroup())
+        {
+            return false;
+        }
+
         const auto &h0 = signature.challenge;
 
         std::vector<scalar_t> h(ring_size);
 
         // ---- Challenge chain: preload shared transcript state, then iterate the ring ----
-        scalar_transcript_t transcript(MLSAG_DOMAIN_0, message_digest);
+        // Mode tag fused into the seed flush via the 3-arg constructor so
+        // h0 is itself a function of the mode at zero added SHA3 cost. The per-round
+        // (L1, R1, L2, R2) updates already differ by mode, but the explicit tag here means
+        // a future reader does not have to derive the binding from L/R shape and the
+        // runtime mismatch reject above does not stand alone.
+        scalar_transcript_t transcript(MLSAG_DOMAIN_0, message_digest, scalar_t(uint64_t(use_commitments ? 1 : 0)));
 
         transcript.update(public_keys);
 
@@ -188,9 +224,26 @@ namespace Crypto::RingSignature::MLSAG
             return {false, {}};
         }
 
-        const auto use_commitments =
-            (input_blinding_factor.valid() && public_commitments.size() == public_keys.size()
-             && pseudo_blinding_factor.valid() && pseudo_commitment.valid());
+        // Strict mode-mismatch reject on the sign side. Either the caller
+        // supplies all four commitment-mode arguments (input_blinding_factor,
+        // pseudo_blinding_factor, pseudo_commitment, and a public_commitments vector
+        // matching the ring size) or none of them. Partial supply is a caller error and
+        // is rejected here rather than silently dropping into plain mode — the symmetric
+        // case to the verifier-side mismatch check.
+        const bool any_commit_field_supplied =
+            (input_blinding_factor.valid() || pseudo_blinding_factor.valid() || pseudo_commitment.valid()
+             || !public_commitments.empty());
+
+        const bool all_commit_fields_supplied =
+            (input_blinding_factor.valid() && pseudo_blinding_factor.valid() && pseudo_commitment.valid()
+             && public_commitments.size() == public_keys.size());
+
+        if (any_commit_field_supplied && !all_commit_fields_supplied)
+        {
+            return {false, {}};
+        }
+
+        const auto use_commitments = all_commit_fields_supplied;
 
         const auto ring_size = public_keys.size();
 
@@ -266,9 +319,24 @@ namespace Crypto::RingSignature::MLSAG
             }
         }
 
-        const auto use_commitments =
-            (input_blinding_factor.valid() && public_commitments.size() == public_keys.size()
-             && pseudo_blinding_factor.valid() && pseudo_commitment.valid());
+        // Same strict mode-mismatch reject as the auto-detect overload —
+        // both sign entry points must enforce identical caller-arguments preconditions so
+        // a downstream signer cannot accidentally route around the check by going through
+        // the explicit-index path.
+        const bool any_commit_field_supplied =
+            (input_blinding_factor.valid() || pseudo_blinding_factor.valid() || pseudo_commitment.valid()
+             || !public_commitments.empty());
+
+        const bool all_commit_fields_supplied =
+            (input_blinding_factor.valid() && pseudo_blinding_factor.valid() && pseudo_commitment.valid()
+             && public_commitments.size() == public_keys.size());
+
+        if (any_commit_field_supplied && !all_commit_fields_supplied)
+        {
+            return {false, {}};
+        }
+
+        const auto use_commitments = all_commit_fields_supplied;
 
         const auto ring_size = public_keys.size();
 
@@ -376,7 +444,11 @@ namespace Crypto::RingSignature::MLSAG
         std::vector<scalar_t> h(ring_size);
 
         // ---- Build challenge chain starting from the real signer ----
-        scalar_transcript_t transcript(MLSAG_DOMAIN_0, message_digest);
+        // Mode tag fused into the seed flush — must match the verifier's
+        // tag at the same position. Belt-and-suspenders to the strict mismatch reject
+        // above; the mode the signer chose is part of h0 itself, not just an artefact of
+        // L/R shape.
+        scalar_transcript_t transcript(MLSAG_DOMAIN_0, message_digest, scalar_t(uint64_t(use_commitments ? 1 : 0)));
 
         transcript.update(public_keys);
 

@@ -74,7 +74,7 @@ Recovered entropy feeds directly into the existing HD key flow: `shares -> combi
 | Scheme | Size | Ring | Description |
 |--------|------|------|-------------|
 | [Ed25519](https://ed25519.cr.yp.to/ed25519-20110926.pdf) | 64 B | — | Standard Schnorr signature (generate + check) |
-| [RFC-8032 Ed25519](https://datatracker.ietf.org/doc/html/rfc8032) | 64 B | — | Strict RFC-8032 — raw seed input, deterministic nonce, arbitrary-length messages |
+| [RFC-8032 Ed25519](https://datatracker.ietf.org/doc/html/rfc8032) | 64 B | — | RFC-8032 wire-format Ed25519 with hedged synthetic-nonce signing (FIPS 186-5 App. A); accepted by every spec verifier |
 | [Adapter Signatures](https://eprint.iacr.org/2020/476.pdf) | 128 B | — | Schnorr-based pre-signatures for trustless atomic swaps (pre-sign, adapt, extract) |
 | [Borromean](https://github.com/Blockstream/borromean_paper/raw/master/borromean_draft_0.01_34241bb.pdf) | O(*n*) | Yes | Linkable ring signature — prove you own one of *n* keys without revealing which |
 | [MLSAG](https://eprint.iacr.org/2015/1098.pdf) | O(*n*) | Yes | Multilayered linkable ring signature with optional Pedersen commitment binding |

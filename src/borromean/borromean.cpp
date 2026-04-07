@@ -29,12 +29,12 @@
  * @brief Borromean ring signatures with key image linkability for signer anonymity within a ring.
  */
 
+#include <borromean/borromean.h>
 #include <core/crypto_common.h>
 #include <core/crypto_constants.h>
 #include <helpers/constant_time.h>
 #include <helpers/dedupe_and_sort_keys.h>
 #include <helpers/scalar_transcript_t.h>
-#include <borromean/borromean.h>
 #include <stdexcept>
 
 namespace Crypto::RingSignature::Borromean

@@ -37,8 +37,8 @@
 #ifndef CRYPTO_ADAPTER_SIGNATURE_H
 #define CRYPTO_ADAPTER_SIGNATURE_H
 
+#include <adapter_signature/adapted_signature_t.h>
 #include <adapter_signature/adapter_signature_t.h>
-#include <ed25519/signature_t.h>
 
 namespace Crypto::AdapterSignature
 {
@@ -68,19 +68,16 @@ namespace Crypto::AdapterSignature
         const adapter_signature_t &pre_signature);
 
     /**
-     * Adapts a pre-signature into a standard signature using the witness scalar.
+     * Adapts a pre-signature into a Schnorr (R', s) signature using the witness scalar.
      *
      * @param pre_signature the adapter pre-signature
      * @param witness_y the witness scalar (such that statement_Y = witness_y * G)
-     * @return the adapted standard signature
+     * @return the adapted Schnorr signature under the adapter Fiat-Shamir domain
      */
-    signature_t adapt(const adapter_signature_t &pre_signature, const scalar_t &witness_y);
+    adapted_signature_t adapt(const adapter_signature_t &pre_signature, const scalar_t &witness_y);
 
     /**
      * Verifies an adapted signature (produced by adapt()) against the signer's public key.
-     *
-     * The adapted signature uses the adapter domain for challenge computation, so it
-     * cannot be verified with Crypto::Signature::check_signature() which uses a different domain.
      *
      * @param message_digest the 32-byte hash of the signed message
      * @param public_key the signer's public key
@@ -90,18 +87,20 @@ namespace Crypto::AdapterSignature
     bool check_adapted_signature(
         const hash_t &message_digest,
         const public_key_t &public_key,
-        const signature_t &signature);
+        const adapted_signature_t &signature);
 
     /**
      * Extracts the witness scalar from a pre-signature and its adapted signature.
      *
      * @param pre_signature the original adapter pre-signature
-     * @param signature the adapted standard signature
+     * @param signature the adapted signature
      * @param statement_Y the statement point (for verification)
      * @return the extracted witness scalar y
      */
-    scalar_t
-        extract(const adapter_signature_t &pre_signature, const signature_t &signature, const point_t &statement_Y);
+    scalar_t extract(
+        const adapter_signature_t &pre_signature,
+        const adapted_signature_t &signature,
+        const point_t &statement_Y);
 
 } // namespace Crypto::AdapterSignature
 

@@ -33,7 +33,7 @@
  * attacks. We generate them deterministically from a single seed domain (SALT_DOMAIN) by
  * feeding sequential indices through iterated SHA-3 hashing (sha3_slow). This guarantees
  * that each subsystem operates in its own hash domain while keeping the constants fully
- * reproducible and auditable.
+ * reproducible and verifiable.
  *
  * INITIALIZATION: All constants use Construct On First Use (static local inside an inline
  * function) to avoid the C++ Static Initialization Order Fiasco. The SALT_DOMAIN seed

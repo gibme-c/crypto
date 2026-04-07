@@ -29,13 +29,13 @@
  * @brief Output ownership proofs: CLSAG-based proof generation and verification for key image auditing.
  */
 
+#include <base58/base58.h>
+#include <clsag/clsag.h>
 #include <core/crypto_common.h>
 #include <core/crypto_constants.h>
-#include <base58/base58.h>
 #include <helpers/scalar_transcript_t.h>
 #include <integration/audit.h>
 #include <serialization.h>
-#include <clsag/clsag.h>
 
 namespace Crypto::Audit
 {

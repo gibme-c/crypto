@@ -54,11 +54,21 @@ without the secret key.
 
 | | Native | RFC 9381 |
 |---|--------|----------|
-| Hash-to-curve | Elligator + mul8 | SSWU (RFC 9380) |
-| Challenge hash | SHA-3 | SHA-512 (truncated to 16 bytes) |
-| Output hash | SHA-3 | SHA-512 |
+| Hash-to-curve | Elligator + mul8 | Elligator2 + cofactor clearing (RFC 9381 §5.4.1.2, suite ELL2) |
+| Nonce derivation | scalar_transcript_t | `SHA-512(SHA-512(seed)[32..64] \|\| h_string) mod q` (RFC 9381 §5.4.2.2) |
+| Challenge hash | SHA-3 | SHA-512 (truncated to 16 bytes) over `(Y, H, Gamma, U, V)` |
+| Output hash | SHA-3 | SHA-512 (truncated to 32 bytes for `hash_t`) |
 | Proof size | 96 bytes | 80 bytes |
-| Interoperable | Library-specific | Standards-compliant |
+| Interoperable | Library-specific | Standards-compliant (RFC 9381 ECVRF-EDWARDS25519-SHA512-ELL2, suite 0x04) |
+
+## API surface note
+
+`Crypto::VRF::RFC9381::prove` takes a `secret_key_t` (the raw 32-byte RFC 8032
+seed), **not** a `scalar_t`. This is required by the spec: §5.4.2.2 nonce
+generation needs the upper half of `SHA-512(seed)` as the deterministic-nonce
+PRF key, which cannot be recovered from the derived scalar. The native
+`Crypto::VRF::prove` continues to take a `scalar_t` because it uses the
+library's `scalar_transcript_t` nonce path.
 
 ---
 
@@ -71,8 +81,10 @@ auto [valid, output2] = Crypto::VRF::verify(public_key, input_bytes, proof);
 // valid == true && output == output2
 
 // RFC 9381 variant (interoperable) -- returns vrf_rfc9381_proof_t (80 B)
-auto [rfc_proof, output] = Crypto::VRF::RFC9381::prove(secret_key, input_bytes);
-auto [valid, output2] = Crypto::VRF::RFC9381::verify(public_key, input_bytes, rfc_proof);
+// Note: prove() takes a secret_key_t (32-byte seed), NOT a scalar_t.
+secret_key_t sk(seed_bytes);
+auto [rfc_proof, output] = Crypto::VRF::RFC9381::prove(sk, input_bytes);
+auto [valid, output2]    = Crypto::VRF::RFC9381::verify(sk.point(), input_bytes, rfc_proof);
 ```
 
 ---

@@ -223,8 +223,29 @@ different roles throughout the transaction lifecycle):
 **Size**: 32 bytes (little-endian integer mod l)
 
 An Ed25519 scalar (integer modulo the group order l). Supports full
-arithmetic and RFC-8032 clamping. Think of a scalar as a **secret number**
-that you multiply by curve points to get new curve points.
+arithmetic. Think of a scalar as a **secret number** that you multiply
+by curve points to get new curve points.
+
+**Canonicalization vs clamping**
+
+`scalar_t` exposes three distinct "normalize these bytes" operations and it
+is critical to use the right one:
+
+- **`.reduce()`** — pure modular reduction mod `l`. Use this to canonicalize
+  bytes that might exceed the group order (e.g., after constructing from a
+  raw 32-byte hash or a `uint256_t`). No clamping, no hidden side effects.
+- **`scalar_t::from_uniform_bytes(const unsigned char buf[64])`** — unbiased
+  wide reduction of 64 bytes via the three-limb split (`reduce_wide_hash`).
+  This is the correct path for random scalars, nonces, blindings, and any
+  value whose distribution must be statistically indistinguishable from
+  uniform on `[0, l)`.
+- **`scalar_t::from_rfc8032_seed(const unsigned char seed[32])`** — RFC 8032
+  §5.1.5 private-key clamping (clear low 3 bits, clear bit 255, set bit 254)
+  followed by reduction. **This is the ONLY public clamp entry point in the
+  library.** Use it exclusively for Ed25519 secret-key expansion. Applying
+  clamping to random values, hash outputs, or Fiat-Shamir challenges produces
+  lattice-attackable biased Schnorr/ECDSA nonces — the same class of flaw
+  that broke PS3 ECDSA and Sony firmware signing.
 
 The group order `l` is approximately 2^252 -- a number so large that
 guessing a random scalar is like finding a specific atom in the observable
@@ -275,8 +296,10 @@ auto pk = sk.public_key();     // derived public key point
 
 The difference between `secret_key_t` and `scalar_t`:
 - **`secret_key_t`**: An RFC-8032 seed. The actual signing scalar
-  is derived from SHA-512 of this seed, then clamped. Use this for
-  standards-compliant Ed25519 (`Crypto::RFC8032` namespace).
+  is derived from SHA-512 of this seed, then clamped via
+  `scalar_t::from_rfc8032_seed()` — the one and only clamp site in the
+  library. Use this for standards-compliant Ed25519 (`Crypto::RFC8032`
+  namespace).
 - **`scalar_t`**: A raw scalar value used directly. Use this for
   the library's native Schnorr variant (`Crypto::Signature` namespace),
   ring signatures, stealth address derivation, key images, and all

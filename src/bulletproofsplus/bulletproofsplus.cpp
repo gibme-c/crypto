@@ -32,13 +32,13 @@
 // Inspired by the work of Sarang Noether at
 // https://github.com/SarangNoether/skunkworks/tree/pybullet-plus
 
+#include <bulletproofsplus/bulletproofsplus.h>
 #include <core/crypto_common.h>
 #include <core/crypto_constants.h>
 #include <ge_double_scalarmult_negate_vartime_batch_ss_p3.h>
 #include <ge_multiscalar_mul_vartime.h>
 #include <helpers/scalar_transcript_t.h>
 #include <mutex>
-#include <bulletproofsplus/bulletproofsplus.h>
 #include <ringct/ringct.h>
 #undef max
 
@@ -472,6 +472,11 @@ namespace Crypto::RangeProofs::BulletproofsPlus
     try_again:
         scalar_transcript_t tr(BULLETPROOFS_PLUS_DOMAIN_0);
 
+        // Bind N into the Fiat-Shamir transcript. N is re-bound on every
+        // try_again retry because tr is reconstructed inside the loop --
+        // symmetric with verify() below.
+        tr.update(scalar_t(N));
+
         const auto alpha = scalar_t::random();
 
         if (!alpha.valid())
@@ -622,6 +627,10 @@ namespace Crypto::RangeProofs::BulletproofsPlus
             }
 
             scalar_transcript_t tr(BULLETPROOFS_PLUS_DOMAIN_0);
+
+            // Bind N (already pow2_round-normalized at the top of verify) into
+            // the transcript before any commitment, mirroring the prover.
+            tr.update(scalar_t(N));
 
             const auto M = size_t(powers_of_two[proof.L.size()].to_uint64_t()) / N;
 

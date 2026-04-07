@@ -244,8 +244,9 @@ auto ciphertext = Crypto::AES::encrypt(plaintext, password);
 auto recovered  = Crypto::AES::decrypt(ciphertext, password);
 
 // Use a higher iteration count for stronger protection (slower to brute-force).
-// Default is CRYPTO_PBKDF2_ITERATIONS = 10000.
-auto ct = Crypto::AES::encrypt(plaintext, password, 100000);
+// Default is CRYPTO_PBKDF2_ITERATIONS = 220000 (OWASP PBKDF2-SHA512 floor,
+// April 2026 cheat sheet). Override only if you have a specific reason.
+auto ct = Crypto::AES::encrypt(plaintext, password, 500000);
 ```
 
 ### Validation Helpers
@@ -268,7 +269,7 @@ flags.
 | Macro | Default | Description |
 |-------|---------|-------------|
 | `CRYPTO_BASE58_CHECKSUM_SIZE` | `4` | Bytes of SHA-3 hash used as Base58 checksum |
-| `CRYPTO_PBKDF2_ITERATIONS` | `10000` | Default PBKDF2 iteration count for AES |
+| `CRYPTO_PBKDF2_ITERATIONS` | `220000` | Default PBKDF2-HMAC-SHA3-512 iteration count for AES (OWASP SHA-512 floor) |
 | `CRYPTO_ENTROPY_BYTES` | `32` | Entropy size (32 = 256-bit / 24-word mnemonic) |
 | `CRYPTO_MINIMUM_SEED_TIMESTAMP` | `1640995200` | Earliest valid seed timestamp (2022-01-01) |
 | `CRYPTO_MAXIMUM_SEED_TIMESTAMP` | `10413792000` | Latest valid seed timestamp |

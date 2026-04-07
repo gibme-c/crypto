@@ -368,14 +368,19 @@ if(BUILD_SHARED)
 endif()
 
 if(BUILD_TESTS)
+    enable_testing()
+
     add_executable(crypto-test src/test.cpp)
     target_link_libraries(crypto-test PRIVATE crypto-static)
+    add_test(NAME crypto-test COMMAND crypto-test)
 
     add_executable(crypto-slip10-test src/test_slip10.cpp)
     target_link_libraries(crypto-slip10-test PRIVATE crypto-static)
+    add_test(NAME crypto-slip10-test COMMAND crypto-slip10-test)
 
     add_executable(crypto-slip39-test src/test_slip39.cpp)
     target_link_libraries(crypto-slip39-test PRIVATE crypto-static)
+    add_test(NAME crypto-slip39-test COMMAND crypto-slip39-test)
 
     foreach(_TEST_TARGET crypto-test crypto-slip10-test crypto-slip39-test)
         crypto_configure_executable(${_TEST_TARGET})

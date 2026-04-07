@@ -29,12 +29,11 @@
  * @brief Schnorr-based adapter signature: pre-sign, verify, adapt, extract.
  */
 
+#include <adapter_signature/adapter_signature.h>
 #include <core/crypto_common.h>
 #include <core/crypto_constants.h>
 #include <dleq/dleq.h>
 #include <helpers/scalar_transcript_t.h>
-#include <adapter_signature/adapter_signature.h>
-#include <ed25519/signature.h>
 
 namespace
 {
@@ -135,89 +134,34 @@ namespace Crypto::AdapterSignature
         return Crypto::DLEQ::check_proof(R, pre_signature.nonce_commitment, Crypto::G, adapter_H, pre_signature.dleq);
     }
 
-    signature_t adapt(const adapter_signature_t &pre_signature, const scalar_t &witness_y)
+    adapted_signature_t adapt(const adapter_signature_t &pre_signature, const scalar_t &witness_y)
     {
         SCALAR_NZ_OR_THROW(witness_y);
 
-        // Adapted signature: s = s' + y, nonce point = R' (adapted nonce)
-        const auto s = pre_signature.s_prime + witness_y;
-
-        signature_t signature;
-
-        // Store challenge in L and response in R (following library convention)
-        // We need to recompute the challenge to store it
-        // Actually the adapted signature is (R', s) as a Schnorr sig
-        // But the library stores signatures as (c, r) where c is challenge, r is response
-        // such that rG + cP = R. Let's reconstruct c for the adapted signature.
-        // We don't have the message here, so we store R' as bytes in L and s in R.
-        // Actually, looking at the signature format: LR.L = challenge, LR.R = response
-        // And verify checks: point = c*P + r*G, then recomputes c from transcript.
-        // So for adapter: the adapted signature should verify with Crypto::Signature::check_signature
-        // That means we need: LR.R = s such that s*G + c*P = R'
-        // => s*G = R' - c*P => s = r + y - c*sk... wait, let's think again.
-
-        // In the library's signature scheme:
-        //   sign: c = H(domain, msg, PK, alpha*G), r = alpha - c*sk
-        //   verify: point = c*PK + r*G, c' = H(domain, msg, PK, point), check c == c'
-
-        // For adapter signatures, we use a different Schnorr variant:
-        //   pre-sign: c = H(adapter_domain, R', PK, msg), s' = r + c*sk
-        //   adapt: s = s' + y
-        //   verify adapted: check s*G - c*PK == R' (where c = H(adapter_domain, R', PK, msg))
-        //
-        // This doesn't match the library's check_signature format directly.
-        // The adapted signature is verified with a dedicated check or we re-encode.
-        // Let's store as (adapted_nonce_bytes, s) and verify with custom logic.
-        // We'll encode adapted_nonce into LR.L as a point-to-scalar-bytes trick.
-        // Actually, simpler: return a signature where LR.L holds a "dummy" and verify differently.
-        //
-        // Per the plan: "Verify adapted signature via Crypto::Signature::check_signature"
-        // But the library's scheme uses c = H(SIGNATURE_DOMAIN_0, ...) while adapter uses ADAPTER_DOMAIN_0.
-        // These won't match. So the final adapted signature must be verified with a custom check.
-        //
-        // Let's just return (R', s) packed into the signature type and provide a custom verify
-        // path in check_pre_signature or the caller uses the returned R' point.
-        //
-        // Actually re-reading the plan more carefully: the plan says adapter uses its own domain.
-        // The adapted sig (R', s) is verified by: recomputing c from the same adapter domain transcript,
-        // then checking s*G == R' + c*PK. So we can't reuse check_signature directly.
-        //
-        // Let's store the adapted nonce as a scalar (its bytes) in LR.L and s in LR.R.
-        // The caller will verify using the adapter domain. This is consistent with the plan's
-        // "Verify adapted: standard Schnorr: sG == R' + c*PK" but with adapter domain.
-
-        // Store adapted nonce point bytes as LR.L (it's just 32 bytes, same as scalar)
-        signature.LR.L = scalar_t(pre_signature.adapted_nonce.serialize());
-        signature.LR.R = s;
-
-        return signature;
+        // Adapted Schnorr signature under the adapter Fiat-Shamir domain: (R', s)
+        //   R' = pre_signature.adapted_nonce  (lifted unchanged from the pre-sig)
+        //   s  = s' + y                       (pre-sig response + witness)
+        // Verification equation: s*G == R' + c*PK where c = H(ADAPTER_DOMAIN_0, R', PK, msg).
+        return adapted_signature_t {pre_signature.adapted_nonce, pre_signature.s_prime + witness_y};
     }
 
     bool check_adapted_signature(
         const hash_t &message_digest,
         const public_key_t &public_key,
-        const signature_t &signature)
+        const adapted_signature_t &signature)
     {
-        if (!signature.LR.R.valid())
+        if (!signature.s.valid())
         {
             return false;
         }
 
-        if (!public_key.check_subgroup())
-        {
-            return false;
-        }
-
-        // Recover the adapted nonce point R' from the stored bytes in LR.L
-        const auto adapted_nonce = point_t(signature.LR.L.serialize());
-
-        if (!adapted_nonce.check_subgroup())
+        if (!public_key.check_subgroup() || !signature.R_prime.check_subgroup())
         {
             return false;
         }
 
         // Recompute the challenge: c = H(adapter_domain, R', PK, message)
-        scalar_transcript_t challenge_transcript(ADAPTER_DOMAIN_0, adapted_nonce, public_key, message_digest);
+        scalar_transcript_t challenge_transcript(ADAPTER_DOMAIN_0, signature.R_prime, public_key, message_digest);
 
         const auto challenge = challenge_transcript.challenge();
 
@@ -227,16 +171,19 @@ namespace Crypto::AdapterSignature
         }
 
         // Verify: s * G == R' + c * PK
-        const auto lhs = signature.LR.R * Crypto::G;
-        const auto rhs = adapted_nonce + (challenge * public_key);
+        const auto lhs = signature.s * Crypto::G;
+        const auto rhs = signature.R_prime + (challenge * public_key);
 
         return lhs == rhs;
     }
 
-    scalar_t extract(const adapter_signature_t &pre_signature, const signature_t &signature, const point_t &statement_Y)
+    scalar_t extract(
+        const adapter_signature_t &pre_signature,
+        const adapted_signature_t &signature,
+        const point_t &statement_Y)
     {
         // y = s - s' (the witness is the difference between adapted and pre-signature responses)
-        const auto y = signature.LR.R - pre_signature.s_prime;
+        const auto y = signature.s - pre_signature.s_prime;
 
         // Verify extracted witness: y*G should equal Y
         const auto check = y * Crypto::G;

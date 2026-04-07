@@ -29,8 +29,8 @@
  * @brief Ed25519 signature serialization as a (L, R) scalar pair.
  */
 
-#include <helpers/debug_helper.h>
 #include <ed25519/signature_t.h>
+#include <helpers/debug_helper.h>
 #include <utility>
 
 signature_t::signature_t(std::initializer_list<unsigned char> _LR)
