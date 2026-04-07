@@ -155,3 +155,5 @@ build.js/
 
 # CMake
 cmake-build*
+bpstar.*
+docs/

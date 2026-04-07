@@ -1,16 +1,24 @@
 [submodule "external/argon2"]
 	path = external/argon2
 	url = https://github.com/gibme-c/argon2
-[submodule "external/cryptopp"]
-	path = external/cryptopp
-	url = https://github.com/gibme-c/cryptopp
 [submodule "external/ed25519"]
 	path = external/ed25519
 	url = https://github.com/gibme-c/ed25519
-	branch = development
 [submodule "external/serializationcpp"]
 	path = external/serializationcpp
 	url = https://github.com/gibme-c/serialization-cpp.git
-[submodule "external/helioselene"]
-	path = external/helioselene
-	url = https://github.com/gibme-c/helioselene
+[submodule "external/tinysha"]
+	path = external/tinysha
+	url = https://github.com/gibme-c/tinysha
+[submodule "external/tinyblake"]
+	path = external/tinyblake
+	url = https://github.com/gibme-c/tinyblake
+[submodule "external/tinyaes"]
+	path = external/tinyaes
+	url = https://github.com/gibme-c/tinyaes
+[submodule "external/ranshaw"]
+	path = external/ranshaw
+	url = https://github.com/gibme-c/ranshaw
+[submodule "external/randompp"]
+	path = external/randompp
+	url = https://github.com/gibme-c/randompp

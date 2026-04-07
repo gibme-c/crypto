@@ -38,7 +38,7 @@
 #ifndef CRYPT_HD_KEYS_H
 #define CRYPT_HD_KEYS_H
 
-#include <types/crypto_hash_t.h>
+#include <types/hash_t.h>
 
 /**
  * Computes HMAC-SHA512 over the given message with the given key.
@@ -66,8 +66,8 @@ std::vector<unsigned char>
  * @param path the BIP-32 derivation path string (e.g., "m/44'/0'/0'")
  * @return a tuple of {child_key, child_chain_code}
  */
-std::tuple<crypto_hash_t, crypto_hash_t>
-    generate_hd_child_key(const crypto_hash_t &parent_key, const crypto_hash_t &chain_code, const std::string &path);
+std::tuple<hash_t, hash_t>
+    generate_hd_child_key(const hash_t &parent_key, const hash_t &chain_code, const std::string &path);
 
 /**
  * Constructs a fully-hardened BIP-44 derivation path string: `m/purpose'/coin'/account'/change'/index'`.

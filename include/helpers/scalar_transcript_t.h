@@ -39,7 +39,7 @@
 #ifndef CRYPTO_SCALAR_TRANSCRIPT_T
 #define CRYPTO_SCALAR_TRANSCRIPT_T
 
-#include <crypto_common.h>
+#include <core/crypto_constants.h>
 #include <serialization.h>
 
 /**
@@ -78,7 +78,9 @@ struct scalar_transcript_t
     template<typename T, typename U, typename V>
     scalar_transcript_t(const T &seed, const U &seed2, const std::vector<V> &seed3)
     {
-        update(seed3, seed, seed2);
+        update(seed);
+        update(seed2);
+        update(seed3);
     }
 
     /**
@@ -86,7 +88,7 @@ struct scalar_transcript_t
      *
      * @return the challenge scalar (SHA3 hash of all accumulated values, reduced mod l)
      */
-    crypto_scalar_t challenge()
+    scalar_t challenge()
     {
         return state;
     }
@@ -124,7 +126,7 @@ struct scalar_transcript_t
 
         writer.pod(input);
 
-        state = crypto_hash_t::sha3(writer.data(), writer.size()).scalar();
+        state = hash_t::sha3(writer.data(), writer.size()).scalar();
     }
 
     /**
@@ -145,7 +147,7 @@ struct scalar_transcript_t
 
         writer.pod(input2);
 
-        state = crypto_hash_t::sha3(writer.data(), writer.size()).scalar();
+        state = hash_t::sha3(writer.data(), writer.size()).scalar();
     }
 
     /**
@@ -170,7 +172,7 @@ struct scalar_transcript_t
 
         writer.pod(input3);
 
-        state = crypto_hash_t::sha3(writer.data(), writer.size()).scalar();
+        state = hash_t::sha3(writer.data(), writer.size()).scalar();
     }
 
     /**
@@ -200,7 +202,7 @@ struct scalar_transcript_t
 
         writer.pod(input4);
 
-        state = crypto_hash_t::sha3(writer.data(), writer.size()).scalar();
+        state = hash_t::sha3(writer.data(), writer.size()).scalar();
     }
 
     /**
@@ -217,12 +219,12 @@ struct scalar_transcript_t
 
         writer.pod(input);
 
-        state = crypto_hash_t::sha3(writer.data(), writer.size()).scalar();
+        state = hash_t::sha3(writer.data(), writer.size()).scalar();
     }
 
   private:
     // default seed state for scalar transcripts
-    crypto_scalar_t state = TRANSCRIPT_BASE;
+    scalar_t state = TRANSCRIPT_BASE;
 };
 
 #endif // CRYPTO_SCALAR_TRANSCRIPT_T

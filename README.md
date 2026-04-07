@@ -8,7 +8,7 @@ The API leans heavily on operator overloading so that common operations read nat
 
 ### Hashing
 
-Multiple hash algorithms, all producing a 256-bit `crypto_hash_t`:
+Multiple hash algorithms, all producing a 256-bit `hash_t`:
 
 - **[SHA-3](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.202.pdf)** (Keccak-256) — the workhorse hash used throughout the library
 - **SHA-256 / SHA-384 / SHA-512** — standard SHA-2 family
@@ -23,20 +23,20 @@ Multiple hash algorithms, all producing a 256-bit `crypto_hash_t`:
 
 | Type | Description |
 |------|-------------|
-| `crypto_hash_t` | 256-bit hash value with static methods for all supported algorithms. Converts to `scalar()` or `point()` for use in protocols. |
-| `crypto_point_t` | Ed25519 curve point with cached `ge_p3`/`ge_cached` representations for fast repeated arithmetic. Overloads `+`, `-`. |
-| `crypto_scalar_t` | Ed25519 scalar (integer mod the group order *l*) with [RFC-8032](https://datatracker.ietf.org/doc/html/rfc8032) clamping. Overloads `+`, `-`, `*`, `/`, including scalar-point multiplication. |
-| `crypto_secret_key_t` | RFC-8032 private key — a 32-byte seed that derives a signing scalar (via SHA-512 + clamping) and public key. |
-| `crypto_signature_t` | Standard 512-bit Ed25519 signature (commitment point *L* and response scalar *R*). |
+| `hash_t` | 256-bit hash value with static methods for all supported algorithms. Converts to `scalar()` or `point()` for use in protocols. |
+| `point_t` | Ed25519 curve point with cached `ge_p3`/`ge_cached` representations for fast repeated arithmetic. Overloads `+`, `-`. |
+| `scalar_t` | Ed25519 scalar (integer mod the group order *l*) with [RFC-8032](https://datatracker.ietf.org/doc/html/rfc8032) clamping. Overloads `+`, `-`, `*`, `/`, including scalar-point multiplication. |
+| `secret_key_t` | RFC-8032 private key — a 32-byte seed that derives a signing scalar (via SHA-512 + clamping) and public key. |
+| `signature_t` | Standard 512-bit Ed25519 signature (challenge scalar *L* and response scalar *R*). |
 
 **Type aliases** give semantic meaning to points used in different contexts:
-- `crypto_public_key_t` — a point representing a public key (*P = sG*)
-- `crypto_key_image_t` — a deterministic tag for double-spend detection
-- `crypto_pedersen_commitment_t` — a point hiding a value (*C = vH + bG*)
-- `crypto_blinding_factor_t` — a scalar used as a commitment blinding factor
-- `crypto_derivation_t` — a shared secret point from ECDH key exchange
+- `public_key_t` — a point representing a public key (*P = sG*)
+- `key_image_t` — a deterministic tag for double-spend detection
+- `pedersen_commitment_t` — a point hiding a value (*C = vH + bG*)
+- `blinding_factor_t` — a scalar used as a commitment blinding factor
+- `derivation_t` — a shared secret point from ECDH key exchange
 
-**Vector types** (`crypto_hash_vector_t`, `crypto_point_vector_t`, `crypto_scalar_vector_t`) provide batch arithmetic — Hadamard products, inner products, batch modular inversion — used extensively in zero-knowledge proof internals.
+**Vector types** (`hash_vector_t`, `point_vector_t`, `scalar_vector_t`) provide batch arithmetic — Hadamard products, inner products, batch modular inversion — used extensively in zero-knowledge proof internals.
 
 ### Hierarchical Deterministic Keys
 
@@ -44,11 +44,11 @@ Full [BIP-39](https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki) / 
 
 | Type | Role |
 |------|------|
-| `crypto_entropy_t` | 128-bit (12 words) or 256-bit (24 words) entropy with optional timestamp embedding |
-| `crypto_seed_t` | PBKDF2-SHA512 seed derived from entropy + optional passphrase |
-| `crypto_hd_key_t` | Derived key pair at any point in a BIP-44 derivation path |
+| `entropy_t` | 128-bit (12 words) or 256-bit (24 words) entropy with optional timestamp embedding |
+| `seed_t` | PBKDF2-SHA512 seed derived from entropy + optional passphrase |
+| `hd_key_t` | Derived key pair at any point in a BIP-44 derivation path |
 
-The derivation chain: **entropy** → mnemonic words → **seed** → root key → **child keys** at any path.
+The derivation chain: **entropy** -> mnemonic words -> **seed** -> root key -> **child keys** at any path.
 
 Mnemonic encoding supports 10 languages: Chinese (Simplified & Traditional), Czech, English, French, Italian, Japanese, Korean, Portuguese, and Spanish.
 
@@ -67,7 +67,7 @@ auto recovered = Crypto::Mnemonics::Shamir::combine({shares[0], shares[2]});
 bool valid = Crypto::Mnemonics::Shamir::validate_share(shares[0]);
 ```
 
-Recovered entropy feeds directly into the existing HD key flow: `shares → combine() → crypto_entropy_t → crypto_seed_t → HD keys`.
+Recovered entropy feeds directly into the existing HD key flow: `shares -> combine() -> entropy_t -> seed_t -> HD keys`.
 
 ### Signatures
 
@@ -76,7 +76,6 @@ Recovered entropy feeds directly into the existing HD key flow: `shares → comb
 | [Ed25519](https://ed25519.cr.yp.to/ed25519-20110926.pdf) | 64 B | — | Standard Schnorr signature (generate + check) |
 | [RFC-8032 Ed25519](https://datatracker.ietf.org/doc/html/rfc8032) | 64 B | — | Strict RFC-8032 — raw seed input, deterministic nonce, arbitrary-length messages |
 | [Adapter Signatures](https://eprint.iacr.org/2020/476.pdf) | 128 B | — | Schnorr-based pre-signatures for trustless atomic swaps (pre-sign, adapt, extract) |
-| [FROST](https://eprint.iacr.org/2020/852.pdf) | 64 B | — | *t*-of-*n* threshold Schnorr signatures with Feldman VSS DKG |
 | [Borromean](https://github.com/Blockstream/borromean_paper/raw/master/borromean_draft_0.01_34241bb.pdf) | O(*n*) | Yes | Linkable ring signature — prove you own one of *n* keys without revealing which |
 | [MLSAG](https://eprint.iacr.org/2015/1098.pdf) | O(*n*) | Yes | Multilayered linkable ring signature with optional Pedersen commitment binding |
 | [CLSAG](https://eprint.iacr.org/2019/654.pdf) | O(*n*) | Yes | Compact linkable ring signature with optional Pedersen commitment binding |
@@ -86,8 +85,6 @@ All four ring signature schemes produce a **key image** — a deterministic, unl
 
 **Adapter signatures** enable trustless atomic swaps: a pre-signature becomes valid only when a secret witness scalar is revealed, and any observer can extract the witness from the adapted signature.
 
-**FROST** (Flexible Round-Optimized Schnorr Threshold) enables *t*-of-*n* multi-party signing where any *t* participants can produce a standard Ed25519 signature. Includes a full Feldman VSS distributed key generation (DKG) protocol.
-
 **Signature timings** (ring size n=4 where applicable):
 
 | Scheme | Sign | Verify |
@@ -96,8 +93,6 @@ All four ring signature schemes produce a **key image** — a deterministic, unl
 | RFC-8032 Ed25519 | ~59 us | ~46 us |
 | Adapter pre-sign | ~134 us | ~258 us |
 | Adapter adapt | <1 us | — |
-| FROST sign (2-of-3) | ~659 us | — |
-| FROST DKG (2-of-3) | ~354 us | — |
 | Borromean (n=4) | ~530 us | ~230 us |
 | MLSAG (n=4) | ~437 us | ~235 us |
 | MLSAG w/ commitments (n=4) | ~964 us | ~573 us |
@@ -120,7 +115,7 @@ All four ring signature schemes produce a **key image** — a deterministic, unl
 | [Bulletproofs+](https://eprint.iacr.org/2020/735.pdf) | Yes | Yes |
 | [Bulletproofs++](https://eprint.iacr.org/2022/510.pdf) | Yes | Yes |
 
-All three support variable bit lengths (1–64 bits), multi-value aggregated proving, and cache generator points for fast repeat calls. Proof size grows by only 64 bytes per doubling of M (one additional IPA/WNLA round).
+All three support variable bit lengths (1-64 bits), multi-value aggregated proving, and cache generator points for fast repeat calls. Proof size grows by only 64 bytes per doubling of M (one additional IPA/WNLA round).
 
 **Aggregated proof scaling** (64-bit range):
 
@@ -157,7 +152,7 @@ All three support variable bit lengths (1–64 bits), multi-value aggregated pro
 - **[Base58](https://tools.ietf.org/html/draft-msporny-base58-02)** — human-readable encoding without confusing characters (0, O, I, l)
 - **Block-based Base58** — processes input in 8-byte blocks for deterministic output length
 - **Address encoding** — checksummed addresses in single-key or dual-key (spend + view) formats, using either Base58 variant
-- **[BIP-39 Mnemonics](https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki)** — entropy ↔ word sequence conversion (SHA-3 checksum) in 10 languages
+- **[BIP-39 Mnemonics](https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki)** — entropy <-> word sequence conversion (SHA-256 checksum) in 10 languages
 - **[SLIP-39 Shamir Backup](https://github.com/satoshilabs/slips/blob/master/slip-0039.md)** — split entropy into T-of-N mnemonic shares (GF(256) Shamir SSS, RS1024 checksums, PBKDF2 Feistel cipher)
 
 ### Core Utilities
@@ -165,21 +160,37 @@ All three support variable bit lengths (1–64 bits), multi-value aggregated pro
 - **Stealth addresses** — one-time addresses via ECDH key derivation, so a sender can pay a recipient without reusing or revealing their public key
 - **Key images** — deterministic, unlinkable tags derived from a secret key for double-spend detection
 - **Key derivation** — sub-key generation from a shared derivation and output index
-- **AES-256 encryption** — symmetric encrypt/decrypt with PBKDF2 key derivation
+- **AES-128-CBC encryption** — symmetric encrypt/decrypt with PBKDF2 key derivation and HMAC authentication
 
 ### Helpers
 
 - **Fiat-Shamir transcripts** — accumulate values and produce challenge scalars for non-interactive zero-knowledge proofs
 - **CSPRNG** — cryptographically secure random byte generation from OS entropy
 - **Constant-time comparison** — timing side-channel resistant equality checks
+- **Gray code generator** — efficient matrix traversal for Triptych ring signatures
+- **Lagrange coefficients** — polynomial interpolation weights for secret sharing schemes
+- **Wide reduction** — bias-free SHA-512 to Ed25519 scalar reduction for RFC 8032 signatures
+
+### SIMD Acceleration
+
+The Ed25519 backend supports runtime SIMD dispatch:
+
+| Backend | Ed25519 |
+|---------|---------|
+| Portable | `int32_t[10]` field elements |
+| x64 baseline | `uint64_t[5]` radix-2^51 |
+| AVX2 | 4-way `fe10x4` batch ops |
+| AVX-512 IFMA | 8-way `fe51x8` hardware multiply |
+
+Dispatch is selected at runtime via `Crypto::init()` (heuristic) or `Crypto::autotune()` (benchmark). Both are thread-safe and idempotent.
 
 ### Serialization
 
-All types inherit from `SerializablePod<N>` (via [serialization-cpp](https://github.com/gibme-c/serialization-cpp)), providing:
+All types inherit from `SerializablePod<N>` or `Serializable` (via [serialization-cpp](https://github.com/gibme-c/serialization-cpp)), providing:
 - Binary serialization and deserialization
 - JSON conversion (via [RapidJSON](https://rapidjson.org))
 - Hexadecimal string representations
-- Pretty printing to screen
+- Pretty printing to screen (`operator<<`)
 
 ## Getting Started
 
@@ -219,19 +230,55 @@ Then include the single umbrella header:
 #include <crypto.h>
 ```
 
+### Initialization
+
+Call one of the SIMD dispatch functions before using the library:
+
+```cpp
+Crypto::init();      // fast heuristic (IFMA > AVX2 > baseline)
+Crypto::autotune();  // benchmark all backends (~1-2s, most accurate)
+```
+
 ### CMake Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `BUILD_TESTS` | OFF | Build test and benchmark binaries |
+| `BUILD_TESTS` | OFF | Build `crypto-test`, `crypto-slip10-test`, `crypto-slip39-test` test binaries |
+| `BUILD_BENCHMARK` | OFF | Build `crypto-benchmark` binary |
 | `BUILD_SHARED` | OFF | Build shared library in addition to static |
-| `ENGLISH_ONLY` | OFF | Include only English mnemonic word lists (smaller binary) |
-| `DEBUG_PRINT` | OFF | Enable debug print statements |
-| `ARCH` | native | Target CPU architecture (`-march` value) |
+| `ENGLISH_ONLY` | OFF | Build only English mnemonic word lists (smaller binary) |
+| `ARCH` | native | Target CPU architecture (`-march` value or `native`) |
 
-### Documentation
+## Documentation
 
-Full API documentation lives in the header files under `include/`. Every public type, method, and constant has doxygen comments explaining its purpose, parameters, and typical usage.
+Detailed API documentation for each module lives in README files alongside the headers:
+
+| Guide | Contents |
+|-------|----------|
+| [`include/README.md`](include/README.md) | Top-level API reference and getting started |
+| [`include/core/README.md`](include/core/README.md) | crypto_common, crypto_config, crypto_constants, math helpers |
+| [`include/types/README.md`](include/types/README.md) | Core data types (points, scalars, vectors) |
+| [`include/helpers/README.md`](include/helpers/README.md) | Transcripts, CSPRNG, HD keys, Lagrange, wide reduction, constant-time, utilities |
+| [`include/dleq/README.md`](include/dleq/README.md) | Discrete Log Equality (Chaum-Pedersen) proofs |
+| [`include/base58/README.md`](include/base58/README.md) | Standard Base58 and CryptoNote Base58 encoding |
+| [`include/addresses/README.md`](include/addresses/README.md) | Public key address encoding (single and dual key) |
+| [`include/mnemonics/README.md`](include/mnemonics/README.md) | BIP-39 mnemonic word phrases (10 languages) |
+| [`include/slip39/README.md`](include/slip39/README.md) | SLIP-39 Shamir's Secret Sharing |
+| [`include/ed25519/README.md`](include/ed25519/README.md) | Ed25519 basic signatures and RFC 8032 |
+| [`include/borromean/README.md`](include/borromean/README.md) | Borromean ring signatures |
+| [`include/clsag/README.md`](include/clsag/README.md) | CLSAG ring signatures |
+| [`include/mlsag/README.md`](include/mlsag/README.md) | MLSAG ring signatures |
+| [`include/triptych/README.md`](include/triptych/README.md) | Triptych logarithmic ring signatures |
+| [`include/adapter_signature/README.md`](include/adapter_signature/README.md) | Adapter pre-signatures for atomic swaps |
+| [`include/ringct/README.md`](include/ringct/README.md) | RingCT Pedersen commitments |
+| [`include/bulletproofs/README.md`](include/bulletproofs/README.md) | Bulletproof range proofs |
+| [`include/bulletproofsplus/README.md`](include/bulletproofsplus/README.md) | Bulletproofs+ range proofs |
+| [`include/bulletproofspp/README.md`](include/bulletproofspp/README.md) | Bulletproofs++ range proofs |
+| [`include/vrf/README.md`](include/vrf/README.md) | Verifiable Random Functions (native and RFC 9381) |
+| [`include/merkle/README.md`](include/merkle/README.md) | Merkle hash trees |
+| [`include/integration/README.md`](include/integration/README.md) | Audit proofs (proof-of-reserves) |
+
+Every public type, method, and constant also has doxygen comments in the header files.
 
 ## License
 

@@ -45,7 +45,7 @@
  *
  * Uses memcmp-based ordering for deterministic, platform-independent results.
  *
- * @tparam T any type with data() and size() methods (e.g., crypto_public_key_t)
+ * @tparam T any type with data() and size() methods (e.g., public_key_t)
  * @param keys the input keys (may contain duplicates)
  * @return a sorted, deduplicated vector of keys
  */

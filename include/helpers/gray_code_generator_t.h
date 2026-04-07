@@ -41,7 +41,7 @@
 #define CRYPTO_GRAY_CODE_GENERATOR_T
 
 #include <cstdint>
-#include <types/crypto_scalar_t.h>
+#include <types/scalar_t.h>
 #include <vector>
 
 /**
@@ -96,7 +96,7 @@ struct gray_code_generator_t
     std::vector<std::vector<int>> changed;
     std::vector<int> v_changed;
     std::vector<int> g, u;
-    size_t N = 0, K = 0, v = -1;
+    size_t N = 0, K = 0, v = SIZE_MAX;
 };
 
 #endif

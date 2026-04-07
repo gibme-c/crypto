@@ -64,4 +64,19 @@ static inline bool constant_time_equals(const void *a, const void *b, size_t len
     return result == 0;
 }
 
+/**
+ * Constant-time conditional select: returns @p true_val if @p condition is true,
+ * @p false_val otherwise, without branching.
+ *
+ * @param condition the boolean selector
+ * @param true_val value returned when condition is true
+ * @param false_val value returned when condition is false
+ * @return the selected value
+ */
+static inline size_t constant_time_select(bool condition, size_t true_val, size_t false_val)
+{
+    const size_t mask = static_cast<size_t>(-static_cast<ptrdiff_t>(condition));
+    return (true_val & mask) | (false_val & ~mask);
+}
+
 #endif // CRYPTO_CONSTANT_TIME_H

@@ -8,24 +8,27 @@ endif()
 
 message(STATUS "Mode: ${CMAKE_BUILD_TYPE}")
 
-set(CMAKE_CONFIGURATION_TYPES Debug RelWithDebInfo Release CACHE STRING INTERNAL)
-set(ARCH native CACHE STRING  "CPU to build for: -march value or native")
-
-message(STATUS "Building for target architecture: ${ARCH}")
-
-set(LIB_MAJOR_VERSION "7")
+set(LIB_MAJOR_VERSION "8")
 set(LIB_MINOR_VERSION "0")
-set(LIB_PATCH_VERSION "3")
+set(LIB_PATCH_VERSION "0")
 set(LIB_VERSION_STRING "${LIB_MAJOR_VERSION}.${LIB_MINOR_VERSION}.${LIB_PATCH_VERSION}")
 
-project(crypto VERSION "${LIB_VERSION_STRING}" LANGUAGES CXX)
+project(crypto VERSION "${LIB_VERSION_STRING}" LANGUAGES C CXX)
 
-if(NOT MSVC)
-    find_program(CCACHE_PROGRAM ccache)
-    if(CCACHE_PROGRAM)
-        message(STATUS "Found ccache package... Activating...")
-        set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}")
-    endif()
+include(CheckCXXCompilerFlag)
+include(CheckCXXSourceCompiles)
+
+# Replace CMake's default /W3 with nothing to avoid D9025 override warning when we set /W4
+if(MSVC)
+    string(REPLACE "/W3" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+    string(REPLACE "/W3" "" CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
+endif()
+
+find_program(CCACHE_PROGRAM ccache)
+if(CCACHE_PROGRAM)
+    message(STATUS "Found ccache package... Activating...")
+    set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
 endif()
 
 option(ENGLISH_ONLY "Build Only English Mnemonics" OFF)
@@ -33,7 +36,8 @@ if(DEFINED ENV{ENGLISH_ONLY})
     set(ENGLISH_ONLY $ENV{ENGLISH_ONLY})
 endif()
 if(ENGLISH_ONLY)
-    add_compile_definitions(ENGLISH_ONLY=1)
+    # Applied per-target below (not globally) to avoid leaking into submodules
+    list(APPEND _CRYPTO_PRIVATE_DEFS ENGLISH_ONLY=1)
     message(STATUS "Building Only English Mnemonics")
 endif()
 
@@ -45,6 +49,14 @@ if (BUILD_TESTS)
     message(STATUS "Test binary added to targets list")
 endif()
 
+option(BUILD_BENCHMARK "Build benchmark binary" OFF)
+if(DEFINED ENV{BUILD_BENCHMARK})
+    set(BUILD_BENCHMARK $ENV{BUILD_BENCHMARK})
+endif()
+if(BUILD_BENCHMARK)
+    message(STATUS "Benchmark binary added to targets list")
+endif()
+
 option(BUILD_SHARED "Build shared library in addition to static" OFF)
 if(DEFINED ENV{BUILD_SHARED})
     set(BUILD_SHARED $ENV{BUILD_SHARED})
@@ -53,180 +65,325 @@ if(BUILD_SHARED)
     message(STATUS "Shared library added to targets list")
 endif()
 
-option(DEBUG_PRINT "Enable debug print statements" OFF)
-if (DEFINED ENV{DEBUG_PRINT})
-    set(DEBUG_PRINT $ENV{DEBUG_PRINT})
-endif()
-if(DEBUG_PRINT)
-    add_compile_definitions(DEBUG_PRINT=1)
-    message(STATUS "Activating debug print statements")
+option(ENABLE_SPECTRE_MITIGATIONS "Enable MSVC Spectre mitigations (/Qspectre)" OFF)
+if(DEFINED ENV{ENABLE_SPECTRE_MITIGATIONS})
+    set(ENABLE_SPECTRE_MITIGATIONS $ENV{ENABLE_SPECTRE_MITIGATIONS})
 endif()
 
 ## This section describes our general CMake setup options
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_SKIP_INSTALL_RULES OFF FORCE)
 set(CMAKE_SKIP_PACKAGE_ALL_DEPENDENCY ON FORCE)
 set(CMAKE_SUPPRESS_REGENERATION ON)
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
-# Enable c++17
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
+# ── Non-Apple Clang on macOS: link against the compiler's own libc++ ──
+if(APPLE AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
+        AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+    get_filename_component(_clang_bin_dir "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    get_filename_component(_clang_prefix  "${_clang_bin_dir}" DIRECTORY)
 
-## We only build static binaries -- this is left here for our dependencies
-set(STATIC ON CACHE BOOL FORCE "Link libraries statically? Forced to ON")
-add_definitions(-DSTATICLIB)
-add_definitions(-DRAPIDJSON_HAS_STDSTRING)
-
-if(MSVC)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /D_CRT_SECURE_NO_WARNINGS")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std:c++17 /wd4267 /wd4804 /wd4996 /D_DLL /D_CRT_SECURE_NO_WARNINGS")
-
-    set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /O2")
-    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /O2")
-else()
-    if("${ARCH}" STREQUAL "default")
-        set(ARCH_FLAG "")
-    else()
-        set(ARCH_FLAG "-march=${ARCH}")
-    endif()
-
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c11 -Wuninitialized ${MAES_FLAG}")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wuninitialized ${MAES_FLAG}")
-
-    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g3 -Og")
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g3 -Og")
-
-    set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -DNDEBUG -O3")
-    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -DNDEBUG -O3")
-
-    if(APPLE)
-        if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
-            # Need to build against libc++ instead of libstc++ on apple
-            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -nostdinc++ -I/usr/local/opt/llvm/include/c++/v1 -nodefaultlibs -lc++ -lc++abi -lm -lc -lgcc -lgcc_eh")
-
-            # Need these flags so gcc OSX works on the cryptopp ASM - https://groups.google.com/forum/#!topic/cryptopp-users/po8yO-vYaac
-            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCRYPTOPP_CLANG_INTEGRATED_ASSEMBLER=1")
-
-        elseif(CMAKE_C_COMPILER_ID STREQUAL "Clang")
-            # Need to link against the llvm libc++ library, default is too old for std::filesystem
-            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++ -I/usr/local/opt/llvm/include/c++/v1")
-        endif()
-    endif()
-
-    if(MINGW OR STATIC_LIBC)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static -static-libstdc++")
-        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
-    endif()
-
-    if(NOT APPLE)
-        set(CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} -static-libgcc -static-libstdc++")
+    if(EXISTS "${_clang_prefix}/lib/c++")
+        message(STATUS "Non-Apple Clang detected – adding ${_clang_prefix}/lib/c++ to linker search path")
+        set(_CRYPTO_CLANG_LIBCXX_DIR "${_clang_prefix}/lib/c++" CACHE INTERNAL "")
+        list(APPEND CMAKE_BUILD_RPATH   "${_clang_prefix}/lib/c++")
+        list(APPEND CMAKE_INSTALL_RPATH "${_clang_prefix}/lib/c++")
     endif()
 endif()
 
+# ---------------------------------------------------------------------------
+# crypto_target_harden(<target> [SHARED])
+# Apply security-hardening compile/link flags PRIVATE to a single target.
+# Submodules are NOT affected — they handle their own flags.
+#
+# MinGW ABI note: only use CMake's built-in MINGW (set for GCC with MinGW).
+# Clang on Windows can target either MinGW or MSVC ABI, and the linker
+# varies (GNU ld vs lld-link) — applying the wrong linker flags breaks the
+# build. We let Clang on Windows rely on the OS defaults for DEP/ASLR
+# (enabled by default on modern Windows) rather than guessing the linker
+# style.
+# ---------------------------------------------------------------------------
+function(crypto_target_harden TARGET_NAME)
+    set(_IS_SHARED FALSE)
+    if("SHARED" IN_LIST ARGN)
+        set(_IS_SHARED TRUE)
+    endif()
+
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(${TARGET_NAME} PRIVATE
+            -Wall -Wextra -Wuninitialized -Wshadow
+            -Wcast-align -Wundef
+            -Wformat=2 -Wformat-security
+            -fno-strict-overflow
+        )
+
+        # Stack protector (probe once, cache result)
+        if(NOT DEFINED _CRYPTO_HAS_STACK_PROTECTOR)
+            set(CMAKE_REQUIRED_FLAGS "-fstack-protector-strong")
+            check_cxx_source_compiles(
+                "int main() { char buf[64]; buf[0] = 0; return buf[0]; }"
+                _CRYPTO_HAS_STACK_PROTECTOR)
+            unset(CMAKE_REQUIRED_FLAGS)
+            set(_CRYPTO_HAS_STACK_PROTECTOR ${_CRYPTO_HAS_STACK_PROTECTOR} CACHE INTERNAL "")
+        endif()
+        if(_CRYPTO_HAS_STACK_PROTECTOR)
+            target_compile_options(${TARGET_NAME} PRIVATE -fstack-protector-strong)
+        endif()
+
+        # -fPIC is implied on Windows PE; only needed on ELF/Mach-O
+        if(NOT WIN32)
+            target_compile_options(${TARGET_NAME} PRIVATE -fPIC)
+            # Stack clash protection (Linux only — not supported on macOS/Apple Clang)
+            if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+                target_compile_options(${TARGET_NAME} PRIVATE -fstack-clash-protection)
+            endif()
+        endif()
+
+        # Intel CET control-flow integrity (x86_64 only, probe once)
+        if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+            if(NOT DEFINED _CRYPTO_HAS_CF_PROTECTION)
+                check_cxx_compiler_flag("-fcf-protection=full" _CRYPTO_HAS_CF_PROTECTION)
+                set(_CRYPTO_HAS_CF_PROTECTION ${_CRYPTO_HAS_CF_PROTECTION} CACHE INTERNAL "")
+            endif()
+            if(_CRYPTO_HAS_CF_PROTECTION)
+                target_compile_options(${TARGET_NAME} PRIVATE -fcf-protection=full)
+            endif()
+        endif()
+
+        # GCC-only extras
+        if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+            target_compile_options(${TARGET_NAME} PRIVATE -Wstrict-aliasing=2)
+            # GCC 13+ -Wdangling-reference false-positives on const auto& from
+            # functions returning references (e.g., rapidjson get_json_value)
+            target_compile_options(${TARGET_NAME} PRIVATE -Wno-dangling-reference)
+            # GCC 12 -Wfree-nonheap-object false-positive when inlining
+            # std::vector::push_back after reserve (loses pointer provenance)
+            target_compile_options(${TARGET_NAME} PRIVATE -Wno-free-nonheap-object)
+            target_compile_options(${TARGET_NAME} PRIVATE
+                $<$<CONFIG:Debug>:-D_GLIBCXX_ASSERTIONS>
+            )
+        endif()
+
+        # _FORTIFY_SOURCE (requires optimization; unreliable on MinGW)
+        if(NOT WIN32)
+            target_compile_options(${TARGET_NAME} PRIVATE
+                $<$<NOT:$<CONFIG:Debug>>:-D_FORTIFY_SOURCE=2>
+            )
+        endif()
+
+        # Linker hardening — Linux
+        if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+            set_property(TARGET ${TARGET_NAME} APPEND_STRING PROPERTY LINK_FLAGS
+                " -Wl,-z,relro,-z,now -Wl,-z,noexecstack")
+            # Reject undefined symbols in shared libs (catches missing exports)
+            if(_IS_SHARED)
+                set_property(TARGET ${TARGET_NAME} APPEND_STRING PROPERTY LINK_FLAGS
+                    " -Wl,-z,defs")
+            endif()
+        endif()
+
+        # Linker hardening — MinGW (DEP + ASLR)
+        # Only for GCC+MinGW (MINGW is false for Clang targeting MSVC ABI)
+        if(MINGW)
+            set_property(TARGET ${TARGET_NAME} APPEND_STRING PROPERTY LINK_FLAGS
+                " -Wl,--nxcompat -Wl,--dynamicbase -Wl,--high-entropy-va")
+        endif()
+
+    elseif(MSVC)
+        target_compile_options(${TARGET_NAME} PRIVATE
+            /W4 /sdl /GS /guard:cf
+            /wd4267 /wd4804 /wd4996
+        )
+
+        # Spectre mitigation (opt-in; significantly increases MSVC compile time)
+        if(ENABLE_SPECTRE_MITIGATIONS)
+            if(NOT DEFINED _CRYPTO_HAS_QSPECTRE)
+                check_cxx_compiler_flag("/Qspectre" _CRYPTO_HAS_QSPECTRE)
+                set(_CRYPTO_HAS_QSPECTRE ${_CRYPTO_HAS_QSPECTRE} CACHE INTERNAL "")
+            endif()
+            if(_CRYPTO_HAS_QSPECTRE)
+                target_compile_options(${TARGET_NAME} PRIVATE /Qspectre)
+            endif()
+        endif()
+
+        # DEP + ASLR
+        set_property(TARGET ${TARGET_NAME} APPEND_STRING PROPERTY LINK_FLAGS
+            " /DYNAMICBASE /NXCOMPAT /HIGHENTROPYVA")
+
+        # CET shadow stack (/guard:ehcont + /CETCOMPAT) is intentionally omitted.
+        # It requires ALL linked object files to be compiled with /guard:ehcont,
+        # which submodules (serializationcpp, etc.) are not.
+    endif()
+endfunction()
+
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/external)
 
-set(INCLUDE_DIRECTORIES
+set(_CRYPTO_INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/external
 )
 
-set(SOURCES
-    src/encoding/languages/chinese_simplified.cpp
-    src/encoding/languages/chinese_traditional.cpp
-    src/encoding/languages/czech.cpp
-    src/encoding/languages/english.cpp
-    src/encoding/languages/french.cpp
-    src/encoding/languages/italian.cpp
-    src/encoding/languages/japanese.cpp
-    src/encoding/languages/korean.cpp
-    src/encoding/languages/language.cpp
-    src/encoding/languages/portuguese.cpp
-    src/encoding/languages/spanish.cpp
-    src/encoding/address_encoding.cpp
-    src/encoding/base58.cpp
-    src/encoding/cn_base58.cpp
-    src/encoding/mnemonics.cpp
-    src/encoding/slip39.cpp
-    src/encoding/languages/slip39_english.cpp
-    src/helpers/gray_code_generator_t.cpp
-    src/helpers/hd_keys.cpp
-    src/helpers/random_bytes.cpp
-    src/proofs/audit.cpp
-    src/proofs/bulletproofs.cpp
-    src/proofs/bulletproofsplus.cpp
-    src/proofs/bulletproofspp.cpp
-    src/proofs/dleq.cpp
-    src/proofs/merkle.cpp
-    src/proofs/ringct.cpp
-    src/proofs/vrf.cpp
-    src/signatures/adapter_signature.cpp
-    src/signatures/frost.cpp
-    src/signatures/rfc8032.cpp
-    src/signatures/ring_signature_borromean.cpp
-    src/signatures/ring_signature_clsag.cpp
-    src/signatures/ring_signature_mlsag.cpp
-    src/signatures/ring_signature_triptych.cpp
-    src/signatures/signature.cpp
-    src/types/crypto_adapter_signature_t.cpp
-    src/types/crypto_borromean_signature_t.cpp
-    src/types/crypto_bulletproof_plus_t.cpp
-    src/types/crypto_bulletproof_pp_t.cpp
-    src/types/crypto_bulletproof_t.cpp
-    src/types/crypto_clsag_signature_t.cpp
-    src/types/crypto_dleq_proof_t.cpp
-    src/types/crypto_frost_types.cpp
-    src/types/crypto_mlsag_signature_t.cpp
-    src/types/crypto_entropy_t.cpp
-    src/types/crypto_hash_t.cpp
-    src/types/crypto_hash_vector_t.cpp
-    src/types/crypto_hd_key_t.cpp
-    src/types/crypto_point_t.cpp
-    src/types/crypto_point_vector_t.cpp
-    src/types/crypto_secret_key_t.cpp
-    src/types/crypto_scalar_t.cpp
-    src/types/crypto_scalar_vector_t.cpp
-    src/types/crypto_seed_t.cpp
-    src/types/crypto_signature_t.cpp
-    src/types/crypto_triptych_signature_t.cpp
-    src/types/crypto_vrf_proof_t.cpp
-    src/crypto_common.cpp
+# ---------------------------------------------------------------------------
+# crypto_configure_target(<target>)
+# Apply standard C++17 settings, include paths, definitions, and hardening.
+# ---------------------------------------------------------------------------
+function(crypto_configure_target TARGET_NAME)
+    set_target_properties(${TARGET_NAME} PROPERTIES
+        CXX_STANDARD 17
+        CXX_STANDARD_REQUIRED ON
+        CXX_EXTENSIONS OFF
+        POSITION_INDEPENDENT_CODE ON
+    )
+    target_include_directories(${TARGET_NAME} PUBLIC ${_CRYPTO_INCLUDE_DIRS})
+    target_compile_definitions(${TARGET_NAME} PUBLIC RAPIDJSON_HAS_STDSTRING)
+    if(_CRYPTO_PRIVATE_DEFS)
+        target_compile_definitions(${TARGET_NAME} PRIVATE ${_CRYPTO_PRIVATE_DEFS})
+    endif()
+    if(MSVC)
+        target_compile_definitions(${TARGET_NAME} PRIVATE _CRT_SECURE_NO_WARNINGS)
+    else()
+        target_compile_options(${TARGET_NAME} PRIVATE
+            $<$<CONFIG:Debug>:-g3>
+            $<$<CONFIG:Debug>:-Og>
+            $<$<CONFIG:Release>:-O3>
+        )
+    endif()
+    crypto_target_harden(${TARGET_NAME})
+endfunction()
+
+# ---------------------------------------------------------------------------
+# crypto_configure_executable(<target>)
+# Apply standard C++17 settings, optimization flags, static linking, and
+# hardening to an executable target. Does NOT set include dirs or PUBLIC
+# definitions (executables inherit those from crypto-static).
+# ---------------------------------------------------------------------------
+function(crypto_configure_executable TARGET_NAME)
+    set_target_properties(${TARGET_NAME} PROPERTIES
+        CXX_STANDARD 17
+        CXX_STANDARD_REQUIRED ON
+        CXX_EXTENSIONS OFF
+    )
+    if(NOT MSVC)
+        target_compile_options(${TARGET_NAME} PRIVATE
+            $<$<CONFIG:Debug>:-g3>
+            $<$<CONFIG:Debug>:-Og>
+            $<$<CONFIG:Release>:-O3>
+        )
+        if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+            set_property(TARGET ${TARGET_NAME} APPEND_STRING PROPERTY
+                LINK_FLAGS " -static-libgcc -static-libstdc++")
+        endif()
+    endif()
+    if(_CRYPTO_CLANG_LIBCXX_DIR)
+        set_property(TARGET ${TARGET_NAME} APPEND_STRING PROPERTY
+            LINK_FLAGS " -L${_CRYPTO_CLANG_LIBCXX_DIR}")
+    endif()
+    crypto_target_harden(${TARGET_NAME})
+endfunction()
+
+# =========================================================================
+# Component Libraries (defined in per-module CMakeLists.txt)
+# =========================================================================
+add_subdirectory(src/helpers)      # Layer 1
+add_subdirectory(src/types)        # Layer 2
+add_subdirectory(src/core)         # Layer 3
+add_subdirectory(src/dleq)         # Layer 3a
+add_subdirectory(src/base58)       # Layer 4a
+add_subdirectory(src/addresses)    # Layer 4a
+add_subdirectory(src/mnemonics)    # Layer 4a
+add_subdirectory(src/slip39)       # Layer 4a
+add_subdirectory(src/ed25519)         # Layer 4b
+add_subdirectory(src/borromean)       # Layer 4b
+add_subdirectory(src/clsag)           # Layer 4b
+add_subdirectory(src/mlsag)           # Layer 4b
+add_subdirectory(src/triptych)        # Layer 4b
+add_subdirectory(src/adapter_signature)  # Layer 4b
+add_subdirectory(src/ringct)          # Layer 4c
+add_subdirectory(src/bulletproofs)    # Layer 4d
+add_subdirectory(src/bulletproofsplus)  # Layer 4e
+add_subdirectory(src/bulletproofspp)  # Layer 4f
+add_subdirectory(src/vrf)            # Layer 4g
+add_subdirectory(src/merkle)         # Layer 4h
+add_subdirectory(src/integration)  # Layer 5a
+
+# =========================================================================
+# Aggregate target: crypto-static (INTERFACE linking all components)
+# =========================================================================
+add_library(crypto-static INTERFACE)
+target_link_libraries(crypto-static INTERFACE
+    crypto-integration
+    crypto-ed25519
+    crypto-borromean
+    crypto-clsag
+    crypto-mlsag
+    crypto-triptych
+    crypto-adapter-signature
+    crypto-ringct
+    crypto-bulletproofs
+    crypto-bulletproofsplus
+    crypto-bulletproofspp
+    crypto-vrf
+    crypto-merkle
+    crypto-dleq
+    crypto-core
+    crypto-base58
+    crypto-addresses
+    crypto-mnemonics
+    crypto-slip39
+    crypto-types
+    crypto-helpers
 )
-
-add_library(crypto-static STATIC ${SOURCES})
-target_link_libraries(crypto-static crypto-thirdparty)
-target_include_directories(crypto-static PUBLIC ${INCLUDE_DIRECTORIES})
-
-if(WIN32)
-    target_link_libraries(crypto-static ws2_32 advapi32 crypt32 gdi32 user32)
-endif()
+target_include_directories(crypto-static SYSTEM INTERFACE ${_CRYPTO_INCLUDE_DIRS})
 
 if(BUILD_SHARED)
-    add_library(crypto-shared STATIC ${SOURCES})
-    target_link_libraries(crypto-shared crypto-thirdparty)
-    target_include_directories(crypto-shared PUBLIC ${INCLUDE_DIRECTORIES})
+    # Gather sources from all component targets, resolving relative paths
+    set(_ALL_SOURCES)
+    foreach(_comp
+        crypto-helpers crypto-types crypto-core crypto-dleq
+        crypto-base58 crypto-addresses crypto-mnemonics crypto-slip39
+        crypto-ed25519 crypto-borromean crypto-clsag
+        crypto-mlsag crypto-triptych crypto-adapter-signature
+        crypto-ringct crypto-bulletproofs
+        crypto-bulletproofsplus crypto-bulletproofspp
+        crypto-vrf crypto-merkle
+        crypto-integration)
+        get_target_property(_srcdir ${_comp} SOURCE_DIR)
+        get_target_property(_srcs ${_comp} SOURCES)
+        foreach(_src ${_srcs})
+            if(NOT IS_ABSOLUTE "${_src}")
+                list(APPEND _ALL_SOURCES "${_srcdir}/${_src}")
+            else()
+                list(APPEND _ALL_SOURCES "${_src}")
+            endif()
+        endforeach()
+    endforeach()
 
-    if(WIN32)
-        target_link_libraries(crypto-shared ws2_32 advapi32 crypt32 gdi32 user32)
+    add_library(crypto-shared SHARED ${_ALL_SOURCES})
+    crypto_configure_target(crypto-shared)
+    target_link_libraries(crypto-shared PUBLIC crypto-thirdparty)
+    if(_CRYPTO_CLANG_LIBCXX_DIR)
+        set_property(TARGET crypto-shared APPEND_STRING PROPERTY
+            LINK_FLAGS " -L${_CRYPTO_CLANG_LIBCXX_DIR}")
     endif()
+    crypto_target_harden(crypto-shared SHARED)
 endif()
 
 if(BUILD_TESTS)
     add_executable(crypto-test src/test.cpp)
-    target_link_libraries(crypto-test crypto-static)
-    set_property(TARGET crypto-test PROPERTY OUTPUT_NAME "crypto-test")
-
-    add_executable(crypto-benchmark src/benchmark.cpp)
-    target_link_libraries(crypto-benchmark crypto-static)
-    set_property(TARGET crypto-benchmark PROPERTY OUTPUT_NAME "crypto-benchmark")
+    target_link_libraries(crypto-test PRIVATE crypto-static)
 
     add_executable(crypto-slip10-test src/test_slip10.cpp)
-    target_link_libraries(crypto-slip10-test crypto-static)
-    set_property(TARGET crypto-slip10-test PROPERTY OUTPUT_NAME "crypto-slip10-test")
+    target_link_libraries(crypto-slip10-test PRIVATE crypto-static)
 
     add_executable(crypto-slip39-test src/test_slip39.cpp)
-    target_link_libraries(crypto-slip39-test crypto-static)
-    set_property(TARGET crypto-slip39-test PROPERTY OUTPUT_NAME "crypto-slip39-test")
+    target_link_libraries(crypto-slip39-test PRIVATE crypto-static)
+
+    foreach(_TEST_TARGET crypto-test crypto-slip10-test crypto-slip39-test)
+        crypto_configure_executable(${_TEST_TARGET})
+    endforeach()
+endif()
+
+if(BUILD_BENCHMARK)
+    add_executable(crypto-benchmark src/benchmark.cpp)
+    target_link_libraries(crypto-benchmark PRIVATE crypto-static)
+    crypto_configure_executable(crypto-benchmark)
 endif()

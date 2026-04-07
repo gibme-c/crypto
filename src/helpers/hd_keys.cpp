@@ -29,11 +29,10 @@
  * @brief SLIP-0010 / BIP-32 hierarchical deterministic key derivation via HMAC-SHA512.
  */
 
-#include <cryptopp/hmac.h>
-#include <cryptopp/pwdbased.h>
-#include <cryptopp/sha.h>
 #include <ed25519/include/ed25519_secure_erase.h>
 #include <helpers/hd_keys.h>
+#include <sstream>
+#include <tinysha.h>
 
 static std::vector<uint32_t> parse_bip32_path(const std::string &path)
 {
@@ -78,12 +77,12 @@ static std::vector<uint32_t> parse_bip32_path(const std::string &path)
     return indices;
 }
 
-static std::tuple<crypto_hash_t, crypto_hash_t>
-    generate_hd_child_key(const crypto_hash_t &parent_key, const crypto_hash_t &chain_code, size_t index)
+static std::tuple<hash_t, hash_t>
+    generate_hd_child_key(const hash_t &parent_key, const hash_t &chain_code, size_t index)
 {
-    CryptoPP::byte data[37];
+    unsigned char data[37];
 
-    crypto_hash_t child_key, child_chain_code;
+    hash_t child_key, child_chain_code;
 
     // SLIP-0010 hardened child: HMAC-SHA512(chain_code, 0x00 || parent_key || index_BE)
     data[0] = 0x00;
@@ -120,23 +119,25 @@ static std::tuple<crypto_hash_t, crypto_hash_t>
 std::vector<unsigned char>
     calculate_hmac_sha512(const void *key, size_t key_length, const void *message, size_t message_length)
 {
-    std::vector<unsigned char> result(CryptoPP::HMAC<CryptoPP::SHA512>::DIGESTSIZE);
+    std::vector<unsigned char> result(64);
 
-    CryptoPP::HMAC<CryptoPP::SHA512> hmac_context(static_cast<const CryptoPP::byte *>(key), key_length);
-
-    hmac_context.Update(static_cast<const CryptoPP::byte *>(message), message_length);
-
-    hmac_context.Final(result.data());
+    tinysha_hmac_sha512(
+        static_cast<const uint8_t *>(key),
+        key_length,
+        static_cast<const uint8_t *>(message),
+        message_length,
+        result.data(),
+        result.size());
 
     return result;
 }
 
-std::tuple<crypto_hash_t, crypto_hash_t>
-    generate_hd_child_key(const crypto_hash_t &parent_key, const crypto_hash_t &chain_code, const std::string &path)
+std::tuple<hash_t, hash_t>
+    generate_hd_child_key(const hash_t &parent_key, const hash_t &chain_code, const std::string &path)
 {
-    crypto_hash_t current_key = parent_key;
+    hash_t current_key = parent_key;
 
-    crypto_hash_t current_chain_code = chain_code;
+    hash_t current_chain_code = chain_code;
 
     const auto indices = parse_bip32_path(path);
 

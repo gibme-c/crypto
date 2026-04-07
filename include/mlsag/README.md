@@ -1,0 +1,121 @@
+# MLSAG
+
+MLSAG (Multilayered Linkable Spontaneous Anonymous Group) is the predecessor to
+CLSAG. It uses a two-column approach -- one column for the public key and one for
+the commitment -- producing two response scalars per ring member instead of one.
+
+**Namespace**: `Crypto::RingSignature::MLSAG`
+**Header**: [`mlsag.h`](mlsag.h)
+**Reference**: [Noether et al., 2015 (ePrint 2015/1098)][mlsag-paper]
+
+---
+
+## Table of Contents
+
+| Section | Description |
+|---------|-------------|
+| [How It Works (ELI5)](#how-it-works-eli5) | The original ring signature, explained simply |
+| [API](#api) | Ring signature generation and verification |
+| [Signature Structure](#signature-structure) | Layout of the mlsag_signature_t |
+| [CLSAG vs MLSAG](#clsag-vs-mlsag) | Size and feature comparison |
+| [Domain Constants](#domain-constants) | Domain separator indices |
+| [References](#references) | Papers and specifications |
+
+---
+
+## How It Works (ELI5)
+
+Imagine a **lineup of suspects**. You want to prove that one of them --
+and you won't say which one -- signed a letter. A **ring signature** does
+exactly that with math: you collect a bunch of public keys (yours plus
+some decoys), and you produce a signature that only a real key-holder
+could have made. The verifier sees "yes, one of these people signed it,"
+but has no way to tell *which* one. Everyone in the lineup looks equally
+guilty.
+
+Every ring signature also publishes a **key image**: a unique one-way tag
+derived from your secret key. It doesn't reveal who you are, but it's
+always the same for the same secret. So if you try to spend the same coin
+twice, the network sees the same tag twice and rejects the second
+attempt -- no double-spending, no anonymity loss.
+
+MLSAG -- *Multilayered* Linkable Spontaneous Anonymous Group -- was the
+**original** ring signature used in Monero-style confidential transactions.
+The "multilayered" part means it handles two columns at once: one for the
+public keys (proving you own a key) and a second for the amount
+commitments (proving your input amount matches a balancing commitment).
+It was the workhorse for years.
+
+The catch is that MLSAG produces **two response scalars per ring member**
+instead of one, so the signature is roughly **twice as big** as it needs
+to be. The newer **CLSAG** scheme proves the exact same thing with
+identical security in half the space, so MLSAG has been superseded. It's
+kept in the library mainly for **legacy and interoperability** with
+systems that still use the old format -- for new designs you should
+almost always reach for CLSAG instead.
+
+---
+
+## API
+
+Same interface as [CLSAG](../clsag/README.md) (drop-in comparable). MLSAG uses the standard key
+image formula `I = x * Hp(P)`, same as CLSAG and Borromean:
+
+```cpp
+auto [ok, sig] = Crypto::RingSignature::MLSAG::generate_ring_signature(
+    digest, secret_key, ring_public_keys,
+    input_blinding, ring_commitments,
+    pseudo_blinding, pseudo_commitment);
+
+// Key image (standard form, same as CLSAG/Borromean)
+auto real_public_key = secret_key * Crypto::G;
+auto key_image = Crypto::generate_key_image(real_public_key, secret_key);
+
+bool valid = Crypto::RingSignature::MLSAG::check_ring_signature(
+    digest, key_image, ring_public_keys, sig, ring_commitments);
+```
+
+---
+
+## Signature Structure
+
+```cpp
+struct mlsag_signature_t {
+    std::vector<scalar_t> key_scalars;         // N scalars (key column)
+    std::vector<scalar_t> commitment_scalars;  // N scalars (commitment column)
+    scalar_t challenge;                        // initial challenge
+    key_image_t commitment_image;              // optional
+    pedersen_commitment_t pseudo_commitment;   // optional
+};
+```
+
+---
+
+## CLSAG vs MLSAG
+
+| | CLSAG | MLSAG |
+|---|-------|-------|
+| Scalars per ring member | 1 | 2 |
+| Signature size (N=11) | ~416 B | ~768 B |
+| Security | Equivalent | Equivalent |
+| Status | Current | Legacy (superseded by CLSAG) |
+
+**Prefer [CLSAG](../clsag/README.md)** for new designs -- it's half the size with identical security.
+
+---
+
+## Domain Constants
+
+| Indices | Subsystem |
+|---------|-----------|
+| 23-24 | MLSAG |
+
+---
+
+## References
+
+| Topic | Link |
+|-------|------|
+| MLSAG / Ring Confidential Transactions | [Noether et al., 2015 (ePrint 2015/1098)][mlsag-paper] |
+
+[mlsag-paper]: https://eprint.iacr.org/2015/1098

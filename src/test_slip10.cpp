@@ -48,16 +48,16 @@ static bool check(const char *name, bool condition)
     return false;
 }
 
-static bool test(const crypto_hd_key_t &key, const std::string &public_key, const std::string &secret_key)
+static bool test(const hd_key_t &key, const std::string &public_key, const std::string &secret_key)
 {
     const auto [pk, sk] = key.keys();
 
-    if (sk != crypto_secret_key_t(secret_key))
+    if (sk != secret_key_t(secret_key))
     {
         return false;
     }
 
-    if (pk != crypto_public_key_t(public_key))
+    if (pk != public_key_t(public_key))
     {
         return false;
     }
@@ -79,7 +79,7 @@ int main()
     {
         const auto raw_seed = Serialization::from_hex("000102030405060708090a0b0c0d0e0f");
 
-        const auto seed = crypto_seed_t(raw_seed);
+        const auto seed = seed_t(raw_seed);
 
         check(
             "v1 master key",
@@ -142,7 +142,7 @@ int main()
             Serialization::from_hex("fffcf9f6f3f0edeae7e4e1dedbd8d5d2cfccc9c6c3c0bdbab7b4b1aeaba8a5a29f9c999693908d8a87"
                                     "84817e7b7875726f6c696663605d5a5754514e4b484542");
 
-        const auto seed = crypto_seed_t(raw_seed);
+        const auto seed = seed_t(raw_seed);
 
         check(
             "v2 master key",

@@ -77,7 +77,7 @@ int main()
     std::cout << std::endl << "=== Round-trip 256-bit 2-of-3 ===" << std::endl;
 
     {
-        const auto entropy = crypto_entropy_t::random(256, {}, false);
+        const auto entropy = entropy_t::random(256, {}, false);
 
         std::cout << "    entropy: " << entropy << std::endl;
 
@@ -129,7 +129,7 @@ int main()
     std::cout << std::endl << "=== Round-trip 128-bit 2-of-3 ===" << std::endl;
 
     {
-        const auto entropy = crypto_entropy_t::random(128, {}, false);
+        const auto entropy = entropy_t::random(128, {}, false);
 
         std::cout << "    entropy: " << entropy << std::endl;
 
@@ -158,7 +158,7 @@ int main()
     std::cout << std::endl << "=== Threshold 3-of-5 ===" << std::endl;
 
     {
-        const auto entropy = crypto_entropy_t::random(256, {}, false);
+        const auto entropy = entropy_t::random(256, {}, false);
 
         const auto shares = Crypto::Mnemonics::Shamir::split(entropy, 3, 5);
 
@@ -200,7 +200,7 @@ int main()
     std::cout << std::endl << "=== Passphrase ===" << std::endl;
 
     {
-        const auto entropy = crypto_entropy_t::random(256, {}, false);
+        const auto entropy = entropy_t::random(256, {}, false);
 
         const auto shares = Crypto::Mnemonics::Shamir::split(entropy, 2, 3, "test passphrase");
 
@@ -230,7 +230,7 @@ int main()
     std::cout << std::endl << "=== Share Validation ===" << std::endl;
 
     {
-        const auto entropy = crypto_entropy_t::random(256, {}, false);
+        const auto entropy = entropy_t::random(256, {}, false);
 
         const auto shares = Crypto::Mnemonics::Shamir::split(entropy, 2, 3);
 
@@ -252,7 +252,7 @@ int main()
     std::cout << std::endl << "=== Seed Derivation ===" << std::endl;
 
     {
-        const auto entropy = crypto_entropy_t::random(256, {}, false);
+        const auto entropy = entropy_t::random(256, {}, false);
 
         const auto seed1 = Crypto::Mnemonics::Shamir::derive_seed(entropy, "");
         const auto seed2 = Crypto::Mnemonics::Shamir::derive_seed(entropy, "");
@@ -276,7 +276,7 @@ int main()
     std::cout << std::endl << "=== 1-of-1 ===" << std::endl;
 
     {
-        const auto entropy = crypto_entropy_t::random(256, {}, false);
+        const auto entropy = entropy_t::random(256, {}, false);
 
         const auto shares = Crypto::Mnemonics::Shamir::split(entropy, 1, 1);
 
@@ -297,8 +297,8 @@ int main()
     std::cout << std::endl << "=== HD Key Compatibility ===" << std::endl;
 
     {
-        const auto entropy = crypto_entropy_t::random(256, {}, false);
-        const auto seed_before = crypto_seed_t(entropy);
+        const auto entropy = entropy_t::random(256, {}, false);
+        const auto seed_before = seed_t(entropy);
         const auto key_before = seed_before.generate_child_key(44, 0, 0);
 
         // Split and recombine
@@ -306,7 +306,7 @@ int main()
         std::vector<std::vector<std::string>> subset = {shares[0], shares[2]};
         const auto recovered = Crypto::Mnemonics::Shamir::combine(subset);
 
-        const auto seed_after = crypto_seed_t(recovered);
+        const auto seed_after = seed_t(recovered);
         const auto key_after = seed_after.generate_child_key(44, 0, 0);
 
         const auto [pk_before, sk_before] = key_before.keys();
@@ -323,7 +323,7 @@ int main()
     std::cout << std::endl << "=== Iteration Exponent ===" << std::endl;
 
     {
-        const auto entropy = crypto_entropy_t::random(256, {}, false);
+        const auto entropy = entropy_t::random(256, {}, false);
 
         // iteration_exponent = 1 means 5000 iterations per round instead of 2500
         const auto shares = Crypto::Mnemonics::Shamir::split(entropy, 2, 3, "", 1);
@@ -342,7 +342,7 @@ int main()
     std::cout << std::endl << "=== Non-extendable ===" << std::endl;
 
     {
-        const auto entropy = crypto_entropy_t::random(256, {}, false);
+        const auto entropy = entropy_t::random(256, {}, false);
 
         const auto shares = Crypto::Mnemonics::Shamir::split(entropy, 2, 3, "", 0, false);
 

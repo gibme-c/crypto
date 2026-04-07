@@ -26,36 +26,15 @@
 
 /**
  * @file debug_helper.h
- * @brief Debug printing macros and helpers, conditional on the DEBUG_PRINT compile flag.
- *
- * When DEBUG_PRINT is defined at compile time, the PRINTF() macro prints a value along
- * with its file and line number. When DEBUG_PRINT is not defined, PRINTF() compiles
- * to a no-op. Also provides RETHROW and SMART_CATCH macros for augmenting exception
- * messages with source location information.
+ * @brief Exception-augmenting macros that attach source location to rethrown exceptions.
  */
 
 #ifndef CRYPTO_DEBUG_HELPER_H
 #define CRYPTO_DEBUG_HELPER_H
 
-#include <helpers/string_helper.h>
-#include <iostream>
 #include <sstream>
 #include <string>
-#include <vector>
 
-#ifdef DEBUG_PRINT
-#define PRINTF(value)                                                        \
-    {                                                                        \
-        std::stringstream ss;                                                \
-        ss << __FILE__ << "#" << std::to_string(__LINE__) << ": " << #value; \
-        Debug::debug_printer(ss.str(), value);                               \
-    }
-#else
-#define PRINTF(value) \
-    {                 \
-        (void)value;  \
-    }
-#endif
 #ifndef RETHROW
 #define RETHROW(type, message, err)                                                                             \
     {                                                                                                           \
@@ -71,67 +50,5 @@
         RETHROW(type, message, error);  \
     }
 #endif
-
-namespace Debug
-{
-    /**
-     * Simple printer for debugging values
-     * @param name
-     * @param value
-     */
-    static inline void debug_print(const std::string &name, bool value)
-    {
-        std::cout << name << ": " << ((value) ? "true" : "false") << std::endl;
-    }
-
-    /**
-     * Simple printer for debugging values
-     * @tparam Type
-     * @param name
-     * @param values
-     */
-    template<typename Type>
-    static inline void debug_printer(const std::string &name, const std::vector<std::vector<Type>> &values)
-    {
-        std::cout << name << ":" << std::endl;
-
-        for (const auto &level1 : values)
-        {
-            for (const auto &value : level1)
-            {
-                std::cout << "\t" << value << std::endl;
-            }
-
-            std::cout << std::endl;
-        }
-    }
-
-    /**
-     * Simple printer for debugging values
-     * @tparam Type
-     * @param name
-     * @param values
-     */
-    template<typename Type> static inline void debug_printer(const std::string &name, const std::vector<Type> &values)
-    {
-        std::cout << name << ":" << std::endl;
-
-        for (const auto &value : values)
-        {
-            std::cout << "\t" << value << std::endl;
-        }
-    }
-
-    /**
-     * Simple printer for debugging values
-     * @tparam Type
-     * @param name
-     * @param value
-     */
-    template<typename Type> static inline void debug_printer(const std::string &name, const Type &value)
-    {
-        std::cout << name << ": " << value << std::endl;
-    }
-} // namespace Debug
 
 #endif

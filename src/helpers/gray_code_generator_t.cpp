@@ -34,7 +34,7 @@
 
 #include <helpers/gray_code_generator_t.h>
 
-gray_code_generator_t::gray_code_generator_t(size_t N, size_t K, size_t v): N(N), K(K), v(v)
+gray_code_generator_t::gray_code_generator_t(size_t _N, size_t _K, size_t _v): N(_N), K(_K), v(_v)
 {
     g = std::vector<int>(K + 1, 0);
 
@@ -57,7 +57,7 @@ std::vector<int> gray_code_generator_t::operator[](int i) const
 // Triptych can incrementally update commitment sums per-position.
 void gray_code_generator_t::generate()
 {
-    const auto upper = size_t(crypto_scalar_t(N).pow(K).to_uint64_t()) - 1;
+    const auto upper = size_t(scalar_t(N).pow(K).to_uint64_t()) - 1;
 
     for (size_t idx = 0; idx < upper; ++idx)
     {
@@ -70,7 +70,7 @@ void gray_code_generator_t::generate()
         // Find the lowest position whose digit can be incremented/decremented
         int i = 0, k = g[0] + u[0];
 
-        while (k >= N || k < 0)
+        while (k >= static_cast<int>(N) || k < 0)
         {
             u[i] = u[i] * -1;
 
