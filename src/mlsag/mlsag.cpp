@@ -400,7 +400,7 @@ namespace Crypto::RingSignature::MLSAG
     try_again:
         // ---- Generate nonces and random decoy scalars ----
         // alpha1: nonce for key column, derived from message/key_image/randomness
-        scalar_transcript_t alpha1_transcript(message_digest, key_image, scalar_t::random());
+        scalar_transcript_t alpha1_transcript(message_digest, key_image, scalar_t::random(), secret_ephemeral);
 
         alpha1_transcript.update(input_blinding_factor, pseudo_blinding_factor, pseudo_commitment);
 
@@ -418,7 +418,8 @@ namespace Crypto::RingSignature::MLSAG
 
         if (use_commitments)
         {
-            scalar_transcript_t alpha2_transcript(MLSAG_DOMAIN_1, commitment_image, scalar_t::random());
+            scalar_transcript_t alpha2_transcript(
+                MLSAG_DOMAIN_1, commitment_image, scalar_t::random(), secret_ephemeral);
 
             alpha2_transcript.update(input_blinding_factor, pseudo_blinding_factor, pseudo_commitment);
 

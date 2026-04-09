@@ -209,7 +209,7 @@ namespace Crypto::RingSignature::Borromean
 
     try_again:
         // Derive nonce by hashing message, key image, public keys, and fresh randomness
-        scalar_transcript_t alpha_transcript(message_digest, key_image, scalar_t::random());
+        scalar_transcript_t alpha_transcript(message_digest, key_image, scalar_t::random(), secret_ephemeral);
 
         alpha_transcript.update(public_keys);
 

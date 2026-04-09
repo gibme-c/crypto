@@ -115,7 +115,7 @@ namespace Crypto::RFC8032
 
     try_again:
         // Derive a nonce scalar by hashing the message digest, public key, and fresh randomness
-        scalar_transcript_t alpha_transcript(message_digest, public_key, scalar_t::random());
+        scalar_transcript_t alpha_transcript(message_digest, public_key, scalar_t::random(), secret_key);
 
         const auto alpha_scalar = alpha_transcript.challenge();
 

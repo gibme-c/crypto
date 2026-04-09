@@ -75,6 +75,12 @@ struct scalar_transcript_t
         update(seed, seed2, seed3, seed4);
     }
 
+    template<typename T, typename U, typename V, typename W, typename X>
+    scalar_transcript_t(const T &seed, const U &seed2, const V &seed3, const W &seed4, const X &seed5)
+    {
+        update(seed, seed2, seed3, seed4, seed5);
+    }
+
     template<typename T, typename U, typename V>
     scalar_transcript_t(const T &seed, const U &seed2, const std::vector<V> &seed3)
     {
@@ -127,6 +133,11 @@ struct scalar_transcript_t
         writer.pod(input);
 
         state = hash_t::sha3(writer.data(), writer.size()).scalar();
+
+        if (writer.size() > 0)
+        {
+            serialization_secure_erase(const_cast<unsigned char *>(writer.data()), writer.size());
+        }
     }
 
     /**
@@ -148,6 +159,11 @@ struct scalar_transcript_t
         writer.pod(input2);
 
         state = hash_t::sha3(writer.data(), writer.size()).scalar();
+
+        if (writer.size() > 0)
+        {
+            serialization_secure_erase(const_cast<unsigned char *>(writer.data()), writer.size());
+        }
     }
 
     /**
@@ -173,6 +189,11 @@ struct scalar_transcript_t
         writer.pod(input3);
 
         state = hash_t::sha3(writer.data(), writer.size()).scalar();
+
+        if (writer.size() > 0)
+        {
+            serialization_secure_erase(const_cast<unsigned char *>(writer.data()), writer.size());
+        }
     }
 
     /**
@@ -203,6 +224,36 @@ struct scalar_transcript_t
         writer.pod(input4);
 
         state = hash_t::sha3(writer.data(), writer.size()).scalar();
+
+        if (writer.size() > 0)
+        {
+            serialization_secure_erase(const_cast<unsigned char *>(writer.data()), writer.size());
+        }
+    }
+
+    template<typename T, typename U, typename V, typename W, typename X>
+    void update(const T &input, const U &input2, const V &input3, const W &input4, const X &input5)
+    {
+        Serialization::serializer_t writer;
+
+        writer.pod(state);
+
+        writer.pod(input);
+
+        writer.pod(input2);
+
+        writer.pod(input3);
+
+        writer.pod(input4);
+
+        writer.pod(input5);
+
+        state = hash_t::sha3(writer.data(), writer.size()).scalar();
+
+        if (writer.size() > 0)
+        {
+            serialization_secure_erase(const_cast<unsigned char *>(writer.data()), writer.size());
+        }
     }
 
     /**
@@ -220,6 +271,11 @@ struct scalar_transcript_t
         writer.pod(input);
 
         state = hash_t::sha3(writer.data(), writer.size()).scalar();
+
+        if (writer.size() > 0)
+        {
+            serialization_secure_erase(const_cast<unsigned char *>(writer.data()), writer.size());
+        }
     }
 
   private:

@@ -3022,6 +3022,105 @@ static void test_adapter_signatures()
     check("adapted JSON encoding", test_json_encoding(adapted_sig));
 }
 
+// Every hedged-nonce signing path must still draw fresh entropy on each call,
+// so signing the same (secret_key, message) twice must yield two distinct
+// signatures. Each assertion exercises a different alpha_transcript site.
+static void test_hedged_nonce_additive_randomness()
+{
+    const auto [public_key, secret_key] = Crypto::generate_keys();
+
+    // 1. Ed25519 Schnorr (src/ed25519/signature.cpp)
+    {
+        const auto sig_a = Crypto::Signature::generate_signature(SHA3_HASH, secret_key);
+        const auto sig_b = Crypto::Signature::generate_signature(SHA3_HASH, secret_key);
+        check("ed25519 schnorr produces fresh nonce per call", sig_a != sig_b);
+    }
+
+    // 2. RFC 8032 Ed25519 (src/ed25519/rfc8032.cpp)
+    {
+        const auto sig_a = Crypto::RFC8032::generate_signature(SHA3_HASH, secret_key);
+        const auto sig_b = Crypto::RFC8032::generate_signature(SHA3_HASH, secret_key);
+        check("rfc8032 produces fresh nonce per call", sig_a != sig_b);
+    }
+
+    // 3. Borromean ring signature (src/borromean/borromean.cpp)
+    {
+        const auto sk = make_stealth_keys();
+        auto public_keys = point_t::random(RING_SIZE);
+        public_keys[RING_SIZE / 2] = sk.public_ephemeral;
+        const auto [ok_a, sig_a] =
+            Crypto::RingSignature::Borromean::generate_ring_signature(SHA3_HASH, sk.secret_ephemeral, public_keys);
+        const auto [ok_b, sig_b] =
+            Crypto::RingSignature::Borromean::generate_ring_signature(SHA3_HASH, sk.secret_ephemeral, public_keys);
+        check("borromean produces fresh nonce per call", ok_a && ok_b && sig_a.serialize() != sig_b.serialize());
+    }
+
+    // 4. CLSAG ring signature (src/clsag/clsag.cpp)
+    {
+        const auto sk = make_stealth_keys();
+        auto public_keys = point_t::random(RING_SIZE);
+        public_keys[RING_SIZE / 2] = sk.public_ephemeral;
+        const auto [ok_a, sig_a] =
+            Crypto::RingSignature::CLSAG::generate_ring_signature(SHA3_HASH, sk.secret_ephemeral, public_keys);
+        const auto [ok_b, sig_b] =
+            Crypto::RingSignature::CLSAG::generate_ring_signature(SHA3_HASH, sk.secret_ephemeral, public_keys);
+        check("clsag produces fresh nonce per call", ok_a && ok_b && sig_a.serialize() != sig_b.serialize());
+    }
+
+    // 5. MLSAG plain (alpha1 transcript at src/mlsag/mlsag.cpp)
+    {
+        const auto sk = make_stealth_keys();
+        auto public_keys = point_t::random(RING_SIZE);
+        public_keys[RING_SIZE / 2] = sk.public_ephemeral;
+        const auto [ok_a, sig_a] =
+            Crypto::RingSignature::MLSAG::generate_ring_signature(SHA3_HASH, sk.secret_ephemeral, public_keys);
+        const auto [ok_b, sig_b] =
+            Crypto::RingSignature::MLSAG::generate_ring_signature(SHA3_HASH, sk.secret_ephemeral, public_keys);
+        check("mlsag plain produces fresh nonce per call", ok_a && ok_b && sig_a.serialize() != sig_b.serialize());
+    }
+
+    // 6. MLSAG commitments (alpha2 transcript — only reached when use_commitments=true)
+    {
+        const auto sk = make_stealth_keys();
+        auto public_keys = point_t::random(RING_SIZE);
+        public_keys[RING_SIZE / 2] = sk.public_ephemeral;
+        const auto input_blinding = scalar_t::random();
+        const auto input_commitment = Crypto::RingCT::generate_pedersen_commitment(input_blinding, 100);
+        std::vector<pedersen_commitment_t> public_commitments = point_t::random(RING_SIZE);
+        public_commitments[RING_SIZE / 2] = input_commitment;
+        const auto [ps_blindings, ps_commitments] =
+            Crypto::RingCT::generate_pseudo_commitments({100}, scalar_t::random(1));
+        const auto [ok_a, sig_a] = Crypto::RingSignature::MLSAG::generate_ring_signature(
+            SHA3_HASH,
+            sk.secret_ephemeral,
+            public_keys,
+            input_blinding,
+            public_commitments,
+            ps_blindings[0],
+            ps_commitments[0]);
+        const auto [ok_b, sig_b] = Crypto::RingSignature::MLSAG::generate_ring_signature(
+            SHA3_HASH,
+            sk.secret_ephemeral,
+            public_keys,
+            input_blinding,
+            public_commitments,
+            ps_blindings[0],
+            ps_commitments[0]);
+        check(
+            "mlsag commitments produces fresh nonces per call", ok_a && ok_b && sig_a.serialize() != sig_b.serialize());
+    }
+
+    // 7. Adapter signature pre-sign (src/adapter_signature/adapter_signature.cpp)
+    {
+        const auto [signer_pub, signer_sec] = Crypto::generate_keys();
+        const auto witness_y = scalar_t::random();
+        const auto statement_Y = witness_y * Crypto::G;
+        const auto sig_a = Crypto::AdapterSignature::pre_sign(SHA3_HASH, signer_sec, statement_Y);
+        const auto sig_b = Crypto::AdapterSignature::pre_sign(SHA3_HASH, signer_sec, statement_Y);
+        check("adapter pre_sign produces fresh nonce per call", sig_a.serialize() != sig_b.serialize());
+    }
+}
+
 static void test_vrf_native()
 {
     const auto [vrf_pub, vrf_sec] = Crypto::generate_keys();
@@ -3837,6 +3936,7 @@ int main(int argc, char **argv)
     test_bulletproofs_pp();
     test_dleq();
     test_adapter_signatures();
+    test_hedged_nonce_additive_randomness();
     test_vrf_native();
     test_vrf_rfc9381();
     test_merkle();

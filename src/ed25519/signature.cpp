@@ -75,7 +75,7 @@ namespace Crypto::Signature
 
     try_again:
         // Derive a nonce by hashing message, public key, and fresh randomness
-        scalar_transcript_t alpha_transcript(message_digest, public_key, scalar_t::random());
+        scalar_transcript_t alpha_transcript(message_digest, public_key, scalar_t::random(), secret_key);
 
         const auto alpha = alpha_transcript.challenge();
 

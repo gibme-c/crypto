@@ -54,7 +54,7 @@ namespace Crypto::AdapterSignature
 
     try_again:
         // Derive nonce r from domain, secret, message, and fresh entropy
-        scalar_transcript_t r_transcript(ADAPTER_DOMAIN_0, public_key, message_digest, scalar_t::random());
+        scalar_transcript_t r_transcript(ADAPTER_DOMAIN_0, public_key, message_digest, scalar_t::random(), secret_key);
 
         auto r = r_transcript.challenge();
 

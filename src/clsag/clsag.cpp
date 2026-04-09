@@ -493,7 +493,7 @@ namespace Crypto::RingSignature::CLSAG
     try_again:
         // ---- Generate nonce and random decoy scalars ----
         // Derive nonce by hashing message, key image, commitments, and fresh randomness
-        scalar_transcript_t alpha_transcript(message_digest, key_image, scalar_t::random());
+        scalar_transcript_t alpha_transcript(message_digest, key_image, scalar_t::random(), secret_ephemeral);
 
         alpha_transcript.update(input_blinding_factor, pseudo_blinding_factor, pseudo_commitment);
 
