@@ -1,0 +1,176 @@
+name: Fuzz Nightly
+
+# ---------------------------------------------------------------------------
+# Nightly coverage-guided fuzz runs against the libFuzzer per-module
+# binaries. Unlike the PR-time crypto-fuzz-smoke harness (which runs on
+# every matrix cell with a ~12s wall-clock budget via ctest), this
+# workflow invokes each libFuzzer binary directly with a longer per-
+# target wall-clock budget and persists the corpus across runs via
+# GitHub Actions cache, so each night builds on the previous night's
+# coverage exploration.
+#
+# libFuzzer requires Linux + Clang (see
+# src/fuzz/libfuzzer/CMakeLists.txt for the gate), so this workflow
+# runs on a single ubuntu-latest job.
+#
+# Escalation rule: any finding surfaced by this workflow must be
+# triaged. The workflow automatically files a GitHub issue with the
+# reproducer on failure via the gh CLI — it does NOT silently patch
+# library code.
+# ---------------------------------------------------------------------------
+
+on:
+  schedule:
+    # 04:00 UTC every night. Change only if the slot conflicts with
+    # another long-running workflow — the fuzz budget can eat up to
+    # (NUM_TARGETS * FUZZ_BUDGET_SECS) of compute per run.
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+    # Manual trigger: lets a developer run a nightly pass on demand
+    # from the Actions tab without waiting for the cron slot. Accepts
+    # an optional fuzz budget override for quick spot-checks.
+    inputs:
+      fuzz_budget_secs:
+        description: 'Per-target wall-clock budget in seconds'
+        required: false
+        default: '300'
+
+jobs:
+  libfuzzer:
+    name: libFuzzer per-target nightly
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    env:
+      # Per-target wall-clock budget. Default 300s (5 min) per target;
+      # override via workflow_dispatch input. With ~26 targets, default
+      # budget is ~130 minutes of total fuzz compute plus build time.
+      FUZZ_BUDGET_SECS: ${{ github.event.inputs.fuzz_budget_secs || '300' }}
+      # Cached corpus location — lives across runs via actions/cache.
+      FUZZ_CORPUS_ROOT: ${{ github.workspace }}/fuzz-corpora
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install LLVM Clang toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-15 lld-15 cmake ninja-build
+          echo "CC=clang-15"   >> "$GITHUB_ENV"
+          echo "CXX=clang++-15" >> "$GITHUB_ENV"
+
+      - name: Restore fuzz corpus cache
+        id: corpus-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.FUZZ_CORPUS_ROOT }}
+          # Key bumps on every run so we always pull the latest, but
+          # restore-keys fall back to any previous corpus. This gives
+          # us accumulating corpus across runs without ever invalidating
+          # everything on a single config change.
+          key: fuzz-corpora-${{ github.run_id }}
+          restore-keys: |
+            fuzz-corpora-
+
+      - name: Configure with BUILD_FUZZERS + ENABLE_SANITIZERS
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER="$CC" \
+            -DCMAKE_CXX_COMPILER="$CXX" \
+            -DBUILD_TESTS=ON \
+            -DBUILD_FUZZERS=ON \
+            -DENABLE_SANITIZERS=ON
+
+      - name: Build libFuzzer binaries
+        run: cmake --build build -j $(nproc)
+
+      - name: Verify smoke harness still passes
+        # The portable smoke run is a cheap sanity check before we spend
+        # real wall-clock on libFuzzer. If smoke fails, do not bother
+        # running the expensive per-target pass.
+        run: |
+          cd build
+          ctest --output-on-failure -R crypto-fuzz-smoke
+
+      - name: Run per-target libFuzzer binaries
+        id: fuzz
+        run: |
+          set +e
+          mkdir -p "$FUZZ_CORPUS_ROOT"
+          FAIL=0
+          FAILURES=""
+          # libFuzzer binaries live in build/fuzz/ per the
+          # RUNTIME_OUTPUT_DIRECTORY set in src/fuzz/libfuzzer/CMakeLists.txt.
+          shopt -s nullglob
+          for bin in build/fuzz/crypto-fuzz-*; do
+            target="$(basename "$bin")"
+            corpus="$FUZZ_CORPUS_ROOT/${target}"
+            mkdir -p "$corpus"
+            echo "---- $target ($FUZZ_BUDGET_SECS s) ----"
+            "$bin" "$corpus" \
+              -max_total_time=$FUZZ_BUDGET_SECS \
+              -print_final_stats=1 \
+              -rss_limit_mb=4096
+            rc=$?
+            if [ "$rc" -ne 0 ]; then
+              FAIL=1
+              FAILURES="$FAILURES $target(rc=$rc)"
+            fi
+          done
+          if [ "$FAIL" -ne 0 ]; then
+            echo "failures=$FAILURES" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+      - name: Upload corpus artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-corpora-${{ github.run_id }}
+          path: ${{ env.FUZZ_CORPUS_ROOT }}
+          retention-days: 14
+
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crashes-${{ github.run_id }}
+          # libFuzzer writes crash-*, leak-*, oom-*, timeout-* files
+          # into the current working directory when it finds a fault.
+          path: |
+            crash-*
+            leak-*
+            oom-*
+            timeout-*
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Open or update tracking issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # ESCALATION: per the project's fuzz-finding rule, any fault
+        # surfaced by this nightly workflow MUST be triaged by the
+        # repository owner before any library or harness code is
+        # changed. This step opens a GitHub issue with a direct link
+        # to the failing workflow run so the finding is not lost. It
+        # does NOT attempt to classify severity or propose a fix.
+        run: |
+          TITLE="Nightly fuzz finding on ${{ github.workflow }} run ${{ github.run_id }}"
+          BODY="A nightly fuzz run produced a finding that needs triage.
+
+          **Workflow run:** <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}>
+          **Failed targets:** ${{ steps.fuzz.outputs.failures }}
+          **Corpus artifact:** fuzz-corpora-${{ github.run_id }}
+          **Crash artifact:** fuzz-crashes-${{ github.run_id }}
+
+          Do NOT silently fix the library. Triage first to decide whether this is a library bug, a harness bug, or accepted behavior, then proceed with remediation."
+          gh issue create \
+            --title "$TITLE" \
+            --body "$BODY" \
+            --label "fuzz-finding,nightly" \
+            || echo "(failed to open issue — check repository labels/permissions)"

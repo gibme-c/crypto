@@ -195,7 +195,8 @@ namespace Crypto::RangeProofs::BulletproofsPP
     {
         if (N == 0 || N > 64)
         {
-            throw std::range_error("N must be between 1 and 64");
+            // Malformed-input contract.
+            throw std::invalid_argument("N must be between 1 and 64");
         }
 
         // Silent power-of-2 normalization (matches BP v1 at bulletproofs.cpp:309).
@@ -214,13 +215,15 @@ namespace Crypto::RangeProofs::BulletproofsPP
         {
             if (N < 64 && amount >= (1ULL << N))
             {
-                throw std::range_error("amount exceeds range for N bits");
+                // Malformed-input contract.
+                throw std::invalid_argument("amount exceeds range for N bits");
             }
         }
 
         if (amounts.size() != blinding_factors.size() || amounts.empty())
         {
-            throw std::runtime_error("amounts and blinding_factors must be the same non-empty size");
+            // Malformed-input contract.
+            throw std::invalid_argument("amounts and blinding_factors must be the same non-empty size");
         }
 
         for (const auto &bf : blinding_factors)
@@ -973,7 +976,8 @@ namespace Crypto::RangeProofs::BulletproofsPP
     {
         if (N == 0 || N > 64)
         {
-            throw std::range_error("N must be between 1 and 64");
+            // Malformed-input contract.
+            throw std::invalid_argument("N must be between 1 and 64");
         }
 
         // Silent power-of-2 normalization (matches BP v1; matches prove() above).

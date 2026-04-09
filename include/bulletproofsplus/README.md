@@ -80,6 +80,38 @@ is hygiene / availability rather than a soundness concern.
 
 ---
 
+## Fuzz coverage
+
+This module is exercised by the project-wide fuzz harness in
+`src/fuzz/`. Two front-ends share the same per-target body so the
+same harness code runs everywhere:
+
+- **Portable smoke** (`crypto-fuzz-smoke`, every PR, every compiler):
+  xoshiro256\*\*-driven PRNG harness with a configurable iteration
+  budget via the `CRYPTO_FUZZ_SMOKE_ITERS` environment variable.
+- **libFuzzer** (`crypto-fuzz-<target>`, nightly, Linux+Clang only):
+  coverage-guided per-target binaries built with
+  `-fsanitize=fuzzer,address,undefined`. The per-target time budget
+  is configurable via `FUZZ_BUDGET_SECS` in
+  `.github/workflows/fuzz-nightly.yml`.
+
+Both front-ends classify the SAFE exception set
+(`std::invalid_argument`, `std::out_of_range`, `std::length_error`,
+`std::range_error`) as expected behavior; anything outside that set
+is promoted to a fuzz finding.
+
+### Target `bpplus`
+
+Source: [`src/fuzz/fuzz_target_bpplus.cpp`](../../src/fuzz/fuzz_target_bpplus.cpp)
+
+Entry points exercised:
+
+- `Crypto::RangeProofs::BulletproofsPlus::prove`
+- `Crypto::RangeProofs::BulletproofsPlus::verify`
+- `bulletproof_plus_t deserialization (binary + JSON)`
+
+---
+
 ## References
 
 | Topic | Link |

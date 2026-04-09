@@ -58,7 +58,12 @@ point_t::point_t(const std::vector<unsigned char> &input)
 {
     if (input.size() != sizeof(bytes))
     {
-        throw std::runtime_error("could not load point");
+        // Malformed-input contract: wrong byte length is a caller mistake
+        // and is signaled as std::invalid_argument. The downstream curve
+        // decode step (see load_hook below) also throws
+        // std::invalid_argument for the "decodes to nothing on the curve"
+        // case. Both are malformed-input signals, not internal failures.
+        throw std::invalid_argument("point_t: input must be 32 bytes");
     }
 
     std::copy(input.begin(), input.end(), std::begin(bytes));
@@ -310,7 +315,12 @@ void point_t::load_hook()
     // ge_cached is needed for efficient point addition/subtraction later.
     if (ge_frombytes_vartime(&point3, bytes) != 0)
     {
-        throw std::runtime_error("could not load point");
+        // Malformed-input contract: bytes don't decode to any point on
+        // the Ed25519 curve. This is a caller mistake (bad wire format,
+        // adversarial input, corruption) — NOT an internal failure — so
+        // we throw std::invalid_argument, matching the wire-length check
+        // in the vector constructor above.
+        throw std::invalid_argument("point_t: bytes do not decode to a valid Ed25519 curve point");
     }
 
     ge_p3_to_cached(&cached_point, &point3);

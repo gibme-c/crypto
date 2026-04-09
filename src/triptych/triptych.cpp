@@ -64,7 +64,8 @@ static inline std::vector<scalar_t> convolve(const scalar_vector_t &x, const std
 {
     if (y.size() != 2)
     {
-        throw std::runtime_error("requires a degree-one polynomial");
+        // Malformed-input contract.
+        throw std::invalid_argument("convolve: y must be a degree-one polynomial (size 2)");
     }
 
     std::vector<scalar_t> result(x.size() + 1, Crypto::ZERO);

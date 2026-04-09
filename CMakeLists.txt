@@ -70,6 +70,35 @@ if(DEFINED ENV{ENABLE_SPECTRE_MITIGATIONS})
     set(ENABLE_SPECTRE_MITIGATIONS $ENV{ENABLE_SPECTRE_MITIGATIONS})
 endif()
 
+# ---------------------------------------------------------------------------
+# BUILD_FUZZERS: dual-front-end fuzz harness. When ON, adds src/fuzz as a
+# subdirectory, which always produces the portable smoke binary
+# (crypto-fuzz-smoke) and — ONLY on Linux + Clang — also produces one
+# libFuzzer-instrumented crypto-fuzz-<mod> binary per target. See
+# src/fuzz/CMakeLists.txt for details.
+#
+# ENABLE_SANITIZERS: address+undefined sanitizers for test + fuzz binaries.
+# Applied to crypto-fuzz-targets and the test executables when set. Has no
+# effect on crypto-static itself (rebuilding that with sanitizers is a
+# follow-up once we're ready to own the findings — see the libfuzzer
+# subdirectory CMakeLists.txt NOTE at the bottom).
+# ---------------------------------------------------------------------------
+option(BUILD_FUZZERS "Build fuzz harnesses (portable smoke everywhere; libFuzzer on Linux+Clang)" OFF)
+if(DEFINED ENV{BUILD_FUZZERS})
+    set(BUILD_FUZZERS $ENV{BUILD_FUZZERS})
+endif()
+if(BUILD_FUZZERS)
+    message(STATUS "Fuzz harnesses added to targets list")
+endif()
+
+option(ENABLE_SANITIZERS "Enable -fsanitize=address,undefined for test/fuzz binaries" OFF)
+if(DEFINED ENV{ENABLE_SANITIZERS})
+    set(ENABLE_SANITIZERS $ENV{ENABLE_SANITIZERS})
+endif()
+if(ENABLE_SANITIZERS)
+    message(STATUS "Sanitizers (address + undefined) enabled for test/fuzz binaries")
+endif()
+
 ## This section describes our general CMake setup options
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(CMAKE_SKIP_INSTALL_RULES OFF FORCE)
@@ -280,6 +309,57 @@ function(crypto_configure_executable TARGET_NAME)
     crypto_target_harden(${TARGET_NAME})
 endfunction()
 
+# ---------------------------------------------------------------------------
+# crypto_enable_sanitizers_if_requested(<target>)
+# If ENABLE_SANITIZERS=ON and the compiler supports -fsanitize=address plus
+# -fsanitize=undefined, apply both to the target's compile AND link flags.
+# Intentionally a no-op on MSVC and AppleClang — MSVC's /fsanitize=address
+# is incompatible with /MTd + /INCREMENTAL and requires a custom toolchain
+# path we don't want to bake in blindly; AppleClang ships ASAN but not
+# libFuzzer, so sanitizer-only builds there are a separate concern.
+# Caller guards (BUILD_FUZZERS / BUILD_TESTS) decide when to invoke this.
+# ---------------------------------------------------------------------------
+function(crypto_enable_sanitizers_if_requested TARGET_NAME)
+    if(NOT ENABLE_SANITIZERS)
+        return()
+    endif()
+    if(NOT (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
+        message(STATUS "ENABLE_SANITIZERS requested but ignored for ${TARGET_NAME} (compiler=${CMAKE_CXX_COMPILER_ID})")
+        return()
+    endif()
+    # MinGW GCC supports ASAN only on recent versions (>= 12) and libasan
+    # runtime isn't always packaged. Skip silently there — the Linux job
+    # is the authoritative sanitizer cell.
+    if(MINGW)
+        return()
+    endif()
+    target_compile_options(${TARGET_NAME} PRIVATE -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer)
+    target_link_options   (${TARGET_NAME} PRIVATE -fsanitize=address -fsanitize=undefined)
+
+    # When BUILD_FUZZERS is also on AND we're on Linux + Clang, append
+    # -fsanitize=fuzzer-no-link so the target's translation units emit
+    # libFuzzer coverage instrumentation. The "no-link" variant intentionally
+    # does NOT pull in the libFuzzer driver (i.e. does not provide main),
+    # so the same instrumented object files can be linked into both:
+    #   - regular test binaries (which provide their own main and use the
+    #     fuzzer-no-link runtime stubs for the coverage hooks), and
+    #   - libFuzzer per-target binaries (which override with the full
+    #     -fsanitize=fuzzer driver in src/fuzz/libfuzzer/CMakeLists.txt to
+    #     pull in libFuzzer main and hook implementations).
+    #
+    # This is the supported partial-instrumentation pattern from the Clang
+    # libFuzzer documentation. It is gated to Linux + Clang because that is
+    # the only configuration the nightly workflow exercises and the only
+    # configuration whose toolchain is known to ship the fuzzer-no-link
+    # runtime.
+    if(BUILD_FUZZERS
+       AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
+       AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        target_compile_options(${TARGET_NAME} PRIVATE -fsanitize=fuzzer-no-link)
+        target_link_options   (${TARGET_NAME} PRIVATE -fsanitize=fuzzer-no-link)
+    endif()
+endfunction()
+
 # =========================================================================
 # Component Libraries (defined in per-module CMakeLists.txt)
 # =========================================================================
@@ -304,6 +384,50 @@ add_subdirectory(src/bulletproofspp)  # Layer 4f
 add_subdirectory(src/vrf)            # Layer 4g
 add_subdirectory(src/merkle)         # Layer 4h
 add_subdirectory(src/integration)  # Layer 5a
+
+# =========================================================================
+# Sanitized library instrumentation pass
+#
+# When BUILD_FUZZERS=ON AND ENABLE_SANITIZERS=ON AND host is Linux + Clang,
+# every per-module library target gets ASAN + UBSAN + libFuzzer coverage
+# instrumentation (via -fsanitize=fuzzer-no-link). This is what gives the
+# nightly libFuzzer workflow coverage-guided exploration into library code
+# instead of treating crypto-static as an opaque black box.
+#
+# In every other configuration (no BUILD_FUZZERS, no ENABLE_SANITIZERS,
+# non-Linux, or non-Clang) the helper is a no-op and the per-module
+# libraries build exactly as they did before.
+#
+# Test binaries that link crypto-static still build cleanly because the
+# helper applies the same flags to those binaries (see the BUILD_TESTS
+# block below) so the coverage hooks resolve consistently across the
+# whole link graph. libFuzzer per-target binaries override with the full
+# -fsanitize=fuzzer driver in src/fuzz/libfuzzer/CMakeLists.txt.
+# =========================================================================
+foreach(_mod
+    crypto-helpers
+    crypto-types
+    crypto-core
+    crypto-dleq
+    crypto-base58
+    crypto-addresses
+    crypto-mnemonics
+    crypto-slip39
+    crypto-ed25519
+    crypto-borromean
+    crypto-clsag
+    crypto-mlsag
+    crypto-triptych
+    crypto-adapter-signature
+    crypto-ringct
+    crypto-bulletproofs
+    crypto-bulletproofsplus
+    crypto-bulletproofspp
+    crypto-vrf
+    crypto-merkle
+    crypto-integration)
+    crypto_enable_sanitizers_if_requested(${_mod})
+endforeach()
 
 # =========================================================================
 # Aggregate target: crypto-static (INTERFACE linking all components)
@@ -382,8 +506,27 @@ if(BUILD_TESTS)
     target_link_libraries(crypto-slip39-test PRIVATE crypto-static)
     add_test(NAME crypto-slip39-test COMMAND crypto-slip39-test)
 
-    foreach(_TEST_TARGET crypto-test crypto-slip10-test crypto-slip39-test)
+    # Per-type deserialization-safety property tests. Runs every
+    # serializable type through a fixed-seed PRNG bank of boundary-size
+    # and random-length byte buffers, asserting every ctor either
+    # succeeds or throws ONLY from the SAFE exception set. Complements
+    # the coverage-guided src/fuzz/ smoke harness with a deterministic,
+    # always-on regression net that executes on EVERY PR regardless of
+    # BUILD_FUZZERS.
+    add_executable(crypto-deserialize-safety-test src/test_deserialize_safety.cpp)
+    target_link_libraries(crypto-deserialize-safety-test PRIVATE crypto-static)
+    add_test(NAME crypto-deserialize-safety-test COMMAND crypto-deserialize-safety-test)
+
+    # RFC / KAT spec vector regression battery. Currently hosts the
+    # BIP-39 English Trezor reference vectors; additional spec vectors
+    # land here as they are surfaced by audits or gap passes.
+    add_executable(crypto-rfc-vectors-test src/test_rfc_vectors.cpp)
+    target_link_libraries(crypto-rfc-vectors-test PRIVATE crypto-static)
+    add_test(NAME crypto-rfc-vectors-test COMMAND crypto-rfc-vectors-test)
+
+    foreach(_TEST_TARGET crypto-test crypto-slip10-test crypto-slip39-test crypto-deserialize-safety-test crypto-rfc-vectors-test)
         crypto_configure_executable(${_TEST_TARGET})
+        crypto_enable_sanitizers_if_requested(${_TEST_TARGET})
     endforeach()
 endif()
 
@@ -391,4 +534,14 @@ if(BUILD_BENCHMARK)
     add_executable(crypto-benchmark src/benchmark.cpp)
     target_link_libraries(crypto-benchmark PRIVATE crypto-static)
     crypto_configure_executable(crypto-benchmark)
+endif()
+
+if(BUILD_FUZZERS)
+    # CTest support is needed so crypto-fuzz-smoke registers correctly.
+    # BUILD_TESTS=ON already enables it above, but BUILD_FUZZERS should
+    # also work standalone.
+    if(NOT BUILD_TESTS)
+        enable_testing()
+    endif()
+    add_subdirectory(src/fuzz)
 endif()

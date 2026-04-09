@@ -61,7 +61,12 @@ hash_t::hash_t(const std::vector<unsigned char> &input)
 {
     if (input.size() > sizeof(bytes))
     {
-        throw std::runtime_error("Could not load hash");
+        // Malformed-input contract: input longer than the 32-byte hash
+        // size is a caller mistake, not an internal failure. Throws
+        // std::invalid_argument so downstream fuzz harnesses and
+        // validators classify this as "bad input, safe to reject"
+        // (std::runtime_error is reserved for invariant violations).
+        throw std::invalid_argument("hash_t: input must be <= 32 bytes");
     }
 
     std::copy(input.begin(), input.end(), std::begin(bytes));

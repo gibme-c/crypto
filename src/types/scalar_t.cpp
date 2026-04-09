@@ -56,7 +56,13 @@ scalar_t::scalar_t(const std::vector<unsigned char> &input)
      */
     if (input.size() != sizeof(bytes) && input.size() != 8 && input.size() != 4)
     {
-        throw std::runtime_error("Could not load scalar");
+        // Malformed-input contract: an unsupported byte length is a caller
+        // mistake, not an internal failure, so this is std::invalid_argument
+        // (not std::runtime_error). Downstream fuzz harnesses and validators
+        // classify std::invalid_argument as the documented "bad input, safe
+        // to reject" signal; std::runtime_error is reserved for invariant
+        // violations that are genuinely unexpected at runtime.
+        throw std::invalid_argument("scalar_t: input must be 32, 8, or 4 bytes");
     }
 
     std::copy(input.begin(), input.end(), std::begin(bytes));
@@ -606,7 +612,10 @@ scalar_t scalar_t::pow_sum(size_t count) const
 
     if (!is_power_of_2)
     {
-        throw std::runtime_error("must be a power of 2");
+        // Malformed-input contract: the doubling recurrence is only valid
+        // for power-of-two counts. Passing a non-power-of-two is a caller
+        // mistake, so this is std::invalid_argument (not runtime_error).
+        throw std::invalid_argument("scalar_t::pow_sum: count must be a power of 2");
     }
 
     if (count == 0)
@@ -693,7 +702,8 @@ std::vector<scalar_t> scalar_t::to_bits(size_t bits) const
 {
     if (bits > 256)
     {
-        throw std::range_error("requested bit length exceeds maximum scalar bit length");
+        // Malformed-input contract.
+        throw std::invalid_argument("scalar_t::to_bits: bit length must be <= 256");
     }
 
     std::vector<scalar_t> result;
@@ -801,7 +811,8 @@ void scalar_t::from_bits(const std::vector<scalar_t> &bits)
 
     if (bits.size() > 256)
     {
-        throw std::range_error("from_bits() supports a maximum of 256 bits");
+        // Malformed-input contract.
+        throw std::invalid_argument("scalar_t::from_bits: supports a maximum of 256 bits");
     }
 
     const scalar_t ZERO = {0}, ONE = scalar_t(1);
@@ -815,7 +826,8 @@ void scalar_t::from_bits(const std::vector<scalar_t> &bits)
     {
         if (bits[i] != ZERO && bits[i] != ONE)
         {
-            throw std::range_error("individual bit scalar values must be zero (0) or one (1)");
+            // Malformed-input contract.
+            throw std::invalid_argument("scalar_t::from_bits: individual bit values must be 0 or 1");
         }
 
         /**

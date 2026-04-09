@@ -60,7 +60,8 @@ scalar_vector_t scalar_vector_t::operator+(const scalar_vector_t &other) const
 {
     if (container.size() != other.container.size())
     {
-        throw std::range_error("vectors must be of the same size");
+        // Malformed-input contract.
+        throw std::invalid_argument("vectors must be of the same size");
     }
 
     std::vector<scalar_t> result(container);
@@ -89,7 +90,8 @@ scalar_vector_t scalar_vector_t::operator-(const scalar_vector_t &other) const
 {
     if (container.size() != other.container.size())
     {
-        throw std::range_error("vectors must be of the same size");
+        // Malformed-input contract.
+        throw std::invalid_argument("vectors must be of the same size");
     }
 
     std::vector<scalar_t> result(container);
@@ -118,7 +120,8 @@ scalar_vector_t scalar_vector_t::operator*(const scalar_vector_t &other) const
 {
     if (container.size() != other.container.size())
     {
-        throw std::range_error("vectors must be of the same size");
+        // Malformed-input contract.
+        throw std::invalid_argument("vectors must be of the same size");
     }
 
     std::vector<scalar_t> result(container);
@@ -135,7 +138,8 @@ point_vector_t scalar_vector_t::operator*(const point_vector_t &other) const
 {
     if (container.size() != other.container.size())
     {
-        throw std::range_error("vectors must be of the same size");
+        // Malformed-input contract.
+        throw std::invalid_argument("vectors must be of the same size");
     }
 
     std::vector<point_t> result(container.size());
@@ -157,7 +161,8 @@ point_t scalar_vector_t::inner_product(const point_vector_t &other) const
 {
     if (container.size() != other.container.size())
     {
-        throw std::range_error("vectors must be of equal size");
+        // Malformed-input contract.
+        throw std::invalid_argument("vectors must be of equal size");
     }
 
     const auto n = container.size();
@@ -197,7 +202,8 @@ scalar_t scalar_vector_t::inner_product(const scalar_vector_t &other) const
 {
     if (container.size() != other.container.size())
     {
-        throw std::range_error("vectors must be of equal size");
+        // Malformed-input contract.
+        throw std::invalid_argument("vectors must be of equal size");
     }
 
     return (*this * other).sum();
@@ -235,7 +241,8 @@ scalar_vector_t scalar_vector_t::invert(bool allow_zero) const
         {
             if (inputs[i].empty())
             {
-                throw std::range_error("cannot divide by 0");
+                // Malformed-input contract.
+                throw std::invalid_argument("scalar_vector_t::invert: cannot divide by 0");
             }
 
             scratch[i] = acc;
@@ -276,12 +283,14 @@ scalar_vector_t scalar_vector_t::slice(size_t start, size_t end) const
 {
     if (end < start)
     {
-        throw std::range_error("ending offset must be greater than or equal to starting offset");
+        // Malformed-input contract.
+        throw std::invalid_argument("ending offset must be greater than or equal to starting offset");
     }
 
     if (start > container.size() || end > container.size())
     {
-        throw std::range_error("slice bounds exceed vector size");
+        // Malformed-input contract.
+        throw std::invalid_argument("slice bounds exceed vector size");
     }
 
     return scalar_vector_t(std::vector<scalar_t>(container.begin() + start, container.begin() + end));

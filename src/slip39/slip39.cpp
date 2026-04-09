@@ -326,7 +326,9 @@ static std::vector<uint8_t> shamir_combine(
 
     if (!constant_time_equals(digest_value.data(), hmac_out, DIGEST_LENGTH))
     {
-        throw std::runtime_error("Share digest verification failed -- wrong passphrase or corrupted shares");
+        // Malformed-input contract: the caller supplied wrong passphrase
+        // or corrupted shares.
+        throw std::invalid_argument("Share digest verification failed -- wrong passphrase or corrupted shares");
     }
 
     return secret;
@@ -707,7 +709,8 @@ static std::vector<std::string> encode_share(const slip39_share_t &share)
     {
         if (idx >= words.size())
         {
-            throw std::runtime_error("Word index out of range");
+            // Malformed-input contract.
+            throw std::invalid_argument("SLIP-39: word index out of range");
         }
 
         result.push_back(words[idx]);
@@ -753,7 +756,8 @@ static slip39_share_t decode_share(const std::vector<std::string> &mnemonic)
     // Verify RS1024 checksum
     if (!rs1024_verify_checksum(indices, share.extendable))
     {
-        throw std::runtime_error("SLIP-39 share checksum verification failed");
+        // Malformed-input contract.
+        throw std::invalid_argument("SLIP-39 share checksum verification failed");
     }
 
     return share;

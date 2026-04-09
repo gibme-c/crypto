@@ -47,7 +47,8 @@ point_vector_t point_vector_t::operator+(const point_vector_t &other) const
 {
     if (container.size() != other.container.size())
     {
-        throw std::range_error("vectors must be of the same size");
+        // Malformed-input contract.
+        throw std::invalid_argument("vectors must be of the same size");
     }
 
     std::vector<point_t> result(container);
@@ -64,7 +65,8 @@ point_vector_t point_vector_t::operator-(const point_vector_t &other) const
 {
     if (container.size() != other.container.size())
     {
-        throw std::range_error("vectors must be of the same size");
+        // Malformed-input contract.
+        throw std::invalid_argument("vectors must be of the same size");
     }
 
     std::vector<point_t> result(container);
@@ -129,12 +131,14 @@ point_vector_t point_vector_t::slice(size_t start, size_t end) const
 {
     if (end < start)
     {
-        throw std::range_error("ending offset must be greater than or equal to starting offset");
+        // Malformed-input contract.
+        throw std::invalid_argument("ending offset must be greater than or equal to starting offset");
     }
 
     if (start > container.size() || end > container.size())
     {
-        throw std::range_error("slice bounds exceed vector size");
+        // Malformed-input contract.
+        throw std::invalid_argument("slice bounds exceed vector size");
     }
 
     return point_vector_t(std::vector<point_t>(container.begin() + start, container.begin() + end));

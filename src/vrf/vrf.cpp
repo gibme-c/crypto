@@ -224,14 +224,16 @@ namespace Crypto::VRF::RFC9381
             // RFC 9380 §5.3.3 specifies a hashed-DST workaround for longer DSTs;
             // not needed here (our suite DST is 40 bytes), but we hard-fail rather
             // than silently ignore.
-            throw std::runtime_error("expand_message_xmd: DST exceeds 255 bytes");
+            // Malformed-input contract.
+            throw std::invalid_argument("expand_message_xmd: DST exceeds 255 bytes");
         }
 
         const size_t ell = (len_in_bytes + b_in_bytes - 1) / b_in_bytes;
 
         if (ell > 255 || len_in_bytes > 65535)
         {
-            throw std::runtime_error("expand_message_xmd: len_in_bytes out of range");
+            // Malformed-input contract.
+            throw std::invalid_argument("expand_message_xmd: len_in_bytes out of range");
         }
 
         // DST_prime = DST || I2OSP(len(DST), 1)

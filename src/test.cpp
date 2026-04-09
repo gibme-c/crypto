@@ -168,9 +168,8 @@ static const uint64_t BASE58_PREFIX = 0x106a1c;
 static void report_struct_sizes()
 {
     // Reference info: print sizeof for the major crypto types so reviewers can see
-    // the on-stack/in-memory footprint of each structure at a glance. The plan-mode
-    // refactor that introduced this function deliberately moved the report here so it
-    // is always emitted on startup, even though no individual test consults it.
+    // the on-stack/in-memory footprint of each structure at a glance. The report is
+    // emitted on startup even though no individual test consults it.
     auto row = [](const char *name, std::size_t bytes)
     {
         std::cout << "" << std::left << std::setw(36) << name << std::right << std::setw(6) << bytes << " bytes"
@@ -420,11 +419,10 @@ static void test_scalar_bias_regression()
     // -----------------------------------------------------------------------
     // Test 6: scalar_t::random hits every forbidden residue within a loop budget
     //
-    // Explicit anti-regression encoding the exact empirical finding from the
-    // probe. Under the path these four classes would
-    // never appear no matter how many samples we draw; under the fix each
-    // one should be observed within ~O(100) samples on average. Using a
-    // generous 5000-sample budget to avoid flakiness under unlucky RNG runs.
+    // Explicit anti-regression: without the fix these four residue classes
+    // would never appear no matter how many samples we draw; with the fix
+    // each one should be observed within ~O(100) samples on average. A
+    // generous 5000-sample budget avoids flakiness under unlucky RNG runs.
     // -----------------------------------------------------------------------
     {
         bool seen_residue[8] = {false, false, false, false, false, false, false, false};
@@ -874,6 +872,153 @@ static void test_entropy()
         const auto restored = entropy_t::recover(wallet_entropy.to_mnemonic_phrase());
         check("entropy 128-bit restore", restored == wallet_entropy);
     }
+
+#ifndef ENGLISH_ONLY
+    // ------------------------------------------------------------------------
+    // NFD user-input acceptance — utf8_substr + normalize_nfc.
+    //
+    // A user who types or pastes a French / Spanish mnemonic on an
+    // OS or input method that delivers Unicode NFD form (base letter +
+    // combining diacritic as two separate codepoints) must still be
+    // able to decode it. The library stores its word lists in NFC
+    // (precomposed) form and normalizes both sides of the lookup via
+    // the new normalize_nfc helper in src/mnemonics/mnemonics.cpp.
+    //
+    // This regression test constructs an NFD-form French phrase by
+    // replacing every precomposed é/è/à/... in the encoder's output
+    // with its decomposed `base + 0xCC 0x8x` byte sequence, then
+    // re-decodes it. Without normalize_nfc this test fails because
+    // the word_index lookup misses on the hash-map key comparison.
+    //
+    // Scope: French + Spanish only. English / Italian / Portuguese /
+    // Czech BIP-39 word lists are pure ASCII and cannot hit the NFD/NFC
+    // mismatch. CJK word lists are out of scope for normalize_nfc —
+    // see the NON-GOAL note at the top of src/mnemonics/mnemonics.cpp.
+    {
+        using Lang = Crypto::Mnemonics::Language::Language;
+
+        // Decompose every precomposed accent from k_nfc_table into
+        // its NFD byte sequence. Covers every char that appears in
+        // any BIP-39 French/Spanish word list.
+        const auto to_nfd = [](const std::string &nfc) -> std::string
+        {
+            struct Pair
+            {
+                const char *nfc;
+                const char *nfd;
+            };
+            // Must stay in sync with k_nfc_table in mnemonics.cpp.
+            constexpr Pair pairs[] = {
+                {"\xC3\xA0", "\x61\xCC\x80"}, // à
+                {"\xC3\xA1", "\x61\xCC\x81"}, // á
+                {"\xC3\xA8", "\x65\xCC\x80"}, // è
+                {"\xC3\xA9", "\x65\xCC\x81"}, // é
+                {"\xC3\xAD", "\x69\xCC\x81"}, // í
+                {"\xC3\xB1", "\x6E\xCC\x83"}, // ñ
+                {"\xC3\xB3", "\x6F\xCC\x81"}, // ó
+                {"\xC3\xBA", "\x75\xCC\x81"}, // ú
+            };
+            std::string out;
+            out.reserve(nfc.size() + 8);
+            for (size_t i = 0; i < nfc.size();)
+            {
+                bool replaced = false;
+                for (const auto &p : pairs)
+                {
+                    const size_t nfc_len = std::strlen(p.nfc);
+                    if (i + nfc_len <= nfc.size() && std::memcmp(nfc.data() + i, p.nfc, nfc_len) == 0)
+                    {
+                        out.append(p.nfd);
+                        i += nfc_len;
+                        replaced = true;
+                        break;
+                    }
+                }
+                if (!replaced)
+                {
+                    out.push_back(nfc[i]);
+                    i += 1;
+                }
+            }
+            return out;
+        };
+
+        // Per language: generate entropies until one produces a mnemonic
+        // with at least one accented word (so the NFD code path is
+        // definitely exercised), then decompose each word to NFD and
+        // verify the decoder recovers the original entropy. The retry
+        // cap is defensive — in practice the base rate of accented
+        // words in the French and Spanish BIP-39 lists is high enough
+        // that nearly every random 12-word mnemonic includes at least
+        // one (empirically ~75-80%).
+        for (const Lang lang : {Lang::FRENCH, Lang::SPANISH})
+        {
+            const std::string lang_name = (lang == Lang::FRENCH) ? "French" : "Spanish";
+
+            entropy_t wallet_entropy;
+            std::vector<std::string> nfc_words;
+            std::vector<std::string> nfd_words;
+            bool any_accented = false;
+
+            for (int attempt = 0; attempt < 20 && !any_accented; ++attempt)
+            {
+                wallet_entropy = entropy_t::random(128, {}, false);
+                nfc_words = Crypto::Mnemonics::encode(wallet_entropy.serialize(), lang);
+
+                nfd_words.clear();
+                nfd_words.reserve(nfc_words.size());
+                for (const auto &w : nfc_words)
+                {
+                    nfd_words.push_back(to_nfd(w));
+                }
+
+                for (size_t i = 0; i < nfc_words.size(); ++i)
+                {
+                    if (nfc_words[i] != nfd_words[i])
+                    {
+                        any_accented = true;
+                        break;
+                    }
+                }
+            }
+
+            // If 20 tries somehow produced zero accented words, the
+            // test has nothing to assert about the NFD path. This is
+            // a loud failure, not a silent skip, so a regression that
+            // somehow breaks the accent-producing path is visible.
+            if (!check(
+                    ("mnemonics " + lang_name + " NFD test produced accented mnemonic within retry cap").c_str(),
+                    any_accented))
+            {
+                continue;
+            }
+
+            // Decode the NFD words back to entropy. This is the
+            // assertion the normalize_nfc fix locks in — without the
+            // normalization, the decoder's word_index lookup would
+            // miss on the hash-map keys and throw.
+            const auto recovered_raw = Crypto::Mnemonics::decode_raw(nfd_words, lang);
+
+            // decode_raw returns 32 bytes for a 12-word mnemonic
+            // (zero-padded); compare the first 16 bytes.
+            const auto original = wallet_entropy.serialize();
+            bool match = recovered_raw.size() >= original.size();
+            if (match)
+            {
+                for (size_t i = 0; i < original.size(); ++i)
+                {
+                    if (recovered_raw[i] != original[i])
+                    {
+                        match = false;
+                        break;
+                    }
+                }
+            }
+
+            check(("mnemonics " + lang_name + " NFD-form user input decodes correctly").c_str(), match);
+        }
+    }
+#endif // ENGLISH_ONLY
 }
 
 static void test_key_derivation()
@@ -1168,6 +1313,16 @@ static void test_signatures()
             check(
                 "check_signature rejects tampered LR.R",
                 !Crypto::Signature::check_signature(SHA3_HASH, public_key, tampered));
+
+            // 4. Torsion on public_key.
+            // The verifier's equation c*P + r*G must be computed over the
+            // prime-order subgroup. Injecting an order-2 torsion component
+            // into the public key must desync the resulting point and
+            // trigger rejection. This locks the verifier-side subgroup
+            // check against regressions.
+            check(
+                "check_signature rejects public_key torsion",
+                !Crypto::Signature::check_signature(SHA3_HASH, public_key + torsion_point(), signature));
         }
     }
 
@@ -1203,6 +1358,15 @@ static void test_signatures()
             check(
                 "rfc8032 check_signature rejects torsion-on-R",
                 !Crypto::RFC8032::check_signature(SHA3_HASH, public_key, tampered));
+
+            // 3. Torsion on public_key.
+            // Mirrors the Crypto::Signature public_key torsion test above.
+            // RFC 8032 §5.1.7 requires the verifier to subgroup-check the
+            // public key before use (it is an external input, not prover-
+            // supplied). Any non-subgroup public key must be rejected.
+            check(
+                "rfc8032 check_signature rejects public_key torsion",
+                !Crypto::RFC8032::check_signature(SHA3_HASH, public_key + torsion_point(), signature));
         }
     }
 
@@ -1359,6 +1523,49 @@ static void test_borromean()
                 !Crypto::RingSignature::Borromean::check_ring_signature(
                     SHA3_HASH, sk.key_image, tampered_ring, signature));
         }
+
+        // ----- Scalar tamper matrix completeness -----
+        // The original tamper tests only touched signatures[0].LR.{L,R}.
+        // Borromean signs over RING_SIZE independent (L, R) scalar pairs,
+        // one per ring member. Each pair is prover-supplied and must be
+        // independently bound into the verification chain. These tests
+        // walk every slot to confirm no slot is silently ignored.
+        for (size_t i = 0; i < RING_SIZE; ++i)
+        {
+            {
+                auto tampered = signature;
+                tampered.signatures[i].LR.L[0] ^= 0x01;
+                check(
+                    ("borromean rejects tamper in signatures[" + std::to_string(i) + "].LR.L").c_str(),
+                    !Crypto::RingSignature::Borromean::check_ring_signature(
+                        SHA3_HASH, sk.key_image, public_keys, tampered));
+            }
+            {
+                auto tampered = signature;
+                tampered.signatures[i].LR.R[0] ^= 0x01;
+                check(
+                    ("borromean rejects tamper in signatures[" + std::to_string(i) + "].LR.R").c_str(),
+                    !Crypto::RingSignature::Borromean::check_ring_signature(
+                        SHA3_HASH, sk.key_image, public_keys, tampered));
+            }
+        }
+
+        // ----- Cross-instance rejection -----
+        // A signature produced over ring_A must not verify against ring_B.
+        // Borromean does not bind the entire ring vector into its transcript
+        // via a length prefix (the per-slot challenges DO depend on each ring
+        // member's public key implicitly through the verification equation,
+        // but a fully-disjoint ring should still fail). This lock-step test
+        // ensures no accidental cross-ring verification.
+        {
+            const auto other_sk = make_stealth_keys();
+            auto other_ring = point_t::random(RING_SIZE);
+            other_ring[RING_SIZE / 2] = other_sk.public_ephemeral;
+            check(
+                "borromean rejects signature against disjoint ring (cross-instance)",
+                !Crypto::RingSignature::Borromean::check_ring_signature(
+                    SHA3_HASH, sk.key_image, other_ring, signature));
+        }
     }
 }
 
@@ -1431,6 +1638,21 @@ static void test_clsag()
             check(
                 "clsag rejects torsion injection on ring member",
                 !Crypto::RingSignature::CLSAG::check_ring_signature(SHA3_HASH, sk.key_image, tampered_ring, signature));
+        }
+
+        // ----- Cross-instance rejection -----
+        // Build a completely disjoint ring B containing a different signer's
+        // public ephemeral. The original signature, message, and key_image
+        // were all bound to ring A via the Fiat-Shamir transcript. Verifying
+        // that signature against ring B must hard-reject.
+        {
+            const auto sk_b = make_stealth_keys();
+            auto ring_b = point_t::random(RING_SIZE);
+            ring_b[RING_SIZE / 2] = sk_b.public_ephemeral;
+
+            check(
+                "clsag rejects cross-instance ring (signature_a vs ring_b)",
+                !Crypto::RingSignature::CLSAG::check_ring_signature(SHA3_HASH, sk.key_image, ring_b, signature));
         }
     }
 }
@@ -1611,6 +1833,20 @@ static void test_mlsag()
             check(
                 "mlsag rejects torsion injection on ring member",
                 !Crypto::RingSignature::MLSAG::check_ring_signature(SHA3_HASH, sk.key_image, tampered_ring, signature));
+        }
+
+        // ----- Cross-instance rejection -----
+        // Mirror of the CLSAG cross-instance test. Disjoint ring B with a
+        // different signer's public ephemeral. Verifying the original ring-A
+        // signature against ring B must hard-reject.
+        {
+            const auto sk_b = make_stealth_keys();
+            auto ring_b = point_t::random(RING_SIZE);
+            ring_b[RING_SIZE / 2] = sk_b.public_ephemeral;
+
+            check(
+                "mlsag rejects cross-instance ring (signature_a vs ring_b)",
+                !Crypto::RingSignature::MLSAG::check_ring_signature(SHA3_HASH, sk.key_image, ring_b, signature));
         }
     }
 }
@@ -1866,6 +2102,19 @@ static void test_triptych()
             tampered.z[0] ^= 0x01;
             check("triptych rejects tamper in signature.z", !verify_with_ring(tampered, public_keys));
         }
+
+        // ----- Cross-instance rejection -----
+        // Build a fully disjoint ring B with a different signer slot. The
+        // original signature was bound to ring A via the Fiat-Shamir
+        // transcript and the key_image_v2 the verifier consumes was derived
+        // from the original signer; verifying against ring B must reject.
+        {
+            const auto sk_b = make_stealth_keys();
+            auto ring_b = point_t::random(RING_SIZE);
+            ring_b[RING_SIZE / 2] = sk_b.public_ephemeral;
+
+            check("triptych rejects cross-instance ring (signature_a vs ring_b)", !verify_with_ring(signature, ring_b));
+        }
     }
 }
 
@@ -2024,6 +2273,19 @@ static void test_bulletproofs()
             "bulletproofs reject out-of-range",
             !Crypto::RangeProofs::Bulletproofs::verify({proof2}, {commitments2}, 8));
 
+        // ----- Commitment-vector torsion injection -----
+        // Pedersen commitments themselves are caller-supplied prover output.
+        // The verifier folds them into its MSM via the Fiat-Shamir transcript;
+        // an 8-torsion injection on commitments[0] must be rejected. The M=1
+        // case only has one commitment to test.
+        {
+            auto tampered = commitments;
+            tampered[0] = tampered[0] + torsion_point();
+            check(
+                "bulletproofs reject commitment[0] torsion",
+                !Crypto::RangeProofs::Bulletproofs::verify({proof}, {tampered}));
+        }
+
         check("bulletproofs binary encoding", test_binary_encoding(proof));
         check("bulletproofs JSON encoding", test_json_encoding(proof));
     }
@@ -2158,6 +2420,58 @@ static void test_bulletproofs_plus()
             tampered.d1 *= Crypto::TWO;
             check(
                 "bulletproofs+ reject d1 tamper",
+                !Crypto::RangeProofs::BulletproofsPlus::verify({tampered}, {commitments}));
+        }
+
+        // ----- 8-torsion injection matrix -----
+        // BP+ soundness is proven in the prime-order subgroup E[l]. Every
+        // prover-supplied point in the proof (A, A1, B, L[i], R[i]) must be
+        // subgroup-checked by the verifier — otherwise a malicious prover
+        // can smuggle an 8-torsion component into the MSM sum, and the
+        // verifier's "did the sum close to identity?" check may ACCEPT
+        // because the torsion residue can theoretically cancel in the
+        // encoded-identity check even when the prime-order component of
+        // the sum is non-identity.
+        //
+        // This matrix mirrors the BP++ torsion battery above. The tests
+        // SHOULD pass (i.e. the verifier rejects) because check_subgroup()
+        // is called at the appropriate sites in
+        // src/bulletproofsplus/bulletproofsplus.cpp — if any of these fire
+        // a FAILURE, it is a genuine library bug and must be triaged
+        // rather than silently patched.
+        {
+            auto tampered = proof;
+            tampered.A = tampered.A + torsion_point();
+            check(
+                "bulletproofs+ reject A torsion",
+                !Crypto::RangeProofs::BulletproofsPlus::verify({tampered}, {commitments}));
+        }
+        {
+            auto tampered = proof;
+            tampered.A1 = tampered.A1 + torsion_point();
+            check(
+                "bulletproofs+ reject A1 torsion",
+                !Crypto::RangeProofs::BulletproofsPlus::verify({tampered}, {commitments}));
+        }
+        {
+            auto tampered = proof;
+            tampered.B = tampered.B + torsion_point();
+            check(
+                "bulletproofs+ reject B torsion",
+                !Crypto::RangeProofs::BulletproofsPlus::verify({tampered}, {commitments}));
+        }
+        {
+            auto tampered = proof;
+            tampered.L[0] = tampered.L[0] + torsion_point();
+            check(
+                "bulletproofs+ reject L[0] torsion",
+                !Crypto::RangeProofs::BulletproofsPlus::verify({tampered}, {commitments}));
+        }
+        {
+            auto tampered = proof;
+            tampered.R[0] = tampered.R[0] + torsion_point();
+            check(
+                "bulletproofs+ reject R[0] torsion",
                 !Crypto::RangeProofs::BulletproofsPlus::verify({tampered}, {commitments}));
         }
 
@@ -2298,8 +2612,7 @@ static void test_bulletproofs_pp()
         // Triptych's (see fix), lives in the prime-order subgroup:
         // the verifier must either cofactor-clear or subgroup-check every
         // prover-supplied point. If any of these assertions fail (i.e., the
-        // verifier accepts a torsioned point), it is a new soundness finding
-        // and must be escalated before any further work.
+        // verifier accepts a torsioned point), it is a soundness bug.
         {
             auto tampered = proof;
             tampered.C_l = tampered.C_l + torsion_point();
@@ -2334,6 +2647,17 @@ static void test_bulletproofs_pp()
             auto tampered = proof;
             tampered.W[0] = tampered.W[0] + torsion_point();
             check("bulletproofs++ reject W[0] torsion", !BPP::verify({tampered}, {commitments}));
+        }
+
+        // ----- Commitment-vector torsion injection -----
+        // Caller-supplied Pedersen commitments must also be subgroup-checked.
+        // BP++'s soundness proof lives in the prime-order subgroup, and an
+        // 8-torsion injection on the commitment vector must be rejected.
+        // M=1 case has a single commitment to test.
+        {
+            auto tampered_commitments = commitments;
+            tampered_commitments[0] = tampered_commitments[0] + torsion_point();
+            check("bulletproofs++ reject commitment[0] torsion", !BPP::verify({proof}, {tampered_commitments}));
         }
 
         check("bulletproofs++ binary encoding", test_binary_encoding(proof));
@@ -2430,13 +2754,15 @@ static void test_bulletproofs_pp()
     }
 
     // ----- Honest-prover bound: amount >= 2^N must throw on prove -----
+    // std::invalid_argument is the canonical malformed-input throw type
+    // across the library.
     {
         bool threw = false;
         try
         {
             BPP::prove({1000}, scalar_t::random(1), 8);
         }
-        catch (const std::range_error &)
+        catch (const std::invalid_argument &)
         {
             threw = true;
         }
@@ -2448,7 +2774,7 @@ static void test_bulletproofs_pp()
         {
             BPP::prove({1ULL << 40}, scalar_t::random(1), 32);
         }
-        catch (const std::range_error &)
+        catch (const std::invalid_argument &)
         {
             threw = true;
         }
@@ -2462,7 +2788,7 @@ static void test_bulletproofs_pp()
         {
             BPP::prove({1}, scalar_t::random(1), 0);
         }
-        catch (const std::range_error &)
+        catch (const std::invalid_argument &)
         {
             threw = true;
         }
@@ -2474,7 +2800,7 @@ static void test_bulletproofs_pp()
         {
             BPP::prove({1}, scalar_t::random(1), 65);
         }
-        catch (const std::range_error &)
+        catch (const std::invalid_argument &)
         {
             threw = true;
         }
@@ -2487,7 +2813,7 @@ static void test_bulletproofs_pp()
         {
             (void)BPP::verify({proof}, {commitments}, 0);
         }
-        catch (const std::range_error &)
+        catch (const std::invalid_argument &)
         {
             threw = true;
         }
@@ -2497,7 +2823,7 @@ static void test_bulletproofs_pp()
         {
             (void)BPP::verify({proof}, {commitments}, 65);
         }
-        catch (const std::range_error &)
+        catch (const std::invalid_argument &)
         {
             threw = true;
         }
@@ -2540,6 +2866,32 @@ static void test_dleq()
     }
     {
         check("dleq reject statement point swap (A<->B)", !Crypto::DLEQ::check_proof(B, A, G_point, H_point, proof));
+    }
+
+    // ----- 8-torsion injection -----
+    // DLEQ's verification equations operate over the prime-order subgroup.
+    // Every prover- or verifier-supplied point (base_G, base_H, statement A,
+    // statement B) could in principle carry an 8-torsion component. The
+    // verifier MUST either subgroup-check each point or cofactor-clear via
+    // mul8 before use. These negative tests lock that guarantee against
+    // verifier-side regressions.
+    //
+    // DLEQ is used as a sub-proof inside adapter_signature, so a torsion
+    // bypass here would propagate to a full-protocol soundness break in
+    // the adapter signature module. Cheap insurance.
+    {
+        check(
+            "dleq reject torsion on base_G",
+            !Crypto::DLEQ::check_proof(A, B, G_point + torsion_point(), H_point, proof));
+        check(
+            "dleq reject torsion on base_H",
+            !Crypto::DLEQ::check_proof(A, B, G_point, H_point + torsion_point(), proof));
+        check(
+            "dleq reject torsion on statement A",
+            !Crypto::DLEQ::check_proof(A + torsion_point(), B, G_point, H_point, proof));
+        check(
+            "dleq reject torsion on statement B",
+            !Crypto::DLEQ::check_proof(A, B + torsion_point(), G_point, H_point, proof));
     }
 
     check("dleq binary encoding", test_binary_encoding(proof));
@@ -2636,6 +2988,34 @@ static void test_adapter_signatures()
             !Crypto::AdapterSignature::check_pre_signature(SHA3_HASH, signer_pub, statement_Y, tampered));
     }
 
+    // ----- 8-torsion injection -----
+    // Adapter signatures compose a Schnorr half-sig + DLEQ sub-proof.
+    // Both sub-protocols are prime-order-subgroup arguments; any point
+    // input (statement_Y, nonce_commitment, signer_pub) that carries an
+    // 8-torsion component must desync the verification equations.
+    // The DLEQ sub-proof's internal bases are already covered by the
+    // dleq torsion matrix; these tests lock the same property for the
+    // adapter-level wrappers.
+    {
+        check(
+            "adapter reject torsion on statement_Y",
+            !Crypto::AdapterSignature::check_pre_signature(
+                SHA3_HASH, signer_pub, statement_Y + torsion_point(), pre_sig));
+    }
+    {
+        auto tampered = pre_sig;
+        tampered.nonce_commitment = tampered.nonce_commitment + torsion_point();
+        check(
+            "adapter reject torsion on nonce_commitment",
+            !Crypto::AdapterSignature::check_pre_signature(SHA3_HASH, signer_pub, statement_Y, tampered));
+    }
+    {
+        check(
+            "adapter reject torsion on signer_pub",
+            !Crypto::AdapterSignature::check_pre_signature(
+                SHA3_HASH, signer_pub + torsion_point(), statement_Y, pre_sig));
+    }
+
     check("adapter binary encoding", test_binary_encoding(pre_sig));
     check("adapter JSON encoding", test_json_encoding(pre_sig));
     check("adapted binary encoding", test_binary_encoding(adapted_sig));
@@ -2686,6 +3066,37 @@ static void test_vrf_native()
         const auto [other_pub, other_sec] = Crypto::generate_keys();
         const auto [bad_valid, bad_beta] = Crypto::VRF::verify(other_pub, alpha, proof);
         check("vrf reject PK swap", !bad_valid);
+    }
+
+    // ----- 8-torsion injection -----
+    // Both the public key and gamma are prover-supplied points that the
+    // verifier uses in its Fiat-Shamir transcript and MSM. Injecting
+    // order-2 torsion into either must cause the challenge check to
+    // desync. This locks the VRF verifier against prime-order-subgroup
+    // regressions.
+    {
+        auto tampered = proof;
+        tampered.gamma = tampered.gamma + torsion_point();
+        const auto [bad_valid, bad_beta] = Crypto::VRF::verify(vrf_pub, alpha, tampered);
+        (void)bad_beta;
+        check("vrf reject gamma torsion", !bad_valid);
+    }
+    {
+        const auto [bad_valid, bad_beta] = Crypto::VRF::verify(vrf_pub + torsion_point(), alpha, proof);
+        (void)bad_beta;
+        check("vrf reject public_key torsion", !bad_valid);
+    }
+
+    // ----- Exhaustive scalar tamper -----
+    // The native VRF proof carries two scalars: c (challenge) and s
+    // (response). The block above already tampers s; this block adds c.
+    // Together they exhaustively cover the scalar surface of vrf_proof_t.
+    {
+        auto tampered = proof;
+        tampered.c = tampered.c + Crypto::ONE;
+        const auto [bad_valid, bad_beta] = Crypto::VRF::verify(vrf_pub, alpha, tampered);
+        (void)bad_beta;
+        check("vrf reject c tamper", !bad_valid);
     }
 
     check("vrf binary encoding", test_binary_encoding(proof));
@@ -2846,10 +3257,8 @@ static void test_vrf_rfc9381()
     //
     // If LAYER 2 (hash_to_field) passes but this layer fails, it means
     // ge_fromfe_frombytes_vartime + ge_mul8 disagrees with RFC 9380 §6.7.1 +
-    // §6.8.2 + §7 — this is the worst-case scenario flagged in the plan, and
-    // the user has asked us to PAUSE here and request a new primitive in the
-    // ed25519 vendored package rather than write a thin field-arithmetic
-    // wrapper inline.
+    // §6.8.2 + §7 — the resolution is to add a new primitive in the ed25519
+    // vendored package rather than write a thin field-arithmetic wrapper inline.
     // ============================================================
     {
         struct b4_h_vec
@@ -3267,6 +3676,43 @@ static void test_merkle()
         // Invalid: different leaf produces a different root.
         const auto bad = Crypto::Merkle::root_hash_from_branch(branch.siblings, leaf_0, branch.path);
         check("merkle branch wrong leaf rejected", bad != root);
+    }
+
+    // ---- cross-tree branch rejection ------------------
+    // Build two 8-leaf trees with disjoint leaf hashes. Extract a valid inclusion
+    // proof for tree A leaf 0 against tree A's root, then re-run reconstruction
+    // using tree B's leaf 0 against the same branch. The reconstructed root must
+    // not match either tree A's root (different leaf) or tree B's root (siblings
+    // belong to a different tree). This locks the verifier against a class of
+    // confused-deputy attacks where a branch from one tree is replayed against a
+    // claimed leaf from a different tree.
+    {
+        // Two disjoint 8-leaf trees. Tree A reuses the existing leaf_0..leaf_7;
+        // tree B uses fresh hashes that share no bytes with the tree A leaves.
+        const std::vector<hash_t> tree_a = {leaf_0, leaf_1, leaf_2, leaf_3, leaf_4, leaf_5, leaf_6, leaf_7};
+        const std::vector<hash_t> tree_b = {
+            hash_t("1111111111111111111111111111111111111111111111111111111111111111"),
+            hash_t("1212121212121212121212121212121212121212121212121212121212121212"),
+            hash_t("1313131313131313131313131313131313131313131313131313131313131313"),
+            hash_t("1414141414141414141414141414141414141414141414141414141414141414"),
+            hash_t("1515151515151515151515151515151515151515151515151515151515151515"),
+            hash_t("1616161616161616161616161616161616161616161616161616161616161616"),
+            hash_t("1717171717171717171717171717171717171717171717171717171717171717"),
+            hash_t("1818181818181818181818181818181818181818181818181818181818181818"),
+        };
+
+        const auto root_a = Crypto::Merkle::root_hash(tree_a);
+        const auto root_b = Crypto::Merkle::root_hash(tree_b);
+        check("merkle cross-tree roots differ", root_a != root_b);
+
+        // Tree A's branch for leaf 0.
+        const auto branch_a0 = Crypto::Merkle::tree_branch(tree_a, 0);
+
+        // Reconstruct using tree B's leaf 0 plus tree A's siblings. The
+        // reconstructed root must not match either real root.
+        const auto reconstructed = Crypto::Merkle::root_hash_from_branch(branch_a0.siblings, tree_b[0], branch_a0.path);
+        check("merkle cross-tree branch rejects (root_a)", reconstructed != root_a);
+        check("merkle cross-tree branch rejects (root_b)", reconstructed != root_b);
     }
 
     // ---- second-preimage resistance ------------------------------------------------

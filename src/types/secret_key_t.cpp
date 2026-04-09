@@ -45,7 +45,10 @@ secret_key_t::secret_key_t(const std::vector<unsigned char> &input)
 {
     if (input.size() != sizeof(bytes))
     {
-        throw std::runtime_error("could not load secret key");
+        // Malformed-input contract: wrong byte length is a caller mistake.
+        // Throws std::invalid_argument so downstream fuzz harnesses and
+        // validators classify this as "bad input, safe to reject".
+        throw std::invalid_argument("secret_key_t: input must be 32 bytes");
     }
 
     std::copy(input.begin(), input.end(), std::begin(bytes));

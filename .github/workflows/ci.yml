@@ -92,35 +92,28 @@ jobs:
           if [ "${{ matrix.name }}" = "msvc" ]; then
             EXTRA="-G Ninja -DCMAKE_BUILD_TYPE=Release"
           fi
+          # Enable the dual front-end fuzz scaffold on every matrix cell.
+          # The portable smoke harness (crypto-fuzz-smoke) builds on every
+          # compiler and runs as a CTest target; libFuzzer is separately
+          # gated to Linux+Clang inside src/fuzz/libfuzzer/CMakeLists.txt.
+          FUZZ_FLAGS="-DBUILD_FUZZERS=ON"
           # eval re-parses CMAKE_FLAGS so embedded quoted args like
           # -G "MinGW Makefiles" survive variable expansion intact.
-          eval "cmake -S . -B build -DBUILD_TESTS=ON $EXTRA $CMAKE_FLAGS"
+          eval "cmake -S . -B build -DBUILD_TESTS=ON $FUZZ_FLAGS $EXTRA $CMAKE_FLAGS"
 
       - name: Build
         run: cmake --build build --config Release -j2
 
-      - name: Resolve executable paths
-        id: exe
+      - name: Run all tests (ctest)
         shell: bash
-        run: |
-          if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            echo "test=./build/crypto-test.exe"           >> "$GITHUB_OUTPUT"
-            echo "slip10=./build/crypto-slip10-test.exe"  >> "$GITHUB_OUTPUT"
-            echo "slip39=./build/crypto-slip39-test.exe"  >> "$GITHUB_OUTPUT"
-          else
-            echo "test=./build/crypto-test"           >> "$GITHUB_OUTPUT"
-            echo "slip10=./build/crypto-slip10-test"  >> "$GITHUB_OUTPUT"
-            echo "slip39=./build/crypto-slip39-test"  >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Test Cryptography
-        shell: bash
-        run: ${{ steps.exe.outputs.test }}
-
-      - name: Test SLIP-0010
-        shell: bash
-        run: ${{ steps.exe.outputs.slip10 }}
-
-      - name: Test SLIP-0039
-        shell: bash
-        run: ${{ steps.exe.outputs.slip39 }}
+        working-directory: build
+        # Invokes the full CTest test list in one shot so any new test
+        # target registered in CMakeLists.txt is automatically picked up
+        # without editing this workflow file. Currently runs:
+        #   - crypto-test
+        #   - crypto-slip10-test
+        #   - crypto-slip39-test
+        #   - crypto-deserialize-safety-test
+        #   - crypto-rfc-vectors-test
+        #   - crypto-fuzz-smoke (portable PRNG-driven smoke harness)
+        run: ctest --output-on-failure -C Release

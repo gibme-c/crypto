@@ -278,22 +278,26 @@ namespace Crypto::RangeProofs::Bulletproofs
     {
         if (N == 0)
         {
-            throw std::range_error("N must be at least 1-bit");
+            // Malformed-input contract.
+            throw std::invalid_argument("N must be at least 1-bit");
         }
 
         if (N > 64)
         {
-            throw std::range_error("N must not exceed 64-bits");
+            // Malformed-input contract.
+            throw std::invalid_argument("N must not exceed 64-bits");
         }
 
         if (amounts.size() != blinding_factors.size())
         {
-            throw std::runtime_error("amounts and blinding factors must be the same size");
+            // Malformed-input contract.
+            throw std::invalid_argument("amounts and blinding factors must be the same size");
         }
 
         if (amounts.empty())
         {
-            throw std::runtime_error("amounts is empty");
+            // Malformed-input contract.
+            throw std::invalid_argument("amounts is empty");
         }
 
         for (const auto &blinding_factor : blinding_factors)
@@ -542,12 +546,14 @@ namespace Crypto::RangeProofs::Bulletproofs
     {
         if (N == 0)
         {
-            throw std::range_error("N must be at least 1-bit");
+            // Malformed-input contract.
+            throw std::invalid_argument("N must be at least 1-bit");
         }
 
         if (N > 64)
         {
-            throw std::range_error("N must not exceed 64-bits");
+            // Malformed-input contract.
+            throw std::invalid_argument("N must not exceed 64-bits");
         }
 
         if (proofs.size() != commitments.size())

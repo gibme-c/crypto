@@ -52,7 +52,11 @@ entropy_t::entropy_t(const std::vector<unsigned char> &input)
 {
     if (input.size() > sizeof(bytes))
     {
-        throw std::runtime_error("Could not load entropy");
+        // Malformed-input contract: entropy input longer than the 32-byte
+        // backing buffer is a caller mistake. Throws std::invalid_argument
+        // so downstream fuzz harnesses and validators classify this as
+        // "bad input, safe to reject" rather than an internal failure.
+        throw std::invalid_argument("entropy_t: input must be <= 32 bytes");
     }
 
     std::copy(input.begin(), input.end(), std::begin(bytes));
