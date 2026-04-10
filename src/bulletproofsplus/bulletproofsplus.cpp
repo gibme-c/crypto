@@ -627,11 +627,6 @@ namespace Crypto::RangeProofs::BulletproofsPlus
                 return false;
             }
 
-            if (commitments[ii].empty())
-            {
-                return false;
-            }
-
             scalar_transcript_t tr(BULLETPROOFS_PLUS_DOMAIN_0);
 
             // Bind N (already pow2_round-normalized at the top of verify) into
@@ -639,6 +634,11 @@ namespace Crypto::RangeProofs::BulletproofsPlus
             tr.update(scalar_t(N));
 
             const auto M = size_t(powers_of_two[proof.L.size()].to_uint64_t()) / N;
+
+            if (M == 0 || commitments[ii].size() != M)
+            {
+                return false;
+            }
 
             const auto MN = M * N;
 

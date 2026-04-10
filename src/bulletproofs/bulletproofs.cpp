@@ -592,12 +592,12 @@ namespace Crypto::RangeProofs::Bulletproofs
                 return false;
             }
 
-            if (commitments[ii].empty())
+            const auto M = size_t(powers_of_two[proof.L.size()].to_uint64_t()) / N;
+
+            if (M == 0 || commitments[ii].size() != M)
             {
                 return false;
             }
-
-            const auto M = size_t(powers_of_two[proof.L.size()].to_uint64_t()) / N;
 
             const auto MN = M * N;
 
