@@ -291,6 +291,17 @@ function(crypto_configure_executable TARGET_NAME)
         CXX_STANDARD_REQUIRED ON
         CXX_EXTENSIONS OFF
     )
+    # ABI-shaping defines (e.g. ENGLISH_ONLY=1) must reach executables too —
+    # otherwise test/benchmark TUs compile with a different view of the
+    # language enum than the libraries they link, and the stripped
+    # switch arm in select_word_list() throws at runtime when a test
+    # iterates a language that no longer exists.
+    if(_CRYPTO_PRIVATE_DEFS)
+        target_compile_definitions(${TARGET_NAME} PRIVATE ${_CRYPTO_PRIVATE_DEFS})
+    endif()
+    if(MSVC)
+        target_compile_definitions(${TARGET_NAME} PRIVATE _CRT_SECURE_NO_WARNINGS)
+    endif()
     if(NOT MSVC)
         target_compile_options(${TARGET_NAME} PRIVATE
             $<$<CONFIG:Debug>:-g3>
@@ -404,6 +415,11 @@ add_subdirectory(src/integration)  # Layer 5a
 # whole link graph. libFuzzer per-target binaries override with the full
 # -fsanitize=fuzzer driver in src/fuzz/libfuzzer/CMakeLists.txt.
 # =========================================================================
+# NOTE: crypto-mnemonics-wordlists is intentionally excluded from this
+# sanitizer loop. Those TUs are pure data (std::vector<std::string> from
+# braced literal lists), instrumenting them provides zero bug-finding
+# value, and under ASan+UBSan they push peak compile RAM above the
+# ubuntu-latest runner ceiling. See src/mnemonics/CMakeLists.txt.
 foreach(_mod
     crypto-helpers
     crypto-types
@@ -463,7 +479,8 @@ if(BUILD_SHARED)
     set(_ALL_SOURCES)
     foreach(_comp
         crypto-helpers crypto-types crypto-core crypto-dleq
-        crypto-base58 crypto-addresses crypto-mnemonics crypto-slip39
+        crypto-base58 crypto-addresses
+        crypto-mnemonics crypto-mnemonics-wordlists crypto-slip39
         crypto-ed25519 crypto-borromean crypto-clsag
         crypto-mlsag crypto-triptych crypto-adapter-signature
         crypto-ringct crypto-bulletproofs

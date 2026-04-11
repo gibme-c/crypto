@@ -46,25 +46,18 @@ jobs:
           # Keeps portable SIMD config to minimize wall-clock; sanitizer
           # coverage is orthogonal to SIMD dispatch.
           #
-          # Two guardrails against OOM on the 2-core ~7GB ubuntu-latest
-          # runner — ASan+UBSan instrumentation on huge translation units
-          # (e.g., src/mnemonics/languages/chinese_traditional.cpp) can
-          # otherwise push peak compiler RAM above the runner ceiling and
-          # manifest as a silent build hang:
+          # The root cause of previous OOM hangs (ASan+UBSan instrumentation
+          # on huge wordlist translation units — korean.cpp, chinese_*.cpp —
+          # exceeding the runner's ~7 GB RAM ceiling) is now fixed at the
+          # CMake layer: crypto-mnemonics-wordlists is a separate STATIC
+          # target that is deliberately excluded from the sanitizer loop in
+          # the root CMakeLists.txt. See src/mnemonics/CMakeLists.txt.
           #
-          #   1. CMAKE_BUILD_TYPE=RelWithDebInfo drops optimization from
-          #      -O3 to -O2, cutting peak compile RAM by ~40-60% on large
-          #      string-literal TUs. NDEBUG stays defined so runtime
-          #      behavior matches Release — this gate tests Release
-          #      semantics, just with sanitizer instrumentation and
-          #      usable debug info for backtraces.
-          #   2. build_jobs: 1 caps build parallelism so only one
-          #      instrumented compile runs at a time.
-          #
-          # The nightly fuzz workflow still runs full -O3 Release +
-          # sanitizers, so optimization-specific UB (rare) is covered
-          # there.
-          - { os: ubuntu-latest, cc: clang-15,  cxx: clang++-15,  name: clang-15,  config: asan-ubsan,   cmake_flags: "-DFORCE_PORTABLE=ON -DENABLE_SANITIZERS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo", build_jobs: 1 }
+          # build_jobs: 1 is retained purely as defense-in-depth belt
+          # insurance against any future large TU that might creep in — it
+          # costs a little wall-clock on this one cell and removes a whole
+          # class of silent-hang failure modes.
+          - { os: ubuntu-latest, cc: clang-15,  cxx: clang++-15,  name: clang-15,  config: asan-ubsan,   cmake_flags: "-DFORCE_PORTABLE=ON -DENABLE_SANITIZERS=ON", build_jobs: 1 }
 
           # ── macOS Homebrew clang (ARM64 — no x86 SIMD configs) ───
           - { os: macos-latest, cc: /opt/homebrew/opt/llvm/bin/clang, cxx: /opt/homebrew/opt/llvm/bin/clang++, name: clang, config: portable, cmake_flags: "-DFORCE_PORTABLE=ON" }
