@@ -39,6 +39,14 @@ jobs:
           - { os: ubuntu-latest, cc: clang-15,  cxx: clang++-15,  name: clang-15,  config: x64-avx2,     cmake_flags: "-DENABLE_AVX512=OFF" }
           - { os: ubuntu-latest, cc: clang-15,  cxx: clang++-15,  name: clang-15,  config: x64-full,     cmake_flags: "" }
 
+          # ── Linux clang-15 + ASan/UBSan (PR-time sanitizer gate) ──
+          # Single cell that runs the full ctest suite under
+          # -fsanitize=address,undefined so memory-safety and UB bugs are
+          # caught pre-merge rather than waiting for the nightly fuzz run.
+          # Keeps portable SIMD config to minimize wall-clock; sanitizer
+          # coverage is orthogonal to SIMD dispatch.
+          - { os: ubuntu-latest, cc: clang-15,  cxx: clang++-15,  name: clang-15,  config: asan-ubsan,   cmake_flags: "-DFORCE_PORTABLE=ON -DENABLE_SANITIZERS=ON" }
+
           # ── macOS Homebrew clang (ARM64 — no x86 SIMD configs) ───
           - { os: macos-latest, cc: /opt/homebrew/opt/llvm/bin/clang, cxx: /opt/homebrew/opt/llvm/bin/clang++, name: clang, config: portable, cmake_flags: "-DFORCE_PORTABLE=ON" }
           - { os: macos-latest, cc: /opt/homebrew/opt/llvm/bin/clang, cxx: /opt/homebrew/opt/llvm/bin/clang++, name: clang, config: arm64,     cmake_flags: "" }

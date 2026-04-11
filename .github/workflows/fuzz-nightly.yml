@@ -96,6 +96,18 @@ jobs:
           cd build
           ctest --output-on-failure -R crypto-fuzz-smoke
 
+      - name: Run unit tests under ASan + UBSan
+        # The nightly build is already compiled with ENABLE_SANITIZERS=ON,
+        # so the unit test binaries are ASan + UBSan instrumented. Run the
+        # full CTest list (minus the fuzz-smoke target we just ran) so any
+        # memory-safety or undefined-behavior defect reachable from the
+        # deterministic unit suite is caught even if no libFuzzer harness
+        # happens to explore the affected path. This is the safety net for
+        # bugs that are not reachable from the fuzz corpus.
+        run: |
+          cd build
+          ctest --output-on-failure -E crypto-fuzz-smoke
+
       - name: Run per-target libFuzzer binaries
         id: fuzz
         run: |
