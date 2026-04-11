@@ -45,7 +45,26 @@ jobs:
           # caught pre-merge rather than waiting for the nightly fuzz run.
           # Keeps portable SIMD config to minimize wall-clock; sanitizer
           # coverage is orthogonal to SIMD dispatch.
-          - { os: ubuntu-latest, cc: clang-15,  cxx: clang++-15,  name: clang-15,  config: asan-ubsan,   cmake_flags: "-DFORCE_PORTABLE=ON -DENABLE_SANITIZERS=ON" }
+          #
+          # Two guardrails against OOM on the 2-core ~7GB ubuntu-latest
+          # runner — ASan+UBSan instrumentation on huge translation units
+          # (e.g., src/mnemonics/languages/chinese_traditional.cpp) can
+          # otherwise push peak compiler RAM above the runner ceiling and
+          # manifest as a silent build hang:
+          #
+          #   1. CMAKE_BUILD_TYPE=RelWithDebInfo drops optimization from
+          #      -O3 to -O2, cutting peak compile RAM by ~40-60% on large
+          #      string-literal TUs. NDEBUG stays defined so runtime
+          #      behavior matches Release — this gate tests Release
+          #      semantics, just with sanitizer instrumentation and
+          #      usable debug info for backtraces.
+          #   2. build_jobs: 1 caps build parallelism so only one
+          #      instrumented compile runs at a time.
+          #
+          # The nightly fuzz workflow still runs full -O3 Release +
+          # sanitizers, so optimization-specific UB (rare) is covered
+          # there.
+          - { os: ubuntu-latest, cc: clang-15,  cxx: clang++-15,  name: clang-15,  config: asan-ubsan,   cmake_flags: "-DFORCE_PORTABLE=ON -DENABLE_SANITIZERS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo", build_jobs: 1 }
 
           # ── macOS Homebrew clang (ARM64 — no x86 SIMD configs) ───
           - { os: macos-latest, cc: /opt/homebrew/opt/llvm/bin/clang, cxx: /opt/homebrew/opt/llvm/bin/clang++, name: clang, config: portable, cmake_flags: "-DFORCE_PORTABLE=ON" }
@@ -110,7 +129,10 @@ jobs:
           eval "cmake -S . -B build -DBUILD_TESTS=ON $FUZZ_FLAGS $EXTRA $CMAKE_FLAGS"
 
       - name: Build
-        run: cmake --build build --config Release -j2
+        # matrix.build_jobs overrides the default parallelism for cells
+        # that need to cap RAM (e.g., the asan-ubsan cell). Defaults to 2
+        # when unset — keeps every pre-existing cell at -j2 as before.
+        run: cmake --build build --config Release -j${{ matrix.build_jobs || '2' }}
 
       - name: Run all tests (ctest)
         shell: bash
