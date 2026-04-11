@@ -415,11 +415,12 @@ add_subdirectory(src/integration)  # Layer 5a
 # whole link graph. libFuzzer per-target binaries override with the full
 # -fsanitize=fuzzer driver in src/fuzz/libfuzzer/CMakeLists.txt.
 # =========================================================================
-# NOTE: crypto-mnemonics-wordlists is intentionally excluded from this
-# sanitizer loop. Those TUs are pure data (std::vector<std::string> from
-# braced literal lists), instrumenting them provides zero bug-finding
-# value, and under ASan+UBSan they push peak compile RAM above the
-# ubuntu-latest runner ceiling. See src/mnemonics/CMakeLists.txt.
+# NOTE: crypto-mnemonics-wordlists and crypto-slip39-wordlist are
+# intentionally excluded from this sanitizer loop. Those TUs are pure
+# data (std::vector<std::string> from braced literal lists),
+# instrumenting them provides zero bug-finding value, and under
+# ASan+UBSan they push peak compile RAM above the ubuntu-latest runner
+# ceiling. See src/mnemonics/CMakeLists.txt and src/slip39/CMakeLists.txt.
 foreach(_mod
     crypto-helpers
     crypto-types
@@ -480,7 +481,8 @@ if(BUILD_SHARED)
     foreach(_comp
         crypto-helpers crypto-types crypto-core crypto-dleq
         crypto-base58 crypto-addresses
-        crypto-mnemonics crypto-mnemonics-wordlists crypto-slip39
+        crypto-mnemonics crypto-mnemonics-wordlists
+        crypto-slip39 crypto-slip39-wordlist
         crypto-ed25519 crypto-borromean crypto-clsag
         crypto-mlsag crypto-triptych crypto-adapter-signature
         crypto-ringct crypto-bulletproofs
