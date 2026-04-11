@@ -64,19 +64,19 @@ static std::tuple<point_vector_t, point_vector_t> generate_exponents(size_t coun
     // via Crypto::init() to avoid contention during batch verify.
     static point_vector_t L_cached, R_cached;
 
-    if (count == L_cached.size() && count == R_cached.size())
+    if (count == L_cached.count() && count == R_cached.count())
     {
         return std::make_tuple(L_cached, R_cached);
     }
 
-    if (count < L_cached.size())
+    if (count < L_cached.count())
     {
         return std::make_tuple(L_cached.slice(0, count), R_cached.slice(0, count));
     }
 
     auto writer = Serialization::serializer_t();
 
-    for (size_t i = L_cached.size(); i < count; ++i)
+    for (size_t i = L_cached.count(); i < count; ++i)
     {
         writer.reset();
 
@@ -132,7 +132,7 @@ namespace Crypto::RangeProofs::Bulletproofs
                 return {L.container, R.container, a.container[0], b.container[0]};
             }
 
-            auto n = G.size();
+            auto n = G.count();
 
             // Precompute y_inv powers: {1, y_inv, y_inv^2, ..., y_inv^(n-1)}
             const auto yinv_powers = y_inv.pow_expand(n, false, true);
@@ -724,7 +724,7 @@ namespace Crypto::RangeProofs::Bulletproofs
             // Precompute challenge products via binary expansion,
             // folding y_inv^i into h_products AND weight constants into seeds
             // so the inner loop needs ZERO scalar multiplications (pure adds)
-            const size_t logMN = challenges.size();
+            const size_t logMN = challenges.count();
 
             const auto g_wz = proof.g * weight_z;
             const auto z_wz = z * weight_z;

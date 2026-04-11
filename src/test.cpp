@@ -835,10 +835,10 @@ static void test_utilities()
 
     {
         const auto points = point_vector_t(point_t::random(20)).dedupe_sort();
-        check("random points unique", points.size() == 20);
+        check("random points unique", points.count() == 20);
 
         const auto scalars = scalar_vector_t(scalar_t::random(20)).dedupe_sort();
-        check("random scalars unique", scalars.size() == 20);
+        check("random scalars unique", scalars.count() == 20);
     }
 
     {

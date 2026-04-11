@@ -68,9 +68,9 @@ static inline std::vector<scalar_t> convolve(const scalar_vector_t &x, const std
         throw std::invalid_argument("convolve: y must be a degree-one polynomial (size 2)");
     }
 
-    std::vector<scalar_t> result(x.size() + 1, Crypto::ZERO);
+    std::vector<scalar_t> result(x.count() + 1, Crypto::ZERO);
 
-    for (size_t i = 0; i < x.size(); ++i)
+    for (size_t i = 0; i < x.count(); ++i)
     {
         for (size_t j = 0; j < y.size(); ++j)
         {

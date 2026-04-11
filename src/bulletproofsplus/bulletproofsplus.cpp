@@ -64,19 +64,19 @@ static std::tuple<point_vector_t, point_vector_t> generate_exponents(size_t coun
     // via Crypto::init() to avoid contention during batch verify.
     static point_vector_t L_cached, R_cached;
 
-    if (count == L_cached.size() && count == R_cached.size())
+    if (count == L_cached.count() && count == R_cached.count())
     {
         return std::make_tuple(L_cached, R_cached);
     }
 
-    if (count < L_cached.size())
+    if (count < L_cached.count())
     {
         return std::make_tuple(L_cached.slice(0, count), R_cached.slice(0, count));
     }
 
     auto writer = Serialization::serializer_t();
 
-    for (size_t i = L_cached.size(); i < count; ++i)
+    for (size_t i = L_cached.count(); i < count; ++i)
     {
         writer.reset();
 
@@ -126,7 +126,7 @@ namespace Crypto::RangeProofs::BulletproofsPlus
                 return {A, B, r1, s1, d1, L.container, R.container};
             }
 
-            auto n = Gi.size();
+            auto n = Gi.count();
 
             // Precompute y_inv once and y-power tables for all rounds
             const auto y_inv_local = y.invert();
@@ -386,7 +386,7 @@ namespace Crypto::RangeProofs::BulletproofsPlus
       private:
         static scalar_t weighted_inner_product(const scalar_vector_t &a, const scalar_vector_t &b, const scalar_t &y)
         {
-            if (a.size() != b.size())
+            if (a.count() != b.count())
             {
                 throw std::invalid_argument("weighted inner product vectors must be of the same size");
             }
@@ -395,7 +395,7 @@ namespace Crypto::RangeProofs::BulletproofsPlus
 
             auto y_power = y;
 
-            for (size_t i = 0; i < a.size(); ++i)
+            for (size_t i = 0; i < a.count(); ++i)
             {
                 r += a[i] * y_power * b[i];
 
@@ -715,7 +715,7 @@ namespace Crypto::RangeProofs::BulletproofsPlus
 
             // Precompute challenge products via binary expansion,
             // folding y_inv^i into g_products so the inner loop needs fewer mults
-            const size_t logMN = challenges.size();
+            const size_t logMN = challenges.count();
 
             std::vector<scalar_t> yinv_g_products(MN), h_products(MN);
 

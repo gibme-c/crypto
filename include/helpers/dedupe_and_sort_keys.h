@@ -51,7 +51,7 @@
  */
 template<typename T> std::vector<T> dedupe_and_sort_keys(const std::vector<T> &keys)
 {
-    auto cmp = [](const T a, const T b) { return std::memcmp(a.data(), b.data(), a.size()) > 0; };
+    auto cmp = [](const T &a, const T &b) { return std::memcmp(a.data(), b.data(), a.size()) > 0; };
 
     std::set<T, decltype(cmp)> seen(keys.begin(), keys.end(), cmp);
 

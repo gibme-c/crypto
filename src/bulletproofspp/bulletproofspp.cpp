@@ -95,16 +95,16 @@ static std::tuple<point_vector_t, point_vector_t> generate_exponents(size_t g_co
     // via Crypto::init() to avoid contention during batch verify.
     static point_vector_t g_cached, h_cached;
 
-    if (g_count <= g_cached.size() && h_count <= h_cached.size())
+    if (g_count <= g_cached.count() && h_count <= h_cached.count())
     {
-        return (g_count == g_cached.size() && h_count == h_cached.size())
+        return (g_count == g_cached.count() && h_count == h_cached.count())
                    ? std::make_tuple(g_cached, h_cached)
                    : std::make_tuple(g_cached.slice(0, g_count), h_cached.slice(0, h_count));
     }
 
     auto writer = Serialization::serializer_t();
 
-    for (size_t i = g_cached.size(); i < g_count; ++i)
+    for (size_t i = g_cached.count(); i < g_count; ++i)
     {
         writer.reset();
         writer.uint64(i);
@@ -112,7 +112,7 @@ static std::tuple<point_vector_t, point_vector_t> generate_exponents(size_t g_co
         g_cached.append(hash_t::sha3(writer).point());
     }
 
-    for (size_t i = h_cached.size(); i < h_count; ++i)
+    for (size_t i = h_cached.count(); i < h_count; ++i)
     {
         writer.reset();
         writer.uint64(i);
